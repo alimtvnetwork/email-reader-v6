@@ -16,6 +16,7 @@ import (
 	"github.com/lovable/email-read/internal/browser"
 	"github.com/lovable/email-read/internal/config"
 	"github.com/lovable/email-read/internal/imapdef"
+	"github.com/lovable/email-read/internal/mailclient"
 	"github.com/lovable/email-read/internal/rules"
 	"github.com/lovable/email-read/internal/store"
 	"github.com/lovable/email-read/internal/watcher"
@@ -48,7 +49,7 @@ and automatically opens matching URLs in Chrome incognito based on regex rules.`
 	root.SetUsageTemplate(usageTemplate)
 
 	root.AddCommand(newAddCmd(), newListCmd(), newRemoveCmd(),
-		newWatchCmd(), newRulesCmd(), newExportCsvCmd())
+		newWatchCmd(), newDiagnoseCmd(), newRulesCmd(), newExportCsvCmd())
 	return root
 }
 
@@ -67,7 +68,126 @@ func newWatchCmd() *cobra.Command {
 	}
 }
 
-// runWatch wires config → store → rules → browser → watcher and runs
+func newDiagnoseCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "diagnose [alias]",
+		Short: "Connect once and print IMAP mailbox diagnostics without saving/opening emails.",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			alias := ""
+			if len(args) == 1 {
+				alias = args[0]
+			}
+			return runDiagnose(alias)
+		},
+	}
+}
+
+func runDiagnose(alias string) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	if len(cfg.Accounts) == 0 {
+		return fmt.Errorf("no accounts configured. Run `email-read add` first")
+	}
+
+	var acct config.Account
+	if alias == "" {
+		acct = cfg.Accounts[0]
+		fmt.Printf("No alias given — diagnosing first configured account %q\n", acct.Alias)
+	} else {
+		p := cfg.FindAccount(alias)
+		if p == nil {
+			return fmt.Errorf("no account with alias %q (run `email-read list`)", alias)
+		}
+		acct = *p
+	}
+
+	cfgPath, _ := config.Path()
+	fmt.Println("IMAP diagnostic report")
+	fmt.Printf("Config:  %s\n", cfgPath)
+	fmt.Printf("Alias:   %s\n", acct.Alias)
+	fmt.Printf("Account: %s\n", acct.Email)
+	fmt.Printf("Server:  %s:%d tls=%v mailbox=%q\n", acct.ImapHost, acct.ImapPort, acct.UseTLS, acct.Mailbox)
+
+	fmt.Println("\n1) Connecting and logging in...")
+	mc, err := mailclient.Dial(acct)
+	if err != nil {
+		return err
+	}
+	defer mc.Close()
+	fmt.Println("   OK: login succeeded")
+
+	fmt.Println("\n2) Listing server folders...")
+	folders, err := mc.ListMailboxes()
+	if err != nil {
+		fmt.Printf("   WARN: %v\n", err)
+	} else if len(folders) == 0 {
+		fmt.Println("   WARN: server returned no folders")
+	} else {
+		for _, f := range folders {
+			fmt.Printf("   - %s %v\n", f.Name, f.Attributes)
+		}
+	}
+
+	fmt.Println("\n3) Selecting configured mailbox...")
+	stats, err := mc.SelectInbox()
+	if err != nil {
+		return err
+	}
+	fmt.Printf("   OK: %q messages=%d recent=%d unseen=%d uidNext=%d uidValidity=%d\n",
+		stats.Name, stats.Messages, stats.Recent, stats.Unseen, stats.UidNext, stats.UidValidity)
+
+	fmt.Println("\n4) Recent headers from configured mailbox...")
+	headers, err := mc.FetchRecentHeaders(stats, 10)
+	if err != nil {
+		return err
+	}
+	if len(headers) == 0 {
+		fmt.Println("   No messages returned by server for this mailbox.")
+	} else {
+		for _, h := range headers {
+			when := "unknown-time"
+			if !h.ReceivedAt.IsZero() {
+				when = h.ReceivedAt.Format("2006-01-02 15:04:05 MST")
+			}
+			fmt.Printf("   UID=%d at=%s from=%q to=%q subject=%q\n",
+				h.Uid, when, h.From, h.To, h.Subject)
+		}
+	}
+
+	fmt.Println("\n5) Folder scan summary...")
+	foundElsewhere := false
+	for _, f := range folders {
+		folderStats, err := mc.SelectMailbox(f.Name)
+		if err != nil {
+			fmt.Printf("   - %s: WARN %v\n", f.Name, err)
+			continue
+		}
+		fmt.Printf("   - %s: messages=%d unseen=%d uidNext=%d\n",
+			folderStats.Name, folderStats.Messages, folderStats.Unseen, folderStats.UidNext)
+		if folderStats.Name != stats.Name && folderStats.Messages > 0 {
+			foundElsewhere = true
+		}
+	}
+
+	fmt.Println("\nDiagnosis:")
+	if stats.Messages <= 1 && stats.UidNext <= 2 {
+		fmt.Println("   The IMAP server is still exposing only the baseline message in the configured mailbox.")
+		if foundElsewhere {
+			fmt.Println("   Other folders contain messages; the new email may be in Spam/Junk/Sent/All Mail instead of INBOX.")
+		} else {
+			fmt.Println("   No other listed folder showed obvious new mail either; this points to mail routing/delivery before IMAP.")
+		}
+		fmt.Println("   Check recipient spelling, mailbox existence, Spam/Junk folders, and domain MX/routing in your mail host.")
+	} else {
+		fmt.Println("   The configured mailbox has more mail than the watcher baseline; run `email-read watch <alias>` to process UID > LastUid.")
+	}
+	return nil
+}
+
+
 // until SIGINT/SIGTERM. Empty alias picks the first configured account.
 func runWatch(parent context.Context, alias string) error {
 	cfg, err := config.Load()
