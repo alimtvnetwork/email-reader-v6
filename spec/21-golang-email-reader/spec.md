@@ -105,9 +105,26 @@ Binary name: `email-read`
 | yahoo.com | imap.mail.yahoo.com | 993 | yes |
 | icloud.com / me.com | imap.mail.me.com | 993 | yes |
 | fastmail.com | imap.fastmail.com | 993 | yes |
-| _other_ | guess `imap.<domain>` :993 TLS, prompt to override |
+| _other_ | guess `mail.<domain>` :993 TLS, then `imap.<domain>` :993 TLS, prompt to override |
+
+Cpanel-hosted domains (very common for custom domains) use `mail.<domain>`, so we now try that **first** before falling back to `imap.<domain>`.
 
 User can override host/port/TLS during `add`.
+
+### Seed/test account (from uploaded mobileconfig)
+For dev/testing, the following account is pre-known and will be offered as the default in `email-read add` if the user just presses Enter:
+
+| Field | Value |
+|---|---|
+| alias | `atto` |
+| email | `lovable.admin@attobondcleaning.store` |
+| imapHost | `mail.attobondcleaning.store` |
+| imapPort | `993` |
+| useTLS | `true` |
+| mailbox | `INBOX` |
+| password | (provided by user, stored Base64 in `passwordB64`) |
+
+> ⚠️ Security note: this password is in the repo's spec file because the user supplied it explicitly for this prototype. For real deployment it must be rotated and only stored inside `data/config.json` (which is gitignored), never in source.
 
 ## 6. Rules Engine
 
