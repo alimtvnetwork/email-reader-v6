@@ -109,8 +109,11 @@ foreach ($d in @($DataDir, $MailDir)) {
     }
 }
 
-# --- 5. Idempotent user PATH update ---
-if ($SkipPathUpdate) {
+# --- 5. Idempotent user PATH update (Windows-only) ---
+if (-not $IsWindowsHost) {
+    Write-Step "Skipping PATH update (non-Windows host)"
+    Write-WarnLine "Run the binary directly: $ExePath"
+} elseif ($SkipPathUpdate) {
     Write-Step "Skipping PATH update (--SkipPathUpdate)"
 } else {
     Write-Step "Updating user PATH"
