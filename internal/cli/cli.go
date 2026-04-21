@@ -111,8 +111,6 @@ func runDiagnose(alias string) error {
 	fmt.Printf("Account: %s\n", acct.Email)
 	fmt.Printf("Server:  %s:%d tls=%v mailbox=%q\n", acct.ImapHost, acct.ImapPort, acct.UseTLS, acct.Mailbox)
 
-	start := context.Background()
-	_ = start
 	fmt.Println("\n1) Connecting and logging in...")
 	mc, err := mailclient.Dial(acct)
 	if err != nil {

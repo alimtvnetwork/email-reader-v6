@@ -207,7 +207,7 @@ func (c *Client) FetchRecentHeaders(stats MailboxStats, limit uint32) ([]HeaderS
 	return out, nil
 }
 
-
+// FetchSince returns all messages with UID strictly greater than lastUid.
 // Pass 0 on the first run to fetch nothing-but-baseline (callers should typically
 // snapshot UIDNEXT before the first poll instead of replaying history).
 func (c *Client) FetchSince(lastUid uint32) ([]*Message, error) {
