@@ -40,7 +40,8 @@ func NewRoot(version string) *cobra.Command {
 			return runWatch(cmd.Context(), alias)
 		},
 	}
-	root.AddCommand(newAddCmd(), newListCmd(), newRemoveCmd(), newWatchCmd())
+	root.AddCommand(newAddCmd(), newListCmd(), newRemoveCmd(),
+		newWatchCmd(), newRulesCmd(), newExportCsvCmd())
 	return root
 }
 
