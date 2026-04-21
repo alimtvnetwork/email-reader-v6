@@ -151,6 +151,7 @@ Write-Host ("  Data: {0}" -f $DataDir)
 Write-Host ("  Mail: {0}" -f $MailDir)
 Write-Host ""
 Write-Host "Try it out:" -ForegroundColor Cyan
+Write-Host "  email-read --help       # Show all commands"
 Write-Host "  email-read --version"
 Write-Host "  email-read add"
 Write-Host "  email-read list"
