@@ -63,56 +63,72 @@ func Run(ctx context.Context, opts Options) error {
 
 // pollOnce performs a single connect → fetch → persist → match → open cycle.
 func pollOnce(ctx context.Context, opts Options, logger *log.Logger) error {
-	ws, err := opts.Store.GetWatchState(ctx, opts.Account.Alias)
+	start := time.Now()
+	alias := opts.Account.Alias
+	logger.Printf("[%s] poll start", alias)
+
+	ws, err := opts.Store.GetWatchState(ctx, alias)
 	if err != nil {
 		return fmt.Errorf("get watch state: %w", err)
 	}
+	logger.Printf("[%s] watch state loaded: lastUid=%d lastSubject=%q",
+		alias, ws.LastUid, ws.LastSubject)
 
+	logger.Printf("[%s] dialing IMAP %s:%d (tls=%v) as %s",
+		alias, opts.Account.ImapHost, opts.Account.ImapPort,
+		opts.Account.UseTLS, opts.Account.Email)
 	mc, err := mailclient.Dial(opts.Account)
 	if err != nil {
 		return err
 	}
 	defer mc.Close()
+	logger.Printf("[%s] connected and logged in (took %s)", alias, time.Since(start).Round(time.Millisecond))
 
-	uidNext, err := mc.SelectInbox()
+	stats, err := mc.SelectInbox()
 	if err != nil {
 		return err
 	}
+	logger.Printf("[%s] mailbox %q stats: messages=%d recent=%d unseen=%d uidNext=%d uidValidity=%d",
+		alias, stats.Name, stats.Messages, stats.Recent, stats.Unseen, stats.UidNext, stats.UidValidity)
 
 	// First-run baseline: don't replay history. Snapshot UIDNEXT-1 and exit.
 	if ws.LastUid == 0 {
 		baseline := uint32(0)
-		if uidNext > 0 {
-			baseline = uidNext - 1
+		if stats.UidNext > 0 {
+			baseline = stats.UidNext - 1
 		}
 		ws.LastUid = baseline
 		if err := opts.Store.UpsertWatchState(ctx, ws); err != nil {
 			return fmt.Errorf("baseline watch state: %w", err)
 		}
-		logger.Printf("[%s] baseline set to UID=%d (skipping history)",
-			opts.Account.Alias, baseline)
+		logger.Printf("[%s] baseline set to UID=%d (skipping history). New mail with UID > %d will be processed.",
+			alias, baseline, baseline)
 		return nil
 	}
 
+	logger.Printf("[%s] fetching messages with UID > %d (server uidNext=%d)",
+		alias, ws.LastUid, stats.UidNext)
 	msgs, err := mc.FetchSince(ws.LastUid)
 	if err != nil {
 		return err
 	}
 	if len(msgs) == 0 {
+		logger.Printf("[%s] no new messages (poll completed in %s)",
+			alias, time.Since(start).Round(time.Millisecond))
 		return nil
 	}
-	logger.Printf("[%s] fetched %d new message(s)", opts.Account.Alias, len(msgs))
+	logger.Printf("[%s] fetched %d new message(s)", alias, len(msgs))
 
 	for _, m := range msgs {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		path, err := mailclient.SaveRaw(opts.Account.Alias, m)
+		path, err := mailclient.SaveRaw(alias, m)
 		if err != nil {
-			logger.Printf("[%s] save raw uid=%d: %v", opts.Account.Alias, m.Uid, err)
+			logger.Printf("[%s] save raw uid=%d: %v", alias, m.Uid, err)
 		}
 		row := &store.Email{
-			Alias:      opts.Account.Alias,
+			Alias:      alias,
 			MessageId:  m.MessageId,
 			Uid:        m.Uid,
 			FromAddr:   m.From,
@@ -126,29 +142,35 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) error {
 		}
 		emailId, inserted, err := opts.Store.UpsertEmail(ctx, row)
 		if err != nil {
-			logger.Printf("[%s] upsert uid=%d: %v", opts.Account.Alias, m.Uid, err)
+			logger.Printf("[%s] upsert uid=%d: %v", alias, m.Uid, err)
 			continue
 		}
 		if inserted {
-			logger.Printf("[%s] saved uid=%d subj=%q", opts.Account.Alias, m.Uid, m.Subject)
+			logger.Printf("[%s] saved uid=%d from=%q subj=%q file=%s",
+				alias, m.Uid, m.From, m.Subject, path)
+		} else {
+			logger.Printf("[%s] duplicate uid=%d (already in DB) subj=%q", alias, m.Uid, m.Subject)
 		}
 
 		// Rules → URLs → browser
 		if opts.Engine != nil && opts.Launcher != nil {
-			for _, match := range opts.Engine.Evaluate(m) {
+			matches := opts.Engine.Evaluate(m)
+			logger.Printf("[%s] uid=%d matched %d rule URL(s)", alias, m.Uid, len(matches))
+			for _, match := range matches {
 				inserted, err := opts.Store.RecordOpenedUrl(ctx, emailId, match.RuleName, match.Url)
 				if err != nil {
-					logger.Printf("[%s] dedup url: %v", opts.Account.Alias, err)
+					logger.Printf("[%s] dedup url: %v", alias, err)
 					continue
 				}
 				if !inserted {
-					continue // already opened
-				}
-				if err := opts.Launcher.Open(match.Url); err != nil {
-					logger.Printf("[%s] open url %s: %v", opts.Account.Alias, match.Url, err)
+					logger.Printf("[%s] skipping url %s (already opened)", alias, match.Url)
 					continue
 				}
-				logger.Printf("[%s] opened %s (rule=%s)", opts.Account.Alias, match.Url, match.RuleName)
+				if err := opts.Launcher.Open(match.Url); err != nil {
+					logger.Printf("[%s] open url %s: %v", alias, match.Url, err)
+					continue
+				}
+				logger.Printf("[%s] opened %s (rule=%s)", alias, match.Url, match.RuleName)
 			}
 		}
 
@@ -163,5 +185,7 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) error {
 	if err := opts.Store.UpsertWatchState(ctx, ws); err != nil {
 		return fmt.Errorf("update watch state: %w", err)
 	}
+	logger.Printf("[%s] poll complete: processed=%d newLastUid=%d total=%s",
+		alias, len(msgs), ws.LastUid, time.Since(start).Round(time.Millisecond))
 	return nil
 }
