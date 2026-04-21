@@ -35,9 +35,19 @@ function Write-WarnLine($msg) {
 # --- Resolve repo root (folder containing this script) ---
 $RepoRoot  = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $DeployDir = Join-Path $RepoRoot 'email-reader-cli'
-$ExePath   = Join-Path $DeployDir 'email-read.exe'
-$DataDir   = Join-Path $DeployDir 'data'
-$MailDir   = Join-Path $DeployDir 'email'
+
+# Detect host OS so this script works on Windows, macOS, and Linux.
+# On non-Windows hosts we drop the .exe suffix and skip the PATH update.
+$IsWindowsHost = $true
+if ($PSVersionTable.PSEdition -eq 'Core') {
+    $IsWindowsHost = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+        [System.Runtime.InteropServices.OSPlatform]::Windows)
+}
+
+$ExeName = if ($IsWindowsHost) { 'email-read.exe' } else { 'email-read' }
+$ExePath = Join-Path $DeployDir $ExeName
+$DataDir = Join-Path $DeployDir 'data'
+$MailDir = Join-Path $DeployDir 'email'
 
 Set-Location $RepoRoot
 
@@ -63,13 +73,24 @@ if (-not $go) {
 Write-Ok ("Found {0}" -f (& go version))
 
 # --- 3. Build the EXE ---
-Write-Step "Building email-read.exe"
+Write-Step "Building $ExeName"
 if (-not (Test-Path $DeployDir)) {
     New-Item -ItemType Directory -Path $DeployDir | Out-Null
 }
 
-$env:GOOS   = 'windows'
-$env:GOARCH = 'amd64'
+# Resolve module dependencies (creates/repairs go.sum). Safe to run every time.
+Write-Step "Resolving Go module dependencies (go mod tidy)"
+& go mod tidy
+if ($LASTEXITCODE -ne 0) {
+    throw "go mod tidy failed with exit code $LASTEXITCODE"
+}
+
+# Only force a Windows cross-compile when running on Windows.
+# On macOS/Linux, build a native binary so the user can actually execute it.
+if ($IsWindowsHost) {
+    $env:GOOS   = 'windows'
+    $env:GOARCH = 'amd64'
+}
 
 & go build -o $ExePath ./cmd/email-read
 if ($LASTEXITCODE -ne 0) {
@@ -88,8 +109,11 @@ foreach ($d in @($DataDir, $MailDir)) {
     }
 }
 
-# --- 5. Idempotent user PATH update ---
-if ($SkipPathUpdate) {
+# --- 5. Idempotent user PATH update (Windows-only) ---
+if (-not $IsWindowsHost) {
+    Write-Step "Skipping PATH update (non-Windows host)"
+    Write-WarnLine "Run the binary directly: $ExePath"
+} elseif ($SkipPathUpdate) {
     Write-Step "Skipping PATH update (--SkipPathUpdate)"
 } else {
     Write-Step "Updating user PATH"
