@@ -25,8 +25,10 @@ import (
 // when an alias is given) is wired in a later step.
 func NewRoot(version string) *cobra.Command {
 	root := &cobra.Command{
-		Use:           "email-read [alias]",
-		Short:         "Watch IMAP inboxes and auto-open links from matching emails.",
+		Use:   "email-read [command]",
+		Short: "Watch IMAP inboxes and auto-open links from matching emails.",
+		Long: `email-read watches IMAP inboxes, saves emails to SQLite + disk,
+and automatically opens matching URLs in Chrome incognito based on regex rules.`,
 		Version:       version,
 		SilenceUsage:  true,
 		SilenceErrors: false,
@@ -40,6 +42,11 @@ func NewRoot(version string) *cobra.Command {
 			return runWatch(cmd.Context(), alias)
 		},
 	}
+
+	// Set custom help template for cleaner output
+	root.SetHelpTemplate(helpTemplate)
+	root.SetUsageTemplate(usageTemplate)
+
 	root.AddCommand(newAddCmd(), newListCmd(), newRemoveCmd(),
 		newWatchCmd(), newRulesCmd(), newExportCsvCmd())
 	return root
@@ -287,3 +294,30 @@ func runRemove(alias string) error {
 	fmt.Printf("Removed account %q\n", alias)
 	return nil
 }
+
+// Custom help templates for cleaner output
+const helpTemplate = `{{.Long}}
+
+Usage:
+  {{.UseLine}}
+
+Available Commands:{{range .Commands}}{{if (or .IsAvailableCommand (eq .Name "help"))}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}
+
+Flags:
+{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}
+
+Use "{{.CommandPath}} [command] --help" for more information about a command.
+`
+
+const usageTemplate = `Usage:
+  {{.UseLine}}
+
+Available Commands:{{range .Commands}}{{if (or .IsAvailableCommand (eq .Name "help"))}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}
+
+Flags:
+{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}
+
+Use "{{.CommandPath}} [command] --help" for more information about a command.
+`
