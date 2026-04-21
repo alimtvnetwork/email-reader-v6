@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	netmail "net/mail"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -297,7 +298,7 @@ func fillHeaderFlat(ent *message.Entity, out *Message) {
 	out.To = h.Get("To")
 	out.Cc = h.Get("Cc")
 	if d := h.Get("Date"); d != "" {
-		if t, err := mail.ParseDate(d); err == nil {
+		if t, err := netmail.ParseDate(d); err == nil {
 			out.ReceivedAt = t
 		}
 	}
