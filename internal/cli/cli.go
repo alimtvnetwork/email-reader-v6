@@ -25,8 +25,10 @@ import (
 // when an alias is given) is wired in a later step.
 func NewRoot(version string) *cobra.Command {
 	root := &cobra.Command{
-		Use:           "email-read [alias]",
-		Short:         "Watch IMAP inboxes and auto-open links from matching emails.",
+		Use:   "email-read [command]",
+		Short: "Watch IMAP inboxes and auto-open links from matching emails.",
+		Long: `email-read watches IMAP inboxes, saves emails to SQLite + disk,
+and automatically opens matching URLs in Chrome incognito based on regex rules.`,
 		Version:       version,
 		SilenceUsage:  true,
 		SilenceErrors: false,
@@ -40,6 +42,11 @@ func NewRoot(version string) *cobra.Command {
 			return runWatch(cmd.Context(), alias)
 		},
 	}
+
+	// Set custom help template for cleaner output
+	root.SetHelpTemplate(helpTemplate)
+	root.SetUsageTemplate(usageTemplate)
+
 	root.AddCommand(newAddCmd(), newListCmd(), newRemoveCmd(),
 		newWatchCmd(), newRulesCmd(), newExportCsvCmd())
 	return root
