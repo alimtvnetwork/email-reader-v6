@@ -98,6 +98,14 @@ func (c *Client) SelectInbox() (MailboxStats, error) {
 	if box == "" {
 		box = "INBOX"
 	}
+	return c.SelectMailbox(box)
+}
+
+// SelectMailbox selects a specific mailbox/folder and returns detailed stats.
+func (c *Client) SelectMailbox(box string) (MailboxStats, error) {
+	if box == "" {
+		box = "INBOX"
+	}
 	mbox, err := c.c.Select(box, false)
 	if err != nil {
 		return MailboxStats{Name: box}, fmt.Errorf("select %s: %w", box, err)
