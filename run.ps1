@@ -35,9 +35,19 @@ function Write-WarnLine($msg) {
 # --- Resolve repo root (folder containing this script) ---
 $RepoRoot  = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $DeployDir = Join-Path $RepoRoot 'email-reader-cli'
-$ExePath   = Join-Path $DeployDir 'email-read.exe'
-$DataDir   = Join-Path $DeployDir 'data'
-$MailDir   = Join-Path $DeployDir 'email'
+
+# Detect host OS so this script works on Windows, macOS, and Linux.
+# On non-Windows hosts we drop the .exe suffix and skip the PATH update.
+$IsWindowsHost = $true
+if ($PSVersionTable.PSEdition -eq 'Core') {
+    $IsWindowsHost = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+        [System.Runtime.InteropServices.OSPlatform]::Windows)
+}
+
+$ExeName = if ($IsWindowsHost) { 'email-read.exe' } else { 'email-read' }
+$ExePath = Join-Path $DeployDir $ExeName
+$DataDir = Join-Path $DeployDir 'data'
+$MailDir = Join-Path $DeployDir 'email'
 
 Set-Location $RepoRoot
 
