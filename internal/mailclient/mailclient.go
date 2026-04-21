@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	netmail "net/mail"
 	"os"
 	"path/filepath"
 	"regexp"
