@@ -10,7 +10,7 @@ Each step is one atomic chunk. After finishing a step I stop and wait for **"nex
 | 4 | SQLite store + migrations | `internal/store` — open DB at `data/emails.db`, create `Emails`, `WatchState`, `OpenedUrls` (PascalCase), upsert helpers | ✅ done |
 | 5 | IMAP mail client | `internal/mailclient` — connect, fetch new UIDs, parse to struct, save raw `.eml` to `email/<alias>/<date>/` | ✅ done |
 | 6 | Rules engine + Chrome launcher | `internal/rules` regex evaluation; `internal/browser` Chrome incognito spawn with dedup via `OpenedUrls` | ✅ done |
-| 7 | Watch loop + `email-read <alias>` | `internal/watcher` polling every N sec, graceful Ctrl+C shutdown, default-to-first-alias when no arg | ⏳ pending |
+| 7 | Watch loop + `email-read <alias>` | `internal/watcher` polling every N sec, graceful Ctrl+C shutdown, default-to-first-alias when no arg | ✅ done |
 | 8 | `rules list/enable/disable` + `export-csv` | `internal/exporter` writing `./data/export-<ts>.csv` from CWD | ⏳ pending |
 | 9 | `run.ps1` bootstrap | `git pull` → `go build` to `email-reader-cli/email-read.exe` → ensure `data/` + `email/` → add to user PATH (idempotent) | ⏳ pending |
 | 10 | README | Install (run `run.ps1`), Gmail/Outlook app-password note, command reference, sample rules JSON | ⏳ pending |
