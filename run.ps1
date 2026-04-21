@@ -73,13 +73,24 @@ if (-not $go) {
 Write-Ok ("Found {0}" -f (& go version))
 
 # --- 3. Build the EXE ---
-Write-Step "Building email-read.exe"
+Write-Step "Building $ExeName"
 if (-not (Test-Path $DeployDir)) {
     New-Item -ItemType Directory -Path $DeployDir | Out-Null
 }
 
-$env:GOOS   = 'windows'
-$env:GOARCH = 'amd64'
+# Resolve module dependencies (creates/repairs go.sum). Safe to run every time.
+Write-Step "Resolving Go module dependencies (go mod tidy)"
+& go mod tidy
+if ($LASTEXITCODE -ne 0) {
+    throw "go mod tidy failed with exit code $LASTEXITCODE"
+}
+
+# Only force a Windows cross-compile when running on Windows.
+# On macOS/Linux, build a native binary so the user can actually execute it.
+if ($IsWindowsHost) {
+    $env:GOOS   = 'windows'
+    $env:GOARCH = 'amd64'
+}
 
 & go build -o $ExePath ./cmd/email-read
 if ($LASTEXITCODE -ne 0) {
