@@ -112,7 +112,102 @@ func (c *Client) SelectInbox() (MailboxStats, error) {
 	}, nil
 }
 
-// FetchSince returns all messages with UID strictly greater than lastUid.
+// HeaderSummary is a lightweight view of a mailbox message for diagnostics.
+type HeaderSummary struct {
+	Uid        uint32
+	From       string
+	To         string
+	Subject    string
+	ReceivedAt time.Time
+}
+
+// MailboxName describes one selectable mailbox/folder exposed by the server.
+type MailboxName struct {
+	Name       string
+	Delimiter  string
+	Attributes []string
+}
+
+// ListMailboxes returns the folders visible to the account. This helps diagnose
+// delivery into Spam/Junk/All Mail instead of the configured INBOX.
+func (c *Client) ListMailboxes() ([]MailboxName, error) {
+	ch := make(chan *imap.MailboxInfo, 32)
+	done := make(chan error, 1)
+	go func() {
+		done <- c.c.List("", "*", ch)
+	}()
+
+	var out []MailboxName
+	for info := range ch {
+		if info == nil {
+			continue
+		}
+		out = append(out, MailboxName{
+			Name:       info.Name,
+			Delimiter:  string(info.Delimiter),
+			Attributes: info.Attributes,
+		})
+	}
+	if err := <-done; err != nil {
+		return nil, fmt.Errorf("list mailboxes: %w", err)
+	}
+	return out, nil
+}
+
+// FetchRecentHeaders returns up to limit latest message headers from the
+// selected mailbox. Call SelectInbox first so UidNext reflects that mailbox.
+func (c *Client) FetchRecentHeaders(stats MailboxStats, limit uint32) ([]HeaderSummary, error) {
+	if limit == 0 || stats.Messages == 0 || stats.UidNext <= 1 {
+		return nil, nil
+	}
+
+	lastUID := stats.UidNext - 1
+	firstUID := uint32(1)
+	if lastUID >= limit {
+		firstUID = lastUID - limit + 1
+	}
+
+	seq := new(imap.SeqSet)
+	seq.AddRange(firstUID, lastUID)
+
+	items := []imap.FetchItem{
+		imap.FetchUid,
+		imap.FetchEnvelope,
+		imap.FetchInternalDate,
+	}
+	ch := make(chan *imap.Message, limit)
+	done := make(chan error, 1)
+	go func() {
+		done <- c.c.UidFetch(seq, items, ch)
+	}()
+
+	var out []HeaderSummary
+	for msg := range ch {
+		if msg == nil {
+			continue
+		}
+		summary := HeaderSummary{Uid: msg.Uid, ReceivedAt: msg.InternalDate}
+		if msg.Envelope != nil {
+			summary.Subject = msg.Envelope.Subject
+			if summary.ReceivedAt.IsZero() {
+				summary.ReceivedAt = msg.Envelope.Date
+			}
+			if len(msg.Envelope.From) > 0 {
+				summary.From = formatAddr(msg.Envelope.From[0])
+			}
+			if len(msg.Envelope.To) > 0 {
+				summary.To = formatAddr(msg.Envelope.To[0])
+			}
+		}
+		out = append(out, summary)
+	}
+	if err := <-done; err != nil {
+		return nil, fmt.Errorf("fetch recent headers: %w", err)
+	}
+	return out, nil
+}
+
+
 // Pass 0 on the first run to fetch nothing-but-baseline (callers should typically
 // snapshot UIDNEXT before the first poll instead of replaying history).
 func (c *Client) FetchSince(lastUid uint32) ([]*Message, error) {
