@@ -4,14 +4,15 @@ Single source of truth for the project roadmap. The detailed step-by-step build 
 
 ## Active
 
-_All initial build tasks complete. Awaiting user verification on Windows._
+### Immediate next action
+- ⏳ Bump `Version` constant in `cmd/email-read/main.go` from `0.8.0` → `0.9.0` (required by project rule; missed during 2026-04-21 debugging session).
 
-### Verification (user-side, awaiting)
-- ⏳ Run `.\run.ps1` locally, confirm build succeeds and `email-read.exe` lands in `email-reader-cli/`.
-- ⏳ Reopen terminal and confirm `email-read` is on PATH.
-- ⏳ Run `email-read add` to seed an account, then `email-read` to start the watch loop.
+### Verification (user-side, in progress)
+- ⏳ Rebuild via `.\run.ps1` (or `go build`) to pick up the new verbose poll logging.
+- ⏳ Run `email-read watch ab` and confirm a per-poll log block appears every 3s with mailbox stats.
+- ⏳ Send a test email from webmail (`https://webmail.attobondcleaning.store`) — guaranteed local delivery. Confirm `messages` count increments and `fetched 1 new message(s)` appears.
 - ⏳ Confirm a test email triggers the rule engine and Chrome incognito opens the URL.
-- ⏳ Run `email-read export-csv` and verify the file is written to CWD `./data/`.
+- ⏳ Run `email-read export-csv` and verify the file is written under `email-reader-cli/data/`.
 
 ## Completed
 
@@ -27,3 +28,4 @@ _All initial build tasks complete. Awaiting user verification on Windows._
 | 8 | ✅ `rules list/enable/disable` + `export-csv` | `internal/exporter` writes `./data/export-<ts>.csv` |
 | 9 | ✅ `run.ps1` bootstrap | git pull → go build → ensure dirs → idempotent user PATH add |
 | 10 | ✅ README | Windows install via `run.ps1`, app-password notes, command reference, sample rules JSON |
+| 11 | ✅ Verbose per-poll logging in watcher | `MailboxStats` struct + per-step `pollOnce` log lines (2026-04-21 debug session) |
