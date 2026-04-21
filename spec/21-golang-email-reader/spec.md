@@ -78,9 +78,20 @@ Binary name: `email-read`
   ],
   "watch": {
     "pollSeconds": 3
+  },
+  "browser": {
+    "chromePath": "",
+    "incognitoArg": ""
   }
 }
 ```
+
+### Browser config
+- `chromePath` — optional absolute path to the Chrome executable. If empty, auto-detect (see §6).
+- `incognitoArg` — optional override for the private-mode flag. If empty, auto-pick based on the detected browser:
+  - Chrome / Chromium / Edge → `--incognito`
+  - Brave → `--incognito`
+  - Firefox (fallback only) → `-private-window`
 
 ### Password handling
 - Stored as **Base64** in `passwordB64`. (Acknowledged: encoding, not encryption.)
@@ -110,16 +121,42 @@ For each enabled rule, ALL of the following must match (empty/missing pattern = 
 If matched, `urlRegex` is run against the body; **every** distinct match is opened via:
 
 ```
-chrome.exe --incognito --new-window <url>
+<chromePath> --incognito --new-window <url>
 ```
 
-Chrome lookup order:
-1. `%ProgramFiles%\Google\Chrome\Application\chrome.exe`
-2. `%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe`
-3. `%LocalAppData%\Google\Chrome\Application\chrome.exe`
-4. `chrome` on `PATH`
+### Chrome auto-detection (cross-platform)
 
-Each opened URL is recorded in the DB (`OpenedUrls` table) so we never re-open the same URL twice.
+Resolution order in `internal/browser`:
+
+1. **Config override** — if `config.browser.chromePath` is set and the file exists, use it verbatim.
+2. **Env var** — `EMAIL_READ_CHROME` if set and exists.
+3. **OS-specific defaults** (first existing path wins):
+
+   **Windows** (`runtime.GOOS == "windows"`)
+   - `%ProgramFiles%\Google\Chrome\Application\chrome.exe`
+   - `%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe`
+   - `%LocalAppData%\Google\Chrome\Application\chrome.exe`
+   - `%ProgramFiles%\Chromium\Application\chrome.exe`
+   - `%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe` (fallback)
+   - `%ProgramFiles%\BraveSoftware\Brave-Browser\Application\brave.exe` (fallback)
+
+   **macOS** (`runtime.GOOS == "darwin"`)
+   - `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
+   - `$HOME/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
+   - `/Applications/Chromium.app/Contents/MacOS/Chromium`
+   - `/Applications/Brave Browser.app/Contents/MacOS/Brave Browser` (fallback)
+   - `/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge` (fallback)
+
+   **Linux** (`runtime.GOOS == "linux"`) — try `exec.LookPath` for each name in order:
+   - `google-chrome`, `google-chrome-stable`, `chromium`, `chromium-browser`, `brave-browser`, `microsoft-edge`
+   - Also probe `/usr/bin/`, `/usr/local/bin/`, `/snap/bin/`, `/var/lib/flatpak/exports/bin/` for the same names.
+
+4. **PATH lookup** — `exec.LookPath("chrome")` as a last resort.
+5. If nothing is found, log a warning, persist the URL to `OpenedUrls` with `OpenedAt = NULL` (or a `Skipped` flag), and continue watching — never crash the watcher.
+
+The detected path is **cached** for the process lifetime. The chosen incognito flag is selected from the executable's basename (chrome/chromium/msedge/brave → `--incognito`, firefox → `-private-window`), unless `config.browser.incognitoArg` overrides it.
+
+Each opened URL is recorded in the `OpenedUrls` table so we never re-open the same URL twice.
 
 ## 7. SQLite Schema (`data/emails.db`)
 
