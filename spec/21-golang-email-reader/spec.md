@@ -254,6 +254,6 @@ Graceful shutdown on Ctrl+C (logout IMAP, close DB).
 ## 12. Out of Scope (v1)
 - Sending email.
 - OAuth (Gmail/Outlook with 2FA require app passwords — documented in README).
-- Cross-platform browser launching (Chrome on Windows only).
+- Browsers other than Chrome/Chromium/Edge/Brave (Firefox is a soft fallback only).
 - Encryption beyond Base64 (explicitly declined by user).
 - GUI.
