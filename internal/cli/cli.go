@@ -294,3 +294,30 @@ func runRemove(alias string) error {
 	fmt.Printf("Removed account %q\n", alias)
 	return nil
 }
+
+// Custom help templates for cleaner output
+const helpTemplate = `{{.Long}}
+
+Usage:
+  {{.UseLine}}
+
+Available Commands:{{range .Commands}}{{if (or .IsAvailableCommand (eq .Name "help"))}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}
+
+Flags:
+{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}
+
+Use "{{.CommandPath}} [command] --help" for more information about a command.
+`
+
+const usageTemplate = `Usage:
+  {{.UseLine}}
+
+Available Commands:{{range .Commands}}{{if (or .IsAvailableCommand (eq .Name "help"))}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}
+
+Flags:
+{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}
+
+Use "{{.CommandPath}} [command] --help" for more information about a command.
+`
