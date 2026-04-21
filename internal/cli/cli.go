@@ -157,13 +157,32 @@ func runDiagnose(alias string) error {
 		}
 	}
 
+	fmt.Println("\n5) Folder scan summary...")
+	foundElsewhere := false
+	for _, f := range folders {
+		folderStats, err := mc.SelectMailbox(f.Name)
+		if err != nil {
+			fmt.Printf("   - %s: WARN %v\n", f.Name, err)
+			continue
+		}
+		fmt.Printf("   - %s: messages=%d unseen=%d uidNext=%d\n",
+			folderStats.Name, folderStats.Messages, folderStats.Unseen, folderStats.UidNext)
+		if folderStats.Name != stats.Name && folderStats.Messages > 0 {
+			foundElsewhere = true
+		}
+	}
+
 	fmt.Println("\nDiagnosis:")
 	if stats.Messages <= 1 && stats.UidNext <= 2 {
-		fmt.Println("   The IMAP server is still exposing only the baseline message in this mailbox.")
-		fmt.Println("   If your mail UI shows a newer Gmail message, it is not visible in this IMAP mailbox/folder yet.")
-		fmt.Println("   Check Spam/Junk/All Mail folders, recipient spelling, and domain MX/routing in your mail host.")
+		fmt.Println("   The IMAP server is still exposing only the baseline message in the configured mailbox.")
+		if foundElsewhere {
+			fmt.Println("   Other folders contain messages; the new email may be in Spam/Junk/Sent/All Mail instead of INBOX.")
+		} else {
+			fmt.Println("   No other listed folder showed obvious new mail either; this points to mail routing/delivery before IMAP.")
+		}
+		fmt.Println("   Check recipient spelling, mailbox existence, Spam/Junk folders, and domain MX/routing in your mail host.")
 	} else {
-		fmt.Println("   The server has more mail than the watcher baseline; run `email-read watch <alias>` to process UID > LastUid.")
+		fmt.Println("   The configured mailbox has more mail than the watcher baseline; run `email-read watch <alias>` to process UID > LastUid.")
 	}
 	return nil
 }
