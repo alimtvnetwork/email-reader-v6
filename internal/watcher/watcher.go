@@ -139,29 +139,29 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 		}
 		ws.LastUid = baseline
 		if err := opts.Store.UpsertWatchState(ctx, ws); err != nil {
-			return fmt.Errorf("baseline watch state: %w", err)
+			return &stats, fmt.Errorf("baseline watch state: %w", err)
 		}
 		logger.Printf("[%s] baseline set to UID=%d (skipping history). New mail with UID > %d will be processed.",
 			alias, baseline, baseline)
-		return nil
+		return &stats, nil
 	}
 
 	logger.Printf("[%s] fetching messages with UID > %d (server uidNext=%d)",
 		alias, ws.LastUid, stats.UidNext)
 	msgs, err := mc.FetchSince(ws.LastUid)
 	if err != nil {
-		return err
+		return &stats, err
 	}
 	if len(msgs) == 0 {
 		logger.Printf("[%s] no new messages (poll completed in %s)",
 			alias, time.Since(start).Round(time.Millisecond))
-		return nil
+		return &stats, nil
 	}
 	logger.Printf("[%s] fetched %d new message(s)", alias, len(msgs))
 
 	for _, m := range msgs {
 		if err := ctx.Err(); err != nil {
-			return err
+			return &stats, err
 		}
 		path, err := mailclient.SaveRaw(alias, m)
 		if err != nil {
@@ -223,9 +223,9 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 	}
 
 	if err := opts.Store.UpsertWatchState(ctx, ws); err != nil {
-		return fmt.Errorf("update watch state: %w", err)
+		return &stats, fmt.Errorf("update watch state: %w", err)
 	}
 	logger.Printf("[%s] poll complete: processed=%d newLastUid=%d total=%s",
 		alias, len(msgs), ws.LastUid, time.Since(start).Round(time.Millisecond))
-	return nil
+	return &stats, nil
 }
