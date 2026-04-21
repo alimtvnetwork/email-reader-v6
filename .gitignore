@@ -22,3 +22,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Go email-read CLI build output
+email-reader-cli/
+*.exe
+data/config.json
+data/emails.db
+email/
