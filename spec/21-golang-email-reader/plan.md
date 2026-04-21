@@ -8,7 +8,7 @@ Each step is one atomic chunk. After finishing a step I stop and wait for **"nex
 | 2 | Config layer | `internal/config` — load/save `data/config.json`, Base64 password helpers, account + rule + watch structs | ✅ done |
 | 3 | IMAP defaults + `add` / `list` / `remove` commands | `internal/imapdef` lookup table, Cobra commands wired with survey prompts (interactive `add`) | ✅ done |
 | 4 | SQLite store + migrations | `internal/store` — open DB at `data/emails.db`, create `Emails`, `WatchState`, `OpenedUrls` (PascalCase), upsert helpers | ✅ done |
-| 5 | IMAP mail client | `internal/mailclient` — connect, fetch new UIDs, parse to struct, save raw `.eml` to `email/<alias>/<date>/` | ⏳ pending |
+| 5 | IMAP mail client | `internal/mailclient` — connect, fetch new UIDs, parse to struct, save raw `.eml` to `email/<alias>/<date>/` | ✅ done |
 | 6 | Rules engine + Chrome launcher | `internal/rules` regex evaluation; `internal/browser` Chrome incognito spawn with dedup via `OpenedUrls` | ⏳ pending |
 | 7 | Watch loop + `email-read <alias>` | `internal/watcher` polling every N sec, graceful Ctrl+C shutdown, default-to-first-alias when no arg | ⏳ pending |
 | 8 | `rules list/enable/disable` + `export-csv` | `internal/exporter` writing `./data/export-<ts>.csv` from CWD | ⏳ pending |
