@@ -47,14 +47,52 @@ func Run(ctx context.Context, opts Options) error {
 	tick := time.NewTimer(0)
 	defer tick.Stop()
 
+	// Cross-poll diagnostic state: detect server-side changes between polls.
+	// If `messages` / `uidNext` / `uidValidity` never change, the mailbox is
+	// genuinely receiving no mail — i.e., the problem is upstream (MX, spam,
+	// wrong recipient address), not in this watcher.
+	var (
+		prevMessages    uint32
+		prevUidNext     uint32
+		prevUidValidity uint32
+		pollCount       int
+		startedAt       = time.Now()
+		havePrev        bool
+	)
+	const heartbeatEvery = 20 // ~ every 20 polls (1 min at 3s poll)
+
 	for {
 		select {
 		case <-ctx.Done():
 			logger.Printf("[%s] watcher stopped: %v", opts.Account.Alias, ctx.Err())
 			return nil
 		case <-tick.C:
-			if err := pollOnce(ctx, opts, logger); err != nil {
+			pollCount++
+			stats, err := pollOnce(ctx, opts, logger)
+			if err != nil {
 				logger.Printf("[%s] poll error: %v", opts.Account.Alias, err)
+			} else if stats != nil {
+				// Diagnostic: compare server-reported mailbox state vs previous poll.
+				if havePrev {
+					if stats.UidValidity != prevUidValidity {
+						logger.Printf("[%s] ⚠ UIDVALIDITY CHANGED %d -> %d: mailbox was recreated/reset on server. Baseline will reset.",
+							opts.Account.Alias, prevUidValidity, stats.UidValidity)
+					}
+					if stats.Messages != prevMessages || stats.UidNext != prevUidNext {
+						logger.Printf("[%s] ✓ server state changed: messages %d->%d, uidNext %d->%d (new mail likely arrived)",
+							opts.Account.Alias, prevMessages, stats.Messages, prevUidNext, stats.UidNext)
+					}
+				}
+				prevMessages = stats.Messages
+				prevUidNext = stats.UidNext
+				prevUidValidity = stats.UidValidity
+				havePrev = true
+
+				// Periodic heartbeat: makes "nothing arriving" obvious vs. "watcher hung".
+				if pollCount%heartbeatEvery == 0 {
+					logger.Printf("[%s] ♥ heartbeat: watching for %s, %d polls completed, server still reports messages=%d uidNext=%d. If you expect new mail and don't see it: check MX records, spam folder, or send a test from webmail.",
+						opts.Account.Alias, time.Since(startedAt).Round(time.Second), pollCount, stats.Messages, stats.UidNext)
+				}
 			}
 			tick.Reset(poll)
 		}
@@ -62,14 +100,16 @@ func Run(ctx context.Context, opts Options) error {
 }
 
 // pollOnce performs a single connect → fetch → persist → match → open cycle.
-func pollOnce(ctx context.Context, opts Options, logger *log.Logger) error {
+// Returns the MailboxStats from the server (or nil on early error) so the
+// caller can do cross-poll diagnostics like "did messages count change?".
+func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclient.MailboxStats, error) {
 	start := time.Now()
 	alias := opts.Account.Alias
 	logger.Printf("[%s] poll start", alias)
 
 	ws, err := opts.Store.GetWatchState(ctx, alias)
 	if err != nil {
-		return fmt.Errorf("get watch state: %w", err)
+		return nil, fmt.Errorf("get watch state: %w", err)
 	}
 	logger.Printf("[%s] watch state loaded: lastUid=%d lastSubject=%q",
 		alias, ws.LastUid, ws.LastSubject)
@@ -79,14 +119,14 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) error {
 		opts.Account.UseTLS, opts.Account.Email)
 	mc, err := mailclient.Dial(opts.Account)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer mc.Close()
 	logger.Printf("[%s] connected and logged in (took %s)", alias, time.Since(start).Round(time.Millisecond))
 
 	stats, err := mc.SelectInbox()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	logger.Printf("[%s] mailbox %q stats: messages=%d recent=%d unseen=%d uidNext=%d uidValidity=%d",
 		alias, stats.Name, stats.Messages, stats.Recent, stats.Unseen, stats.UidNext, stats.UidValidity)
