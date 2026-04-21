@@ -12,3 +12,5 @@ Hard prohibitions for this project. Violating these will break builds, leak secr
 - **Do NOT append boilerplate blocks** ("If you have any question..." or "Do you understand?..."). User preference.
 - **Do NOT bump version by less than minor on code changes.** User preference: every code change bumps at least minor version of the CLI (`cmd/email-read/main.go` `Version` constant).
 - **Do NOT invest in the React/Vite scaffold (`src/`)** unless explicitly asked. The product is the Go CLI.
+- **Do NOT write polling/watch loops that are silent on success.** Every cycle must emit at least one heartbeat log line including a server-side counter (e.g. `messages=N uidNext=M`). See `solved-issues/02-watcher-silent-on-healthy-idle.md`.
+- **Do NOT investigate the Base64 password layer when IMAP returns `AUTHENTICATIONFAILED`.** It is always a wrong-password input issue. See `solved-issues/01-imap-auth-failed-wrong-password.md`. Always verify with raw `openssl s_client` first.
