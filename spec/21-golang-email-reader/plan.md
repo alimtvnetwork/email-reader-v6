@@ -6,7 +6,7 @@ Each step is one atomic chunk. After finishing a step I stop and wait for **"nex
 |---|---|---|---|
 | 1 | Scaffold Go module + repo layout | `go.mod`, `cmd/email-read/main.go` printing version, folder skeleton under `internal/`, `.gitignore` for `email-reader-cli/` build output | ✅ done |
 | 2 | Config layer | `internal/config` — load/save `data/config.json`, Base64 password helpers, account + rule + watch structs | ✅ done |
-| 3 | IMAP defaults + `add` / `list` / `remove` commands | `internal/imapdef` lookup table, Cobra commands wired with survey prompts (interactive `add`) | ⏳ pending |
+| 3 | IMAP defaults + `add` / `list` / `remove` commands | `internal/imapdef` lookup table, Cobra commands wired with survey prompts (interactive `add`) | ✅ done |
 | 4 | SQLite store + migrations | `internal/store` — open DB at `data/emails.db`, create `Emails`, `WatchState`, `OpenedUrls` (PascalCase), upsert helpers | ⏳ pending |
 | 5 | IMAP mail client | `internal/mailclient` — connect, fetch new UIDs, parse to struct, save raw `.eml` to `email/<alias>/<date>/` | ⏳ pending |
 | 6 | Rules engine + Chrome launcher | `internal/rules` regex evaluation; `internal/browser` Chrome incognito spawn with dedup via `OpenedUrls` | ⏳ pending |
