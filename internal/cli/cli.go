@@ -16,6 +16,7 @@ import (
 	"github.com/lovable/email-read/internal/browser"
 	"github.com/lovable/email-read/internal/config"
 	"github.com/lovable/email-read/internal/imapdef"
+	"github.com/lovable/email-read/internal/mailclient"
 	"github.com/lovable/email-read/internal/rules"
 	"github.com/lovable/email-read/internal/store"
 	"github.com/lovable/email-read/internal/watcher"
@@ -48,7 +49,7 @@ and automatically opens matching URLs in Chrome incognito based on regex rules.`
 	root.SetUsageTemplate(usageTemplate)
 
 	root.AddCommand(newAddCmd(), newListCmd(), newRemoveCmd(),
-		newWatchCmd(), newRulesCmd(), newExportCsvCmd())
+		newWatchCmd(), newDiagnoseCmd(), newRulesCmd(), newExportCsvCmd())
 	return root
 }
 
