@@ -80,18 +80,36 @@ func (c *Client) Close() error {
 	return c.c.Logout()
 }
 
+// MailboxStats summarises the selected mailbox so callers can log it.
+type MailboxStats struct {
+	Name        string // e.g. "INBOX"
+	Messages    uint32 // total messages in the mailbox
+	Recent      uint32 // \Recent count
+	Unseen      uint32 // \Seen=false count (0 if server didn't report)
+	UidNext     uint32 // next UID the server will assign
+	UidValidity uint32 // changes when UID space is reset
+}
+
 // SelectInbox selects the configured mailbox (defaults to INBOX) and returns
-// the highest UID currently present (UIDNEXT-1) — useful for first-run baselines.
-func (c *Client) SelectInbox() (uidNext uint32, err error) {
+// detailed mailbox statistics. UidNext-1 is the highest UID currently present
+// — useful for first-run baselines and per-poll diagnostics.
+func (c *Client) SelectInbox() (MailboxStats, error) {
 	box := c.acct.Mailbox
 	if box == "" {
 		box = "INBOX"
 	}
 	mbox, err := c.c.Select(box, false)
 	if err != nil {
-		return 0, fmt.Errorf("select %s: %w", box, err)
+		return MailboxStats{Name: box}, fmt.Errorf("select %s: %w", box, err)
 	}
-	return mbox.UidNext, nil
+	return MailboxStats{
+		Name:        box,
+		Messages:    mbox.Messages,
+		Recent:      mbox.Recent,
+		Unseen:      mbox.Unseen,
+		UidNext:     mbox.UidNext,
+		UidValidity: mbox.UidValidity,
+	}, nil
 }
 
 // FetchSince returns all messages with UID strictly greater than lastUid.
