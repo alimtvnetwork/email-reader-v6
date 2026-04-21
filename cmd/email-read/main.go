@@ -8,7 +8,7 @@ import (
 )
 
 // Version is the CLI version. Bumped per release.
-const Version = "0.8.0"
+const Version = "0.9.0"
 
 func main() {
 	root := cli.NewRoot(Version)
