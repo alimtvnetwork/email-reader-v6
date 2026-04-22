@@ -22,7 +22,7 @@ import (
 
 // AppVersion is shown in the window title. Bumped per release in lockstep
 // with cmd/email-read/main.go.
-const AppVersion = "0.23.0"
+const AppVersion = "0.24.0"
 
 // Run creates the Fyne app, builds the main window, and blocks until close.
 func Run() {
@@ -109,6 +109,8 @@ func viewFor(item NavItem, state *AppState, gotoNav func(NavKind)) fyne.CanvasOb
 		return views.BuildEmails(views.EmailsOptions{
 			Alias: state.Alias(),
 		})
+	case NavRules:
+		return views.BuildRules(views.RulesOptions{})
 	default:
 		return placeholderView(item, state)
 	}
