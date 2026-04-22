@@ -13,10 +13,25 @@ import (
 
 // TestLoadDashboardStats sets up an isolated config + store under a tmp cwd,
 // inserts two emails for two aliases, then verifies every counter.
+//
+// Cleanup note: config.Path()/store.Open() resolve relative to the
+// *executable* directory, not cwd. So even after we t.Chdir back, files
+// linger and can poison sibling tests (e.g. TestDiagnose_NoAccounts which
+// expects zero accounts). We snapshot config.json and emails.db up-front
+// and restore/delete them in t.Cleanup.
 func TestLoadDashboardStats(t *testing.T) {
 	tmp := t.TempDir()
 	old, _ := os.Getwd()
 	t.Cleanup(func() { _ = os.Chdir(old) })
+
+	cfgPath, err := config.Path()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dbPath := filepath.Join(filepath.Dir(cfgPath), "emails.db")
+	snapshotAndRestore(t, cfgPath)
+	snapshotAndRestore(t, dbPath)
+
 	if err := os.Chdir(tmp); err != nil {
 		t.Fatal(err)
 	}
