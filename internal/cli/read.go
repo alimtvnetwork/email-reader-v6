@@ -87,12 +87,28 @@ func runRead(parent context.Context, alias string, uid uint32) error {
 		logger.Printf("    file: %s", row.FilePath)
 	}
 
+	// Auto-seed default rule (same behavior as `watch`) so `read` works
+	// out-of-the-box for users who have not hand-edited config.json.
+	if countEnabledRules(cfg.Rules) == 0 {
+		seeded := config.Rule{
+			Name:     "default-open-any-url",
+			Enabled:  true,
+			UrlRegex: `https?://[^\s<>"'\)\]]+`,
+		}
+		cfg.Rules = append(cfg.Rules, seeded)
+		if err := config.Save(cfg); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not save seeded rule: %v\n", err)
+		} else {
+			logger.Printf("    ℹ no enabled rules found — seeded default rule %q (matches any http(s) URL)", seeded.Name)
+		}
+	}
+
 	engine, ruleErr := rules.New(cfg.Rules)
 	if ruleErr != nil {
 		fmt.Fprintf(os.Stderr, "warning: %v\n", ruleErr)
 	}
 	if engine == nil || engine.RuleCount() == 0 {
-		logger.Printf("    ⚠ 0 enabled rules — nothing to evaluate. Add a rule in data/config.json (rules[].enabled=true with a urlRegex).")
+		logger.Printf("    ⚠ 0 enabled rules — nothing to evaluate.")
 		return nil
 	}
 	logger.Printf("    %d enabled rule(s) loaded", engine.RuleCount())
