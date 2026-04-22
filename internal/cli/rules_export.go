@@ -14,6 +14,18 @@ import (
 	"github.com/lovable/email-read/internal/store"
 )
 
+// countEnabledRules is shared with watch/read to decide whether a default
+// "open-any-url" seed rule should be installed.
+func countEnabledRules(rs []config.Rule) int {
+	n := 0
+	for _, r := range rs {
+		if r.Enabled {
+			n++
+		}
+	}
+	return n
+}
+
 func newRulesCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "rules",
@@ -37,7 +49,68 @@ func newRulesCmd() *cobra.Command {
 			Args:  cobra.ExactArgs(1),
 			RunE:  func(cmd *cobra.Command, args []string) error { return runRulesToggle(args[0], false) },
 		},
+		newRulesAddCmd(),
 	)
+	return c
+}
+
+// newRulesAddCmd registers `email-read rules add` for non-interactive rule
+// creation. Only --name and --url-regex are required.
+func newRulesAddCmd() *cobra.Command {
+	var (
+		name         string
+		urlRegex     string
+		fromRegex    string
+		subjectRegex string
+		bodyRegex    string
+		disabled     bool
+	)
+	c := &cobra.Command{
+		Use:   "add",
+		Short: "Add a rule from flags (no prompts).",
+		Long: `Add an auto-open rule. Only --name and --url-regex are required.
+Examples:
+  email-read rules add --name open-all --url-regex 'https?://[^\s]+'
+  email-read rules add --name lovable-verify \
+    --from-regex 'noreply@lovable\.dev' \
+    --url-regex 'https://lovable\.dev/auth/action[^\s]+'`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if name == "" || urlRegex == "" {
+				return errtrace.New("--name and --url-regex are required")
+			}
+			cfg, err := config.Load()
+			if err != nil {
+				return errtrace.Wrap(err, "load config")
+			}
+			r := config.Rule{
+				Name:         name,
+				Enabled:      !disabled,
+				FromRegex:    fromRegex,
+				SubjectRegex: subjectRegex,
+				BodyRegex:    bodyRegex,
+				UrlRegex:     urlRegex,
+			}
+			if existing := cfg.FindRule(name); existing != nil {
+				*existing = r
+			} else {
+				cfg.Rules = append(cfg.Rules, r)
+			}
+			if err := config.Save(cfg); err != nil {
+				return errtrace.Wrap(err, "save config")
+			}
+			p, _ := config.Path()
+			fmt.Printf("Saved rule %q (enabled=%v) to %s\n", name, r.Enabled, p)
+			return nil
+		},
+	}
+	c.Flags().StringVar(&name, "name", "", "rule name (required, unique)")
+	c.Flags().StringVar(&urlRegex, "url-regex", "", "regex matched against the email body to harvest URLs (required)")
+	c.Flags().StringVar(&fromRegex, "from-regex", "", "optional regex matched against the From header")
+	c.Flags().StringVar(&subjectRegex, "subject-regex", "", "optional regex matched against the Subject header")
+	c.Flags().StringVar(&bodyRegex, "body-regex", "", "optional regex that the body must match before urlRegex runs")
+	c.Flags().BoolVar(&disabled, "disabled", false, "save the rule disabled")
+	_ = c.MarkFlagRequired("name")
+	_ = c.MarkFlagRequired("url-regex")
 	return c
 }
 
