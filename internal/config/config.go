@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
+	"unicode"
 
 	"github.com/lovable/email-read/internal/errtrace"
 )
@@ -66,19 +68,49 @@ func Default() *Config {
 	}
 }
 
+// SanitizePassword strips leading/trailing whitespace AND zero-width / format
+// Unicode characters that frequently sneak in via copy-paste from chat / web
+// (e.g. U+2060 WORD JOINER, U+200B ZERO-WIDTH SPACE, U+FEFF BOM, U+00A0 NBSP).
+// IMAP servers reject the literal bytes, so we sanitize defensively at every
+// boundary. Returns the cleaned password.
+func SanitizePassword(s string) string {
+	// First trim ASCII whitespace.
+	s = strings.TrimSpace(s)
+	// Then strip leading/trailing zero-width or format runes.
+	s = strings.TrimFunc(s, func(r rune) bool {
+		if unicode.IsSpace(r) {
+			return true
+		}
+		// Format category (Cf) covers WORD JOINER, ZWSP, ZWNJ, BOM, etc.
+		if unicode.Is(unicode.Cf, r) {
+			return true
+		}
+		switch r {
+		case '\u00A0', '\u2007', '\u202F', '\u3000':
+			return true
+		}
+		return false
+	})
+	return s
+}
+
 // EncodePassword base64-encodes a plaintext password for storage.
 // Note: this is encoding, not encryption — explicitly accepted by the user.
+// The input is sanitized to remove invisible characters that copy-paste from
+// chat/markdown commonly introduces (U+2060 word joiner, U+200B ZWSP, etc.).
 func EncodePassword(plain string) string {
-	return base64.StdEncoding.EncodeToString([]byte(plain))
+	return base64.StdEncoding.EncodeToString([]byte(SanitizePassword(plain)))
 }
 
 // DecodePassword base64-decodes a stored password back to plaintext.
+// The result is sanitized as a defense-in-depth measure for accounts that
+// were stored before sanitization was added on the encode side.
 func DecodePassword(b64 string) (string, error) {
-	b, err := base64.StdEncoding.DecodeString(b64)
+	b, err := base64.StdEncoding.DecodeString(strings.TrimSpace(b64))
 	if err != nil {
 		return "", errtrace.Wrap(err, "decode password")
 	}
-	return string(b), nil
+	return SanitizePassword(string(b)), nil
 }
 
 // ExeDir returns the directory that holds the running executable.
