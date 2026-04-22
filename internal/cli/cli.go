@@ -49,9 +49,11 @@ and automatically opens matching URLs in Chrome incognito based on regex rules.`
 			if len(args) == 1 {
 				alias = args[0]
 			}
-			return runWatch(cmd.Context(), alias)
+			verbose, _ := cmd.Flags().GetBool("verbose")
+			return runWatch(cmd.Context(), alias, verbose)
 		},
 	}
+	root.PersistentFlags().BoolP("verbose", "v", false, "verbose logging (log every poll step, not just state changes)")
 
 	// Set custom help template for cleaner output
 	root.SetHelpTemplate(helpTemplate)
@@ -237,7 +239,8 @@ func newWatchCmd() *cobra.Command {
 			if len(args) == 1 {
 				alias = args[0]
 			}
-			return runWatch(cmd.Context(), alias)
+			verbose, _ := cmd.Flags().GetBool("verbose")
+			return runWatch(cmd.Context(), alias, verbose)
 		},
 	}
 }
@@ -363,7 +366,7 @@ func runDiagnose(alias string) error {
 
 
 // until SIGINT/SIGTERM. Empty alias picks the first configured account.
-func runWatch(parent context.Context, alias string) error {
+func runWatch(parent context.Context, alias string, verbose bool) error {
 	cfg, err := config.Load()
 	if err != nil {
 		return errtrace.Wrap(err, "load config")
@@ -406,7 +409,6 @@ func runWatch(parent context.Context, alias string) error {
 	defer stop()
 
 	logger := log.New(os.Stdout, "", log.LstdFlags)
-	logger.Printf("press Ctrl+C to stop")
 
 	return watcher.Run(ctx, watcher.Options{
 		Account:     acct,
@@ -415,6 +417,7 @@ func runWatch(parent context.Context, alias string) error {
 		Launcher:    launcher,
 		Store:       st,
 		Logger:      logger,
+		Verbose:     verbose,
 	})
 }
 

@@ -26,10 +26,16 @@ type Options struct {
 	Launcher    *browser.Launcher
 	Store       *store.Store
 	Logger      *log.Logger // optional; defaults to stdout
+	Verbose     bool        // if true, log every poll step. Default: only state changes.
 }
 
 // Run blocks until ctx is cancelled. It logs progress and tolerates
 // transient IMAP errors by reconnecting on the next tick.
+//
+// Logging modes:
+//   - Quiet (default): only startup banner, baseline, new-mail events,
+//     errors, and a periodic heartbeat. Idle polls are silent.
+//   - Verbose (--verbose): every poll step is logged.
 func Run(ctx context.Context, opts Options) error {
 	logger := opts.Logger
 	if logger == nil {
@@ -40,17 +46,17 @@ func Run(ctx context.Context, opts Options) error {
 		poll = 3 * time.Second
 	}
 
-	logger.Printf("[%s] starting watcher (poll=%s, host=%s)",
-		opts.Account.Alias, poll, opts.Account.ImapHost)
+	alias := opts.Account.Alias
+	logger.Printf("[%s] watching %s @ %s:%d (poll=%s)  press Ctrl+C to stop",
+		alias, opts.Account.Email, opts.Account.ImapHost, opts.Account.ImapPort, poll)
+	if !opts.Verbose {
+		logger.Printf("[%s] quiet mode — only new mail / errors / heartbeat will be shown. Re-run with --verbose for full trace.", alias)
+	}
 
-	// One iteration immediately, then every `poll`.
 	tick := time.NewTimer(0)
 	defer tick.Stop()
 
-	// Cross-poll diagnostic state: detect server-side changes between polls.
-	// If `messages` / `uidNext` / `uidValidity` never change, the mailbox is
-	// genuinely receiving no mail — i.e., the problem is upstream (MX, spam,
-	// wrong recipient address), not in this watcher.
+	// Cross-poll diagnostic state.
 	var (
 		prevMessages    uint32
 		prevUidNext     uint32
@@ -58,29 +64,34 @@ func Run(ctx context.Context, opts Options) error {
 		pollCount       int
 		startedAt       = time.Now()
 		havePrev        bool
+		lastError       string // de-dupe spammy repeated errors in quiet mode
 	)
-	const heartbeatEvery = 20 // ~ every 20 polls (1 min at 3s poll)
+	const heartbeatEvery = 60 // ~ every 60 polls (~3 min at 3s poll)
 
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Printf("[%s] watcher stopped: %v", opts.Account.Alias, ctx.Err())
+			logger.Printf("[%s] stopped (%s, %d polls)", alias, time.Since(startedAt).Round(time.Second), pollCount)
 			return nil
 		case <-tick.C:
 			pollCount++
 			stats, err := pollOnce(ctx, opts, logger)
 			if err != nil {
-				logger.Printf("[%s] poll error:\n%s", opts.Account.Alias, errtrace.Format(err))
+				msg := err.Error()
+				if opts.Verbose || msg != lastError {
+					logger.Printf("[%s] ✗ poll error:\n%s", alias, errtrace.Format(err))
+					lastError = msg
+				}
 			} else if stats != nil {
-				// Diagnostic: compare server-reported mailbox state vs previous poll.
+				lastError = ""
 				if havePrev {
 					if stats.UidValidity != prevUidValidity {
-						logger.Printf("[%s] ⚠ UIDVALIDITY CHANGED %d -> %d: mailbox was recreated/reset on server. Baseline will reset.",
-							opts.Account.Alias, prevUidValidity, stats.UidValidity)
+						logger.Printf("[%s] ⚠ UIDVALIDITY changed %d → %d (mailbox reset on server, baseline will reset)",
+							alias, prevUidValidity, stats.UidValidity)
 					}
-					if stats.Messages != prevMessages || stats.UidNext != prevUidNext {
-						logger.Printf("[%s] ✓ server state changed: messages %d->%d, uidNext %d->%d (new mail likely arrived)",
-							opts.Account.Alias, prevMessages, stats.Messages, prevUidNext, stats.UidNext)
+					if opts.Verbose && (stats.Messages != prevMessages || stats.UidNext != prevUidNext) {
+						logger.Printf("[%s] server state: messages %d→%d, uidNext %d→%d",
+							alias, prevMessages, stats.Messages, prevUidNext, stats.UidNext)
 					}
 				}
 				prevMessages = stats.Messages
@@ -88,10 +99,9 @@ func Run(ctx context.Context, opts Options) error {
 				prevUidValidity = stats.UidValidity
 				havePrev = true
 
-				// Periodic heartbeat: makes "nothing arriving" obvious vs. "watcher hung".
 				if pollCount%heartbeatEvery == 0 {
-					logger.Printf("[%s] ♥ heartbeat: watching for %s, %d polls completed, server still reports messages=%d uidNext=%d. If you expect new mail and don't see it: check MX records, spam folder, or send a test from webmail.",
-						opts.Account.Alias, time.Since(startedAt).Round(time.Second), pollCount, stats.Messages, stats.UidNext)
+					logger.Printf("[%s] ♥ alive — %s, %d polls, mailbox messages=%d uidNext=%d (no new mail since last heartbeat)",
+						alias, time.Since(startedAt).Round(time.Second), pollCount, stats.Messages, stats.UidNext)
 				}
 			}
 			tick.Reset(poll)
@@ -100,36 +110,46 @@ func Run(ctx context.Context, opts Options) error {
 }
 
 // pollOnce performs a single connect → fetch → persist → match → open cycle.
-// Returns the MailboxStats from the server (or nil on early error) so the
-// caller can do cross-poll diagnostics like "did messages count change?".
+// In quiet mode (opts.Verbose=false) it stays silent unless something
+// noteworthy happens (new mail, errors, baseline being set).
 func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclient.MailboxStats, error) {
 	start := time.Now()
 	alias := opts.Account.Alias
-	logger.Printf("[%s] poll start", alias)
+	v := opts.Verbose
+
+	if v {
+		logger.Printf("[%s] poll start", alias)
+	}
 
 	ws, err := opts.Store.GetWatchState(ctx, alias)
 	if err != nil {
 		return nil, errtrace.Wrap(err, "get watch state")
 	}
-	logger.Printf("[%s] watch state loaded: lastUid=%d lastSubject=%q",
-		alias, ws.LastUid, ws.LastSubject)
+	if v {
+		logger.Printf("[%s] watch state loaded: lastUid=%d lastSubject=%q",
+			alias, ws.LastUid, ws.LastSubject)
+		logger.Printf("[%s] dialing IMAP %s:%d (tls=%v) as %s",
+			alias, opts.Account.ImapHost, opts.Account.ImapPort,
+			opts.Account.UseTLS, opts.Account.Email)
+	}
 
-	logger.Printf("[%s] dialing IMAP %s:%d (tls=%v) as %s",
-		alias, opts.Account.ImapHost, opts.Account.ImapPort,
-		opts.Account.UseTLS, opts.Account.Email)
 	mc, err := mailclient.Dial(opts.Account)
 	if err != nil {
 		return nil, errtrace.Wrap(err, "dial imap")
 	}
 	defer mc.Close()
-	logger.Printf("[%s] connected and logged in (took %s)", alias, time.Since(start).Round(time.Millisecond))
+	if v {
+		logger.Printf("[%s] connected and logged in (took %s)", alias, time.Since(start).Round(time.Millisecond))
+	}
 
 	stats, err := mc.SelectInbox()
 	if err != nil {
 		return nil, errtrace.Wrap(err, "select inbox")
 	}
-	logger.Printf("[%s] mailbox %q stats: messages=%d recent=%d unseen=%d uidNext=%d uidValidity=%d",
-		alias, stats.Name, stats.Messages, stats.Recent, stats.Unseen, stats.UidNext, stats.UidValidity)
+	if v {
+		logger.Printf("[%s] mailbox %q stats: messages=%d recent=%d unseen=%d uidNext=%d uidValidity=%d",
+			alias, stats.Name, stats.Messages, stats.Recent, stats.Unseen, stats.UidNext, stats.UidValidity)
+	}
 
 	// First-run baseline: don't replay history. Snapshot UIDNEXT-1 and exit.
 	if ws.LastUid == 0 {
@@ -141,23 +161,30 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 		if err := opts.Store.UpsertWatchState(ctx, ws); err != nil {
 			return &stats, errtrace.Wrap(err, "baseline watch state")
 		}
-		logger.Printf("[%s] baseline set to UID=%d (skipping history). New mail with UID > %d will be processed.",
+		// Always log baseline — it's a one-time meaningful event.
+		logger.Printf("[%s] baseline set to UID=%d (skipping history). Watching for UID > %d.",
 			alias, baseline, baseline)
 		return &stats, nil
 	}
 
-	logger.Printf("[%s] fetching messages with UID > %d (server uidNext=%d)",
-		alias, ws.LastUid, stats.UidNext)
+	if v {
+		logger.Printf("[%s] fetching messages with UID > %d (server uidNext=%d)",
+			alias, ws.LastUid, stats.UidNext)
+	}
 	msgs, err := mc.FetchSince(ws.LastUid)
 	if err != nil {
 		return &stats, errtrace.Wrap(err, "fetch since")
 	}
 	if len(msgs) == 0 {
-		logger.Printf("[%s] no new messages (poll completed in %s)",
-			alias, time.Since(start).Round(time.Millisecond))
+		if v {
+			logger.Printf("[%s] no new messages (poll completed in %s)",
+				alias, time.Since(start).Round(time.Millisecond))
+		}
 		return &stats, nil
 	}
-	logger.Printf("[%s] fetched %d new message(s)", alias, len(msgs))
+
+	// New mail arrived — always announce in both modes.
+	logger.Printf("[%s] ✉ %d new message(s)", alias, len(msgs))
 
 	for _, m := range msgs {
 		if err := ctx.Err(); err != nil {
@@ -165,7 +192,7 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 		}
 		path, err := mailclient.SaveRaw(alias, m)
 		if err != nil {
-			logger.Printf("[%s] save raw uid=%d:\n%s", alias, m.Uid, errtrace.Format(err))
+			logger.Printf("[%s] ✗ save raw uid=%d:\n%s", alias, m.Uid, errtrace.Format(err))
 		}
 		row := &store.Email{
 			Alias:      alias,
@@ -182,39 +209,44 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 		}
 		emailId, inserted, err := opts.Store.UpsertEmail(ctx, row)
 		if err != nil {
-			logger.Printf("[%s] upsert uid=%d:\n%s", alias, m.Uid, errtrace.Format(err))
+			logger.Printf("[%s] ✗ upsert uid=%d:\n%s", alias, m.Uid, errtrace.Format(err))
 			continue
 		}
 		if inserted {
-			logger.Printf("[%s] saved uid=%d from=%q subj=%q file=%s",
-				alias, m.Uid, m.From, m.Subject, path)
-		} else {
-			logger.Printf("[%s] duplicate uid=%d (already in DB) subj=%q", alias, m.Uid, m.Subject)
+			logger.Printf("    uid=%d  from=%s  subj=%q", m.Uid, shortAddr(m.From), m.Subject)
+			if v {
+				logger.Printf("    saved → %s", path)
+			}
+		} else if v {
+			logger.Printf("    uid=%d duplicate (already in DB) subj=%q", m.Uid, m.Subject)
 		}
 
 		// Rules → URLs → browser
 		if opts.Engine != nil && opts.Launcher != nil {
 			matches := opts.Engine.Evaluate(m)
-			logger.Printf("[%s] uid=%d matched %d rule URL(s)", alias, m.Uid, len(matches))
+			if len(matches) > 0 || v {
+				logger.Printf("    matched %d rule URL(s)", len(matches))
+			}
 			for _, match := range matches {
 				inserted, err := opts.Store.RecordOpenedUrl(ctx, emailId, match.RuleName, match.Url)
 				if err != nil {
-					logger.Printf("[%s] dedup url:\n%s", alias, errtrace.Format(err))
+					logger.Printf("    ✗ dedup url:\n%s", errtrace.Format(err))
 					continue
 				}
 				if !inserted {
-					logger.Printf("[%s] skipping url %s (already opened)", alias, match.Url)
+					if v {
+						logger.Printf("    skip %s (already opened)", match.Url)
+					}
 					continue
 				}
 				if err := opts.Launcher.Open(match.Url); err != nil {
-					logger.Printf("[%s] open url %s:\n%s", alias, match.Url, errtrace.Format(err))
+					logger.Printf("    ✗ open %s:\n%s", match.Url, errtrace.Format(err))
 					continue
 				}
-				logger.Printf("[%s] opened %s (rule=%s)", alias, match.Url, match.RuleName)
+				logger.Printf("    → opened %s (rule=%s)", match.Url, match.RuleName)
 			}
 		}
 
-		// Track highest UID seen.
 		if m.Uid > ws.LastUid {
 			ws.LastUid = m.Uid
 			ws.LastSubject = m.Subject
@@ -225,7 +257,30 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 	if err := opts.Store.UpsertWatchState(ctx, ws); err != nil {
 		return &stats, errtrace.Wrap(err, "update watch state")
 	}
-	logger.Printf("[%s] poll complete: processed=%d newLastUid=%d total=%s",
-		alias, len(msgs), ws.LastUid, time.Since(start).Round(time.Millisecond))
+	if v {
+		logger.Printf("[%s] poll complete: processed=%d newLastUid=%d total=%s",
+			alias, len(msgs), ws.LastUid, time.Since(start).Round(time.Millisecond))
+	}
 	return &stats, nil
+}
+
+// shortAddr trims the long `"Display Name" <addr@host>` form down to just
+// the angle-addr if present, else returns input. Keeps idle-poll new-mail
+// log lines compact.
+func shortAddr(s string) string {
+	if i := indexByte(s, '<'); i >= 0 {
+		if j := indexByte(s[i:], '>'); j > 0 {
+			return s[i+1 : i+j]
+		}
+	}
+	return s
+}
+
+func indexByte(s string, b byte) int {
+	for i := 0; i < len(s); i++ {
+		if s[i] == b {
+			return i
+		}
+	}
+	return -1
 }
