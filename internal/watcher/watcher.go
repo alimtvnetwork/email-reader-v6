@@ -52,6 +52,25 @@ func Run(ctx context.Context, opts Options) error {
 	if !opts.Verbose {
 		logger.Printf("[%s] quiet mode — only new mail / errors / heartbeat will be shown. Re-run with --verbose for full trace.", alias)
 	}
+	// Always announce rule + browser readiness so the user can immediately tell
+	// why "new mail" arrives but nothing opens.
+	if opts.Engine == nil {
+		logger.Printf("[%s] ⚠ no rules engine attached — incoming mail will be saved but no URLs will be opened", alias)
+	} else {
+		n := opts.Engine.RuleCount()
+		if n == 0 {
+			logger.Printf("[%s] ⚠ 0 enabled rules loaded — incoming mail will be saved but no URLs will be opened. Add a rule in data/config.json (rules[].enabled=true with a urlRegex).", alias)
+		} else {
+			logger.Printf("[%s] %d enabled rule(s) loaded", alias, n)
+		}
+	}
+	if opts.Launcher == nil {
+		logger.Printf("[%s] ⚠ no browser launcher attached — URLs will be matched but never opened", alias)
+	} else if path, err := opts.Launcher.Path(); err != nil {
+		logger.Printf("[%s] ⚠ browser not resolved yet:\n%s", alias, errtrace.Format(err))
+	} else {
+		logger.Printf("[%s] browser ready: %s (incognito flag=%q)", alias, path, opts.Launcher.IncognitoArg())
+	}
 
 	tick := time.NewTimer(0)
 	defer tick.Stop()
