@@ -244,8 +244,7 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 		// quiet mode) so the user can see why "new mail arrived but nothing
 		// opened" — this was the #1 source of confusion before.
 		if opts.Engine != nil {
-			matches, traces := opts.Engine.Evaluate(m), []rules.RuleTrace(nil)
-			matches, traces = opts.Engine.EvaluateWithTrace(m)
+			matches, traces := opts.Engine.EvaluateWithTrace(m)
 			if len(traces) == 0 {
 				logger.Printf("    rules: 0 enabled rules — nothing to evaluate (add one in data/config.json)")
 			} else {
