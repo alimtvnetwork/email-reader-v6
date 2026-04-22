@@ -9,7 +9,10 @@ import (
 )
 
 // Version is the CLI version. Bumped per release.
-const Version = "0.18.0"
+// 0.19.0 — Phase 1 of the Fyne UI plan complete: business logic extracted to
+// internal/core (accounts, rules, emails, read, export, diagnose) and the
+// watcher now exposes a structured event Bus. CLI behavior unchanged.
+const Version = "0.19.0"
 
 func main() {
 	root := cli.NewRoot(Version)
