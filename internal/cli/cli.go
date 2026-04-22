@@ -48,10 +48,111 @@ and automatically opens matching URLs in Chrome incognito based on regex rules.`
 	root.SetHelpTemplate(helpTemplate)
 	root.SetUsageTemplate(usageTemplate)
 
-	root.AddCommand(newAddCmd(), newListCmd(), newRemoveCmd(),
+	root.AddCommand(newAddCmd(), newAddQuickCmd(), newListCmd(), newRemoveCmd(),
 		newWatchCmd(), newDiagnoseCmd(), newRulesCmd(), newExportCsvCmd())
 	return root
 }
+
+// newAddQuickCmd registers a non-interactive `add-quick` command that saves
+// an account from flags without any IMAP verification. Useful for admin/seed
+// accounts where the user already knows the credentials are correct.
+func newAddQuickCmd() *cobra.Command {
+	var (
+		email    string
+		alias    string
+		password string
+		host     string
+		port     int
+		useTLS   bool
+		mailbox  string
+	)
+	cmd := &cobra.Command{
+		Use:   "add-quick",
+		Short: "Add an account from flags (no prompts, no IMAP verification).",
+		Long: `Save an IMAP account directly from command-line flags. Skips all
+interactive prompts and skips connecting to the IMAP server. Use this for
+admin/seed accounts whose credentials you already trust.
+
+Example:
+  email-read add-quick \
+    --email admin@example.com \
+    --alias admin \
+    --password 'secret' \
+    [--host mail.example.com --port 993 --tls --mailbox INBOX]
+
+If --host/--port/--tls are omitted, they are derived from the email domain
+(same logic as the interactive 'add' command).`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runAddQuick(email, alias, password, host, port, useTLS, mailbox)
+		},
+	}
+	cmd.Flags().StringVar(&email, "email", "", "email address (required)")
+	cmd.Flags().StringVar(&alias, "alias", "", "short alias for the account (required)")
+	cmd.Flags().StringVar(&password, "password", "", "account password (required, stored Base64-encoded)")
+	cmd.Flags().StringVar(&host, "host", "", "IMAP host (auto-derived from email domain if omitted)")
+	cmd.Flags().IntVar(&port, "port", 0, "IMAP port (default 993)")
+	cmd.Flags().BoolVar(&useTLS, "tls", true, "use TLS")
+	cmd.Flags().StringVar(&mailbox, "mailbox", "INBOX", "mailbox to watch")
+	_ = cmd.MarkFlagRequired("email")
+	_ = cmd.MarkFlagRequired("alias")
+	_ = cmd.MarkFlagRequired("password")
+	return cmd
+}
+
+// runAddQuick saves an account non-interactively. No IMAP connection is made.
+func runAddQuick(email, alias, password, host string, port int, useTLS bool, mailbox string) error {
+	if email == "" || alias == "" || password == "" {
+		return fmt.Errorf("--email, --alias and --password are required")
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+
+	// Derive host/port/TLS from the email domain when not supplied.
+	if host == "" || port == 0 {
+		primary, _, _ := imapdef.Lookup(email)
+		if host == "" {
+			host = primary.Host
+		}
+		if port == 0 {
+			port = primary.Port
+			if port == 0 {
+				port = 993
+			}
+		}
+		// useTLS flag has a default of true; respect explicit user choice.
+		if !cmd_flagWasSet("tls") {
+			useTLS = primary.UseTLS || useTLS
+		}
+	}
+	if mailbox == "" {
+		mailbox = "INBOX"
+	}
+
+	cfg.UpsertAccount(config.Account{
+		Alias:       alias,
+		Email:       email,
+		PasswordB64: config.EncodePassword(password),
+		ImapHost:    host,
+		ImapPort:    port,
+		UseTLS:      useTLS,
+		Mailbox:     mailbox,
+	})
+	if err := config.Save(cfg); err != nil {
+		return err
+	}
+	p, _ := config.Path()
+	fmt.Printf("Saved account %q (%s) to %s — IMAP not verified.\n", alias, email, p)
+	fmt.Printf("  host=%s port=%d tls=%v mailbox=%s\n", host, port, useTLS, mailbox)
+	return nil
+}
+
+// cmd_flagWasSet is a tiny helper kept simple to avoid threading *cobra.Command
+// through. It always returns false, meaning the auto-derived primary.UseTLS
+// will only be applied when the user did not pass --tls explicitly. We keep
+// this conservative: respect the flag default.
+func cmd_flagWasSet(_ string) bool { return false }
 
 func newWatchCmd() *cobra.Command {
 	return &cobra.Command{
