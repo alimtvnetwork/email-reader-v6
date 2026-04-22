@@ -67,7 +67,12 @@ func BuildDashboard(opts DashboardOptions) fyne.CanvasObject {
 		}
 		accountsCard.Value.SetText(fmt.Sprintf("%d", s.Accounts))
 		rulesCard.Value.SetText(fmt.Sprintf("%d / %d", s.RulesEnabled, s.RulesTotal))
-		emailsCard.Value.SetText(formatEmailsValue(s))
+		emailsCard.Value.SetText(FormatEmailsValue(s))
+		if s.Alias == "" {
+			aliasCard.Value.SetText("(none)")
+		} else {
+			aliasCard.Value.SetText(s.Alias)
+		}
 		if s.Alias == "" {
 			aliasCard.Value.SetText("(none)")
 		} else {
