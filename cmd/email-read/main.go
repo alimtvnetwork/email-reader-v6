@@ -10,8 +10,8 @@ import (
 
 // Version is the CLI version. Bumped per release in lockstep with
 // internal/ui.AppVersion so both binaries advertise the same release.
-// 0.26.0 — Phase 4 / Step 15: Add Account inline form (Tools tab).
-const Version = "0.26.0"
+// 0.27.0 — Phase 4 / Step 16: Add Rule inline form (Tools tab).
+const Version = "0.27.0"
 
 func main() {
 	root := cli.NewRoot(Version)

@@ -1,8 +1,6 @@
-// tools.go renders the Tools tab: an AppTabs container holding one tab per
-// inline mutating form. Phase 4 lands one form at a time — this file is
-// the host that future steps extend (add-rule, remove, read, export,
-// diagnose). Each tab is a self-contained widget so failures in one form
-// can't break the others.
+// tools.go renders the Tools tab: an AppTabs container holding one tab
+// per inline mutating form. Phase 4 lands one form at a time; this file
+// is the host that future steps extend.
 //
 // Behind the !nofyne build tag because it imports the Fyne widget set.
 //go:build !nofyne
@@ -15,15 +13,15 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-// ToolsOptions wires shared callbacks. Currently only OnAccountsChanged
-// (fired after add/remove) so the shell can refresh the sidebar account
-// picker without each form needing direct access to AppState.
+// ToolsOptions wires shared callbacks. OnAccountsChanged fires after the
+// Add Account form saves so the shell can refresh the sidebar picker.
+// OnRulesChanged fires after the Add Rule form saves.
 type ToolsOptions struct {
 	OnAccountsChanged func()
+	OnRulesChanged    func()
 }
 
-// BuildTools returns the Tools view: tabs across the top, the active form
-// in the body. New forms in Steps 16–20 simply append a new tab.
+// BuildTools returns the Tools view with one tab per form.
 func BuildTools(opts ToolsOptions) fyne.CanvasObject {
 	heading := widget.NewLabelWithStyle("Tools", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	subtitle := widget.NewLabel("Mutating actions. Each form runs inline — no modal popups.")
@@ -32,7 +30,9 @@ func BuildTools(opts ToolsOptions) fyne.CanvasObject {
 		container.NewTabItem("Add account", BuildAddAccountForm(AddAccountFormOptions{
 			OnSaved: opts.OnAccountsChanged,
 		})),
-		container.NewTabItem("Add rule", placeholderTab("Add rule form lands in Step 16.")),
+		container.NewTabItem("Add rule", BuildAddRuleForm(AddRuleFormOptions{
+			OnSaved: opts.OnRulesChanged,
+		})),
 		container.NewTabItem("Remove", placeholderTab("Remove account / rule lands in Step 17.")),
 		container.NewTabItem("Read", placeholderTab("One-shot fetch form lands in Step 18.")),
 		container.NewTabItem("Export CSV", placeholderTab("CSV export form lands in Step 19.")),
@@ -48,7 +48,7 @@ func BuildTools(opts ToolsOptions) fyne.CanvasObject {
 }
 
 // placeholderTab is the temporary "coming in Step N" body used by Tools
-// tabs that don't have a real form yet. Cleared as Phase 4 lands.
+// tabs that don't have a real form yet.
 func placeholderTab(msg string) fyne.CanvasObject {
 	l := widget.NewLabel(msg)
 	l.Wrapping = fyne.TextWrapWord
