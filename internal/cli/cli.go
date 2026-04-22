@@ -201,7 +201,7 @@ func runDiagnose(alias string) error {
 	} else {
 		p := cfg.FindAccount(alias)
 		if p == nil {
-			return errtrace.Wrapf(nil, "no account with alias %q (run `email-read list`)", alias)
+			return errtrace.New(fmt.Sprintf("no account with alias %q (run `email-read list`)", alias))
 		}
 		acct = *p
 	}
