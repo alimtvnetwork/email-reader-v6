@@ -105,6 +105,11 @@ func runAddQuick(email, alias, password, host string, port int, useTLS bool, mai
 	if email == "" || alias == "" || password == "" {
 		return errtrace.New("--email, --alias and --password are required")
 	}
+	// Detect invisible chars BEFORE sanitization so we can warn the user.
+	clean := config.SanitizePassword(password)
+	if clean != password {
+		fmt.Printf("⚠ password contained %d hidden char(s) (whitespace / zero-width). Sanitized before storing.\n", len(password)-len(clean))
+	}
 	cfg, err := config.Load()
 	if err != nil {
 		return errtrace.Wrap(err, "load config")
@@ -134,7 +139,7 @@ func runAddQuick(email, alias, password, host string, port int, useTLS bool, mai
 	cfg.UpsertAccount(config.Account{
 		Alias:       alias,
 		Email:       email,
-		PasswordB64: config.EncodePassword(password),
+		PasswordB64: config.EncodePassword(clean),
 		ImapHost:    host,
 		ImapPort:    port,
 		UseTLS:      useTLS,
@@ -145,8 +150,67 @@ func runAddQuick(email, alias, password, host string, port int, useTLS bool, mai
 	}
 	p, _ := config.Path()
 	fmt.Printf("Saved account %q (%s) to %s — IMAP not verified.\n", alias, email, p)
-	fmt.Printf("  host=%s port=%d tls=%v mailbox=%s\n", host, port, useTLS, mailbox)
+	fmt.Printf("  host=%s port=%d tls=%v mailbox=%s pw_len=%d\n", host, port, useTLS, mailbox, len(clean))
 	return nil
+}
+
+// newDoctorCmd inspects stored accounts for hidden characters in passwords
+// and reports the byte/rune breakdown so users can confirm what's actually
+// being sent to the IMAP server.
+func newDoctorCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "doctor [alias]",
+		Short: "Inspect stored password for hidden / invisible characters.",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.Load()
+			if err != nil {
+				return errtrace.Wrap(err, "load config")
+			}
+			if len(cfg.Accounts) == 0 {
+				return errtrace.New("no accounts configured")
+			}
+			target := ""
+			if len(args) == 1 {
+				target = args[0]
+			}
+			for _, a := range cfg.Accounts {
+				if target != "" && a.Alias != target {
+					continue
+				}
+				pw, err := config.DecodePassword(a.PasswordB64)
+				if err != nil {
+					fmt.Printf("[%s] decode error: %v\n", a.Alias, err)
+					continue
+				}
+				// Re-decode WITHOUT sanitization to expose what's actually stored.
+				rawBytes, _ := decodeRawForDoctor(a.PasswordB64)
+				rawStr := string(rawBytes)
+				fmt.Printf("[%s] %s\n", a.Alias, a.Email)
+				fmt.Printf("  stored bytes : %d  | sanitized rune count: %d\n", len(rawStr), len([]rune(pw)))
+				if rawStr != pw {
+					fmt.Printf("  ⚠ stored password contains hidden chars; sanitized version is what we send to IMAP.\n")
+				}
+				fmt.Printf("  rune dump (sanitized):\n")
+				for i, r := range pw {
+					fmt.Printf("    [%2d] U+%04X %q\n", i, r, string(r))
+				}
+				if rawStr != pw {
+					fmt.Printf("  rune dump (raw, BEFORE sanitization):\n")
+					for i, r := range rawStr {
+						fmt.Printf("    [%2d] U+%04X %q\n", i, r, string(r))
+					}
+				}
+			}
+			return nil
+		},
+	}
+}
+
+// decodeRawForDoctor returns the raw decoded bytes WITHOUT sanitization.
+// Only used by the doctor command for diagnostics.
+func decodeRawForDoctor(b64 string) ([]byte, error) {
+	return base64StdDecode(b64)
 }
 
 // cmd_flagWasSet is a tiny helper kept simple to avoid threading *cobra.Command
