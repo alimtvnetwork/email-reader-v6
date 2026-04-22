@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
+	"unicode"
 
 	"github.com/lovable/email-read/internal/errtrace"
 )
