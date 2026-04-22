@@ -8,18 +8,12 @@
 // Subscribers register a callback; AppState calls every subscriber whenever
 // state changes. The callback runs on whatever goroutine called the setter
 // — Fyne widgets must marshal back to the UI thread themselves if needed.
+//
+// NavKind itself is defined in nav.go (alongside the canonical NavItems
+// list) so the two stay in sync without circular references.
 package ui
 
 import "sync"
-
-// NavKind represents the sidebar navigation selection.
-type NavKind int
-
-const (
-	NavDashboard NavKind = iota
-	NavWatch
-	NavSettings
-)
 
 // AppState is the single source of truth for cross-view UI state.
 // Zero value is usable; prefer NewAppState for clarity.
