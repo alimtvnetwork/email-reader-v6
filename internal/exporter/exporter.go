@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/lovable/email-read/internal/errtrace"
 	"github.com/lovable/email-read/internal/store"
 )
 
@@ -25,25 +26,25 @@ var Columns = []string{
 func ExportCSV(ctx context.Context, st *store.Store) (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
-		return "", err
+		return "", errtrace.Wrap(err, "getwd")
 	}
 	dir := filepath.Join(cwd, "data")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", fmt.Errorf("mkdir %s: %w", dir, err)
+		return "", errtrace.Wrapf(err, "mkdir %s", dir)
 	}
 	name := fmt.Sprintf("export-%s.csv", time.Now().Format("20060102-150405"))
 	path := filepath.Join(dir, name)
 
 	f, err := os.Create(path)
 	if err != nil {
-		return "", fmt.Errorf("create %s: %w", path, err)
+		return "", errtrace.Wrapf(err, "create %s", path)
 	}
 	defer f.Close()
 
 	w := csv.NewWriter(f)
 	defer w.Flush()
 	if err := w.Write(Columns); err != nil {
-		return "", err
+		return "", errtrace.Wrap(err, "write csv header")
 	}
 
 	rows, err := st.DB.QueryContext(ctx, `
@@ -51,7 +52,7 @@ func ExportCSV(ctx context.Context, st *store.Store) (string, error) {
 		       Subject, BodyText, BodyHtml, ReceivedAt, FilePath, CreatedAt
 		FROM Emails ORDER BY Id ASC`)
 	if err != nil {
-		return "", fmt.Errorf("query emails: %w", err)
+		return "", errtrace.Wrap(err, "query emails")
 	}
 	defer rows.Close()
 
@@ -64,18 +65,18 @@ func ExportCSV(ctx context.Context, st *store.Store) (string, error) {
 		)
 		if err := rows.Scan(&id, &alias, &msgId, &uid, &fromA, &toA, &ccA,
 			&subj, &bt, &bh, &received, &fp, &created); err != nil {
-			return "", fmt.Errorf("scan: %w", err)
+			return "", errtrace.Wrap(err, "scan row")
 		}
 		if err := w.Write([]string{
 			strconv.FormatInt(id, 10), alias, msgId, strconv.FormatInt(uid, 10),
 			fromA, toA, ccA, subj, bt, bh,
 			fmtAny(received), fp, fmtAny(created),
 		}); err != nil {
-			return "", err
+			return "", errtrace.Wrap(err, "write csv row")
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return "", err
+		return "", errtrace.Wrap(err, "rows iterate")
 	}
 	return path, nil
 }
