@@ -3,9 +3,9 @@
 // `-tags nofyne` to compile/test the rest of the package on headless CI.
 //go:build !nofyne
 
-// Package ui hosts the Fyne desktop frontend. It is intentionally split from
-// cmd/email-read-ui so internal/ui can be unit-tested with `go test` without
-// needing the cgo display libs that linking the binary requires.
+// Package ui hosts the Fyne desktop frontend. It is intentionally split
+// from cmd/email-read-ui so internal/ui can be unit-tested with `go test`
+// without needing the cgo display libs that linking the binary requires.
 package ui
 
 import (
@@ -22,7 +22,7 @@ import (
 
 // AppVersion is shown in the window title. Bumped per release in lockstep
 // with cmd/email-read/main.go.
-const AppVersion = "0.24.0"
+const AppVersion = "0.26.0"
 
 // Run creates the Fyne app, builds the main window, and blocks until close.
 func Run() {
@@ -35,8 +35,7 @@ func Run() {
 }
 
 // LoadAliases pulls the configured account aliases from core. Failures are
-// logged (non-fatal) so the UI still opens with an empty picker — the user
-// can add an account from the Tools view (Phase 4).
+// logged (non-fatal) so the UI still opens with an empty picker.
 func LoadAliases() []string {
 	accts, err := core.ListAccounts()
 	if err != nil {
@@ -56,49 +55,66 @@ func LoadAliases() []string {
 func BuildShell(aliases []string) fyne.CanvasObject {
 	state := NewAppState()
 	detail := container.NewStack()
+	root := container.NewStack() // we swap the whole shell when accounts change
 
-	// rebuild swaps the detail pane to match the current state.Nav().
-	// Defined as a closure so views can call it via the goto callback to
-	// trigger a re-render after a nav change (e.g. the Dashboard CTA).
-	var rebuild func()
+	// rebuildSidebar rebuilds the entire shell with a fresh aliases list —
+	// used after the Add Account form saves so the picker reflects truth.
+	var rebuildShell func()
+	// rebuildDetail swaps the detail pane to match the current state.Nav().
+	var rebuildDetail func()
 	gotoNav := func(k NavKind) {
 		state.SetNav(k)
-		rebuild()
+		rebuildDetail()
 	}
-	rebuild = func() {
+	rebuildDetail = func() {
 		for _, it := range NavItems {
 			if it.Kind == state.Nav() {
-				detail.Objects = []fyne.CanvasObject{viewFor(it, state, gotoNav)}
+				detail.Objects = []fyne.CanvasObject{viewFor(it, state, gotoNav, rebuildShell)}
 				detail.Refresh()
 				return
 			}
 		}
 	}
-	rebuild()
 
-	sidebar := NewSidebar(SidebarOptions{
-		State:       state,
-		Aliases:     aliases,
-		OnSelectNav: func(item NavItem) { rebuild() },
-	})
+	rebuildShell = func() {
+		freshAliases := LoadAliases()
+		sidebar := NewSidebar(SidebarOptions{
+			State:       state,
+			Aliases:     freshAliases,
+			OnSelectNav: func(item NavItem) { rebuildDetail() },
+		})
+		rebuildDetail()
+		split := container.NewHSplit(sidebar, container.NewPadded(detail))
+		split.SetOffset(0.20)
+		root.Objects = []fyne.CanvasObject{split}
+		root.Refresh()
+	}
 
 	// Re-render the active view if the alias changes so views always reflect
-	// the currently selected account without each view subscribing manually.
+	// the currently selected account.
 	state.Subscribe(func(ev AppStateEvent) {
 		if ev.PrevAlias != ev.Alias {
-			rebuild()
+			rebuildDetail()
 		}
 	})
 
+	// Initial build using the aliases passed in (avoids double-loading).
+	sidebar := NewSidebar(SidebarOptions{
+		State:       state,
+		Aliases:     aliases,
+		OnSelectNav: func(item NavItem) { rebuildDetail() },
+	})
+	rebuildDetail()
 	split := container.NewHSplit(sidebar, container.NewPadded(detail))
 	split.SetOffset(0.20)
-	return split
+	root.Objects = []fyne.CanvasObject{split}
+	return root
 }
 
 // viewFor returns the widget for a nav destination. Each case picks a real
 // view from internal/ui/views or falls back to a placeholder for nav items
-// not yet implemented (cleared as Phase 3+ steps land).
-func viewFor(item NavItem, state *AppState, gotoNav func(NavKind)) fyne.CanvasObject {
+// not yet implemented.
+func viewFor(item NavItem, state *AppState, gotoNav func(NavKind), onAccountsChanged func()) fyne.CanvasObject {
 	switch item.Kind {
 	case NavDashboard:
 		return views.BuildDashboard(views.DashboardOptions{
@@ -106,18 +122,22 @@ func viewFor(item NavItem, state *AppState, gotoNav func(NavKind)) fyne.CanvasOb
 			OnStartWatch: func() { gotoNav(NavWatch) },
 		})
 	case NavEmails:
-		return views.BuildEmails(views.EmailsOptions{
-			Alias: state.Alias(),
-		})
+		return views.BuildEmails(views.EmailsOptions{Alias: state.Alias()})
 	case NavRules:
 		return views.BuildRules(views.RulesOptions{})
+	case NavAccounts:
+		return views.BuildAccounts(views.AccountsOptions{})
+	case NavTools:
+		return views.BuildTools(views.ToolsOptions{
+			OnAccountsChanged: onAccountsChanged,
+		})
 	default:
 		return placeholderView(item, state)
 	}
 }
 
 // placeholderView renders the temporary "coming in Step N" content for nav
-// items that don't have a real widget yet. Phase 3+ steps replace each.
+// items that don't have a real widget yet (only NavWatch as of v0.26.0).
 func placeholderView(item NavItem, state *AppState) fyne.CanvasObject {
 	heading := widget.NewLabelWithStyle(item.Title, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	alias := "(none)"

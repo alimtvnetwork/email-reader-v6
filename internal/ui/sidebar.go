@@ -1,18 +1,6 @@
-// sidebar.go renders the navigation List and the account picker.
-// Framework-agnostic data lives in nav.go and state.go (no fyne imports).
-//
-// Layout inside the sidebar:
-//
-//	┌──────────────────┐
-//	│  email-read      │   header (bold, centered)
-//	├──────────────────┤
-//	│  Account ▾       │   account picker (Step 10)
-//	├──────────────────┤
-//	│  Dashboard       │   nav list (Step 9)
-//	│  Emails          │
-//	│  …               │
-//	└──────────────────┘
-//
+// sidebar.go renders NavItems as a Fyne List + an account picker on top.
+// The data lives in nav.go and AppState lives in state.go (both fyne-free)
+// so headless CI can test the canonical nav order and observer pattern.
 //go:build !nofyne
 
 package ui
@@ -23,20 +11,37 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-// SidebarOptions wires the sidebar to app state and account data. Aliases is
-// the list of configured account aliases (typically from core.ListAccounts).
-// onSelectNav fires whenever the user picks a different nav row.
+// SidebarOptions wires the sidebar to the shared AppState plus the live
+// account list. OnSelectNav is invoked synchronously when the user picks
+// a row so the shell can swap the detail pane.
 type SidebarOptions struct {
 	State       *AppState
 	Aliases     []string
 	OnSelectNav func(NavItem)
 }
 
-// NewSidebar builds the navigation list + account picker. The first nav row
-// is pre-selected so the detail pane is never blank. The account picker is
-// pre-selected to State.Alias() if non-empty, else the first alias if any.
+// NewSidebar builds the sidebar: header, account picker, nav list.
 func NewSidebar(opts SidebarOptions) fyne.CanvasObject {
-	picker := newAccountPicker(opts.State, opts.Aliases)
+	header := widget.NewLabelWithStyle("email-read", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
+
+	var picker *widget.Select
+	if len(opts.Aliases) == 0 {
+		picker = widget.NewSelect([]string{"No accounts — add one"}, nil)
+		picker.Disable()
+	} else {
+		picker = widget.NewSelect(opts.Aliases, func(a string) {
+			if opts.State != nil {
+				opts.State.SetAlias(a)
+			}
+		})
+		// Pre-select either the previously chosen alias or the first one so
+		// the detail pane always has a useful default.
+		if opts.State != nil && opts.State.Alias() != "" {
+			picker.SetSelected(opts.State.Alias())
+		} else {
+			picker.SetSelected(opts.Aliases[0])
+		}
+	}
 
 	list := widget.NewList(
 		func() int { return len(NavItems) },
@@ -57,43 +62,24 @@ func NewSidebar(opts SidebarOptions) fyne.CanvasObject {
 			opts.OnSelectNav(item)
 		}
 	}
-	list.Select(0)
+	// Pre-select the row matching state.Nav() (or the first row).
+	preIdx := 0
+	if opts.State != nil {
+		for i, it := range NavItems {
+			if it.Kind == opts.State.Nav() {
+				preIdx = i
+				break
+			}
+		}
+	}
+	list.Select(preIdx)
 
-	header := widget.NewLabelWithStyle("email-read", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
-	top := container.NewVBox(header, picker, widget.NewSeparator())
+	top := container.NewVBox(
+		header,
+		widget.NewSeparator(),
+		widget.NewLabelWithStyle("Account", fyne.TextAlignLeading, fyne.TextStyle{Italic: true}),
+		picker,
+		widget.NewSeparator(),
+	)
 	return container.NewBorder(top, nil, nil, nil, list)
-}
-
-// newAccountPicker builds the dropdown. Empty aliases ⇒ a disabled picker
-// labelled "No accounts — add one in Tools" so the user knows what to do.
-func newAccountPicker(state *AppState, aliases []string) fyne.CanvasObject {
-	if len(aliases) == 0 {
-		empty := widget.NewSelect([]string{"No accounts"}, func(string) {})
-		empty.PlaceHolder = "No accounts"
-		empty.Disable()
-		return container.NewPadded(empty)
-	}
-	sel := widget.NewSelect(aliases, func(picked string) {
-		if state != nil {
-			state.SetAlias(picked)
-		}
-	})
-	// Pre-select: keep current state if it matches one of the aliases,
-	// otherwise default to the first one (and update state to match).
-	current := ""
-	if state != nil {
-		current = state.Alias()
-	}
-	chosen := aliases[0]
-	for _, a := range aliases {
-		if a == current {
-			chosen = current
-			break
-		}
-	}
-	sel.SetSelected(chosen)
-	if state != nil && state.Alias() != chosen {
-		state.SetAlias(chosen)
-	}
-	return container.NewPadded(sel)
 }

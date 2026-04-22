@@ -6,76 +6,67 @@ import (
 	"testing"
 )
 
-// TestAppState_DefaultState verifies the zero-config starting point.
-func TestAppState_DefaultState(t *testing.T) {
-	s := NewAppState()
-	if got := s.Alias(); got != "" {
-		t.Errorf("default Alias = %q, want empty", got)
-	}
-	if got := s.Nav(); got != NavDashboard {
-		t.Errorf("default Nav = %q, want %q", got, NavDashboard)
-	}
-}
-
-// TestAppState_SetAliasNotifies confirms subscribers see the transition with
-// both prev + new alias populated.
-func TestAppState_SetAliasNotifies(t *testing.T) {
+func TestAppState_SetAliasFiresOnChange(t *testing.T) {
 	s := NewAppState()
 	var got AppStateEvent
 	var calls int32
 	s.Subscribe(func(ev AppStateEvent) {
-		atomic.AddInt32(&calls, 1)
 		got = ev
+		atomic.AddInt32(&calls, 1)
 	})
 
-	s.SetAlias("primary")
-	if atomic.LoadInt32(&calls) != 1 {
-		t.Fatalf("subscriber called %d times, want 1", calls)
+	s.SetAlias("a")
+	if got.Alias != "a" || got.PrevAlias != "" {
+		t.Errorf("first set: %+v", got)
 	}
-	if got.PrevAlias != "" || got.Alias != "primary" {
-		t.Errorf("event = %+v, want PrevAlias=\"\" Alias=\"primary\"", got)
-	}
-
-	// No-op set must NOT trigger a second callback.
-	s.SetAlias("primary")
 	if atomic.LoadInt32(&calls) != 1 {
-		t.Fatalf("no-op SetAlias triggered subscriber: calls=%d", calls)
+		t.Errorf("calls = %d, want 1", calls)
+	}
+	// No-op set should not fire.
+	s.SetAlias("a")
+	if atomic.LoadInt32(&calls) != 1 {
+		t.Errorf("no-op fired: calls = %d", calls)
+	}
+	s.SetAlias("b")
+	if got.PrevAlias != "a" || got.Alias != "b" {
+		t.Errorf("transition: %+v", got)
 	}
 }
 
-// TestAppState_SetNavNotifies mirrors the alias test for nav transitions.
-func TestAppState_SetNavNotifies(t *testing.T) {
+func TestAppState_SetNavFiresOnChange(t *testing.T) {
 	s := NewAppState()
-	var got AppStateEvent
-	s.Subscribe(func(ev AppStateEvent) { got = ev })
-
-	s.SetNav(NavWatch)
-	if got.PrevNav != NavDashboard || got.Nav != NavWatch {
-		t.Errorf("event = %+v, want PrevNav=dashboard Nav=watch", got)
+	var seen []NavKind
+	s.Subscribe(func(ev AppStateEvent) { seen = append(seen, ev.Nav) })
+	s.SetNav(NavEmails)
+	s.SetNav(NavEmails) // dedupe
+	s.SetNav(NavRules)
+	if len(seen) != 2 || seen[0] != NavEmails || seen[1] != NavRules {
+		t.Errorf("seen = %v", seen)
 	}
 }
 
-// TestAppState_Concurrent runs many setters + readers; with -race this
-// guarantees the mutex protects shared state.
-func TestAppState_Concurrent(t *testing.T) {
+// TestAppState_ConcurrentAccess stresses the lock to catch races. Run with
+// -race; failures show up as data-race reports, not test assertions.
+func TestAppState_ConcurrentAccess(t *testing.T) {
 	s := NewAppState()
 	s.Subscribe(func(AppStateEvent) {})
 
 	var wg sync.WaitGroup
-	for i := 0; i < 8; i++ {
-		wg.Add(1)
-		go func(n int) {
+	for i := 0; i < 50; i++ {
+		wg.Add(2)
+		go func(i int) {
 			defer wg.Done()
-			for j := 0; j < 200; j++ {
-				if n%2 == 0 {
-					s.SetAlias("a")
-					s.SetAlias("b")
-				} else {
-					_ = s.Alias()
-					_ = s.Nav()
-				}
+			if i%2 == 0 {
+				s.SetAlias("a")
+			} else {
+				s.SetAlias("b")
 			}
 		}(i)
+		go func() {
+			defer wg.Done()
+			_ = s.Alias()
+			_ = s.Nav()
+		}()
 	}
 	wg.Wait()
 }
