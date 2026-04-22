@@ -95,17 +95,17 @@ Examples:
 }
 
 func runRulesList() error {
-	cfg, err := config.Load()
+	rs, err := core.ListRules()
 	if err != nil {
-		return errtrace.Wrap(err, "load config")
+		return err
 	}
-	if len(cfg.Rules) == 0 {
+	if len(rs) == 0 {
 		fmt.Println("No rules configured. Edit data/config.json to add some.")
 		return nil
 	}
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, "NAME\tENABLED\tFROM\tSUBJECT\tURL")
-	for _, r := range cfg.Rules {
+	for _, r := range rs {
 		fmt.Fprintf(w, "%s\t%v\t%s\t%s\t%s\n",
 			r.Name, r.Enabled, ellipsis(r.FromRegex, 28),
 			ellipsis(r.SubjectRegex, 28), ellipsis(r.UrlRegex, 40))
@@ -114,17 +114,8 @@ func runRulesList() error {
 }
 
 func runRulesToggle(name string, enabled bool) error {
-	cfg, err := config.Load()
-	if err != nil {
-		return errtrace.Wrap(err, "load config")
-	}
-	r := cfg.FindRule(name)
-	if r == nil {
-		return errtrace.New(fmt.Sprintf("no rule with name %q", name))
-	}
-	r.Enabled = enabled
-	if err := config.Save(cfg); err != nil {
-		return errtrace.Wrap(err, "save config")
+	if err := core.SetRuleEnabled(name, enabled); err != nil {
+		return err
 	}
 	state := "disabled"
 	if enabled {
