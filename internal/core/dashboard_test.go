@@ -95,3 +95,20 @@ func TestLoadDashboardStats(t *testing.T) {
 		t.Errorf("EmailsTotal = %d, want 3", got2.EmailsTotal)
 	}
 }
+
+// snapshotAndRestore reads the current contents of path (if any) and
+// restores them in t.Cleanup. Lets a test mutate a process-wide file (like
+// data/config.json which lives next to the test binary) without leaking the
+// mutation to sibling tests in the same package.
+func snapshotAndRestore(t *testing.T, path string) {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	switch {
+	case err == nil:
+		t.Cleanup(func() { _ = os.WriteFile(path, data, 0o644) })
+	case os.IsNotExist(err):
+		t.Cleanup(func() { _ = os.Remove(path) })
+	default:
+		t.Fatalf("snapshot %s: %v", path, err)
+	}
+}
