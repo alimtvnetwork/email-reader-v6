@@ -239,7 +239,8 @@ func newWatchCmd() *cobra.Command {
 			if len(args) == 1 {
 				alias = args[0]
 			}
-			return runWatch(cmd.Context(), alias)
+			verbose, _ := cmd.Flags().GetBool("verbose")
+			return runWatch(cmd.Context(), alias, verbose)
 		},
 	}
 }
