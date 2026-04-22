@@ -22,7 +22,7 @@ import (
 
 // AppVersion is shown in the window title. Bumped per release in lockstep
 // with cmd/email-read/main.go.
-const AppVersion = "0.26.0"
+const AppVersion = "0.27.0"
 
 // Run creates the Fyne app, builds the main window, and blocks until close.
 func Run() {
@@ -130,6 +130,7 @@ func viewFor(item NavItem, state *AppState, gotoNav func(NavKind), onAccountsCha
 	case NavTools:
 		return views.BuildTools(views.ToolsOptions{
 			OnAccountsChanged: onAccountsChanged,
+			OnRulesChanged:    onAccountsChanged, // same shell-rebuild trigger
 		})
 	default:
 		return placeholderView(item, state)
