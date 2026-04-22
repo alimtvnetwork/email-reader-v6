@@ -23,6 +23,7 @@ import (
 	"github.com/emersion/go-message/mail"
 
 	"github.com/lovable/email-read/internal/config"
+	"github.com/lovable/email-read/internal/errtrace"
 )
 
 // Message is the parsed representation of an email used by downstream layers.
@@ -58,16 +59,16 @@ func Dial(acct config.Account) (*Client, error) {
 		c, err = client.Dial(addr)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("imap dial %s: %w", addr, err)
+		return nil, errtrace.Wrapf(err, "imap dial %s", addr)
 	}
 	pwd, err := config.DecodePassword(acct.PasswordB64)
 	if err != nil {
 		_ = c.Logout()
-		return nil, err
+		return nil, errtrace.Wrap(err, "decode password")
 	}
 	if err := c.Login(acct.Email, pwd); err != nil {
 		_ = c.Logout()
-		return nil, fmt.Errorf("imap login %s: %w", acct.Email, err)
+		return nil, errtrace.Wrapf(err, "imap login %s", acct.Email)
 	}
 	return &Client{acct: acct, c: c}, nil
 }
@@ -108,7 +109,7 @@ func (c *Client) SelectMailbox(box string) (MailboxStats, error) {
 	}
 	mbox, err := c.c.Select(box, false)
 	if err != nil {
-		return MailboxStats{Name: box}, fmt.Errorf("select %s: %w", box, err)
+		return MailboxStats{Name: box}, errtrace.Wrapf(err, "select %s", box)
 	}
 	return MailboxStats{
 		Name:        box,
@@ -157,7 +158,7 @@ func (c *Client) ListMailboxes() ([]MailboxName, error) {
 		})
 	}
 	if err := <-done; err != nil {
-		return nil, fmt.Errorf("list mailboxes: %w", err)
+		return nil, errtrace.Wrap(err, "list mailboxes")
 	}
 	return out, nil
 }
@@ -210,7 +211,7 @@ func (c *Client) FetchRecentHeaders(stats MailboxStats, limit uint32) ([]HeaderS
 		out = append(out, summary)
 	}
 	if err := <-done; err != nil {
-		return nil, fmt.Errorf("fetch recent headers: %w", err)
+		return nil, errtrace.Wrap(err, "fetch recent headers")
 	}
 	return out, nil
 }
@@ -286,7 +287,7 @@ func (c *Client) FetchSince(lastUid uint32) ([]*Message, error) {
 		out = append(out, parsed)
 	}
 	if err := <-done; err != nil {
-		return nil, fmt.Errorf("uid fetch: %w", err)
+		return nil, errtrace.Wrap(err, "uid fetch")
 	}
 	return out, nil
 }
@@ -296,7 +297,7 @@ func (c *Client) FetchSince(lastUid uint32) ([]*Message, error) {
 func SaveRaw(alias string, m *Message) (string, error) {
 	root, err := config.EmailDir()
 	if err != nil {
-		return "", err
+		return "", errtrace.Wrap(err, "email dir")
 	}
 	when := m.ReceivedAt
 	if when.IsZero() {
@@ -304,7 +305,7 @@ func SaveRaw(alias string, m *Message) (string, error) {
 	}
 	dir := filepath.Join(root, sanitize(alias), when.Format("2006-01-02"))
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", fmt.Errorf("mkdir email dir: %w", err)
+		return "", errtrace.Wrap(err, "mkdir email dir")
 	}
 	name := sanitize(strings.Trim(m.MessageId, "<>"))
 	if name == "" {
@@ -315,7 +316,7 @@ func SaveRaw(alias string, m *Message) (string, error) {
 	}
 	path := filepath.Join(dir, name+".eml")
 	if err := os.WriteFile(path, m.Raw, 0o600); err != nil {
-		return "", fmt.Errorf("write eml: %w", err)
+		return "", errtrace.Wrap(err, "write eml")
 	}
 	return path, nil
 }
