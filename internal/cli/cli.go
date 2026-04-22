@@ -236,7 +236,7 @@ func runDiagnose(alias string) error {
 	fmt.Println("\n3) Selecting configured mailbox...")
 	stats, err := mc.SelectInbox()
 	if err != nil {
-		return err
+		return errtrace.Wrap(err, "select inbox")
 	}
 	fmt.Printf("   OK: %q messages=%d recent=%d unseen=%d uidNext=%d uidValidity=%d\n",
 		stats.Name, stats.Messages, stats.Recent, stats.Unseen, stats.UidNext, stats.UidValidity)
@@ -244,7 +244,7 @@ func runDiagnose(alias string) error {
 	fmt.Println("\n4) Recent headers from configured mailbox...")
 	headers, err := mc.FetchRecentHeaders(stats, 10)
 	if err != nil {
-		return err
+		return errtrace.Wrap(err, "fetch recent headers")
 	}
 	if len(headers) == 0 {
 		fmt.Println("   No messages returned by server for this mailbox.")
