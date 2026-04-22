@@ -197,11 +197,7 @@ func decodeRawForDoctor(b64 string) ([]byte, error) {
 	return base64StdDecode(b64)
 }
 
-// cmd_flagWasSet is a tiny helper kept simple to avoid threading *cobra.Command
-// through. It always returns false, meaning the auto-derived primary.UseTLS
-// will only be applied when the user did not pass --tls explicitly. We keep
-// this conservative: respect the flag default.
-func cmd_flagWasSet(_ string) bool { return false }
+// (cmd_flagWasSet was removed when runAddQuick moved to core.AddAccount.)
 
 func newWatchCmd() *cobra.Command {
 	return &cobra.Command{
@@ -538,35 +534,35 @@ func runAdd() error {
 		return err
 	}
 
-	cfg.UpsertAccount(config.Account{
-		Alias:       alias,
-		Email:       email,
-		PasswordB64: config.EncodePassword(password),
-		ImapHost:    host,
-		ImapPort:    port,
-		UseTLS:      useTLS,
-		Mailbox:     mailbox,
+	res, err := core.AddAccount(core.AccountInput{
+		Alias:          alias,
+		Email:          email,
+		PlainPassword:  password,
+		ImapHost:       host,
+		ImapPort:       port,
+		UseTLS:         useTLS,
+		UseTLSExplicit: true, // user just confirmed via survey prompt
+		Mailbox:        mailbox,
 	})
-	if err := config.Save(cfg); err != nil {
-		return errtrace.Wrap(err, "save config")
+	if err != nil {
+		return err
 	}
-	p, _ := config.Path()
-	fmt.Printf("Saved account %q to %s\n", alias, p)
+	fmt.Printf("Saved account %q to %s\n", res.Account.Alias, res.ConfigPath)
 	return nil
 }
 
 func runList() error {
-	cfg, err := config.Load()
+	accts, err := core.ListAccounts()
 	if err != nil {
-		return errtrace.Wrap(err, "load config")
+		return err
 	}
-	if len(cfg.Accounts) == 0 {
+	if len(accts) == 0 {
 		fmt.Println("No accounts configured. Run `email-read add` to add one.")
 		return nil
 	}
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, "ALIAS\tEMAIL\tIMAP HOST\tPORT\tTLS\tMAILBOX")
-	for _, a := range cfg.Accounts {
+	for _, a := range accts {
 		fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%v\t%s\n",
 			a.Alias, a.Email, a.ImapHost, a.ImapPort, a.UseTLS, a.Mailbox)
 	}
@@ -574,15 +570,8 @@ func runList() error {
 }
 
 func runRemove(alias string) error {
-	cfg, err := config.Load()
-	if err != nil {
-		return errtrace.Wrap(err, "load config")
-	}
-	if !cfg.RemoveAccount(alias) {
-		return errtrace.New(fmt.Sprintf("no account with alias %q", alias))
-	}
-	if err := config.Save(cfg); err != nil {
-		return errtrace.Wrap(err, "save config")
+	if err := core.RemoveAccount(alias); err != nil {
+		return err
 	}
 	fmt.Printf("Removed account %q\n", alias)
 	return nil
