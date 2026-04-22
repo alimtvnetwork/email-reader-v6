@@ -3,10 +3,12 @@ package cli
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"text/tabwriter"
 
@@ -22,6 +24,12 @@ import (
 	"github.com/lovable/email-read/internal/store"
 	"github.com/lovable/email-read/internal/watcher"
 )
+
+// base64StdDecode is a thin wrapper that returns raw bytes without any
+// sanitization, used by the doctor diagnostic to expose what's truly stored.
+func base64StdDecode(s string) ([]byte, error) {
+	return base64.StdEncoding.DecodeString(strings.TrimSpace(s))
+}
 
 // NewRoot builds the root cobra command. The watch behavior (default subcommand
 // when an alias is given) is wired in a later step.
