@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/lovable/email-read/internal/mailclient"
-	"github.com/lovable/email-read/internal/rules"
 )
 
 // EventKind classifies what just happened in the watcher loop.
@@ -111,6 +110,3 @@ func (b *Bus) SubscriberCount() int {
 	defer b.mu.RUnlock()
 	return len(b.subscribers)
 }
-
-// Compile-time guarantee that we don't accidentally drop a key field.
-var _ = rules.MatchResult{}
