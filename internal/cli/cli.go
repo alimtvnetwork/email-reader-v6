@@ -50,7 +50,7 @@ and automatically opens matching URLs in Chrome incognito based on regex rules.`
 	root.SetUsageTemplate(usageTemplate)
 
 	root.AddCommand(newAddCmd(), newAddQuickCmd(), newListCmd(), newRemoveCmd(),
-		newWatchCmd(), newDiagnoseCmd(), newRulesCmd(), newExportCsvCmd())
+		newWatchCmd(), newDiagnoseCmd(), newDoctorCmd(), newRulesCmd(), newExportCsvCmd())
 	return root
 }
 
