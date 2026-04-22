@@ -17,6 +17,7 @@ import (
 
 	"github.com/lovable/email-read/internal/browser"
 	"github.com/lovable/email-read/internal/config"
+	"github.com/lovable/email-read/internal/core"
 	"github.com/lovable/email-read/internal/errtrace"
 	"github.com/lovable/email-read/internal/imapdef"
 	"github.com/lovable/email-read/internal/mailclient"
@@ -112,56 +113,28 @@ If --host/--port/--tls are omitted, they are derived from the email domain
 }
 
 // runAddQuick saves an account non-interactively. No IMAP connection is made.
+// Delegates the heavy lifting to internal/core so the same code powers the UI.
 func runAddQuick(email, alias, password, host string, port int, useTLS bool, mailbox string) error {
-	if email == "" || alias == "" || password == "" {
-		return errtrace.New("--email, --alias and --password are required")
-	}
-	// Detect invisible chars BEFORE sanitization so we can warn the user.
-	clean := config.SanitizePassword(password)
-	if clean != password {
-		fmt.Printf("⚠ password contained %d hidden char(s) (whitespace / zero-width). Sanitized before storing.\n", len(password)-len(clean))
-	}
-	cfg, err := config.Load()
-	if err != nil {
-		return errtrace.Wrap(err, "load config")
-	}
-
-	// Derive host/port/TLS from the email domain when not supplied.
-	if host == "" || port == 0 {
-		primary, _, _ := imapdef.Lookup(email)
-		if host == "" {
-			host = primary.Host
-		}
-		if port == 0 {
-			port = primary.Port
-			if port == 0 {
-				port = 993
-			}
-		}
-		// useTLS flag has a default of true; respect explicit user choice.
-		if !cmd_flagWasSet("tls") {
-			useTLS = primary.UseTLS || useTLS
-		}
-	}
-	if mailbox == "" {
-		mailbox = "INBOX"
-	}
-
-	cfg.UpsertAccount(config.Account{
-		Alias:       alias,
-		Email:       email,
-		PasswordB64: config.EncodePassword(clean),
-		ImapHost:    host,
-		ImapPort:    port,
-		UseTLS:      useTLS,
-		Mailbox:     mailbox,
+	res, err := core.AddAccount(core.AccountInput{
+		Alias:          alias,
+		Email:          email,
+		PlainPassword:  password,
+		ImapHost:       host,
+		ImapPort:       port,
+		UseTLS:         useTLS,
+		UseTLSExplicit: false, // CLI flag default is true; keep legacy behavior
+		Mailbox:        mailbox,
 	})
-	if err := config.Save(cfg); err != nil {
-		return errtrace.Wrap(err, "save config")
+	if err != nil {
+		return err
 	}
-	p, _ := config.Path()
-	fmt.Printf("Saved account %q (%s) to %s — IMAP not verified.\n", alias, email, p)
-	fmt.Printf("  host=%s port=%d tls=%v mailbox=%s pw_len=%d\n", host, port, useTLS, mailbox, len(clean))
+	if res.HiddenCharsRem > 0 {
+		fmt.Printf("⚠ password contained %d hidden char(s) (whitespace / zero-width). Sanitized before storing.\n", res.HiddenCharsRem)
+	}
+	a := res.Account
+	pw, _ := config.DecodePassword(a.PasswordB64)
+	fmt.Printf("Saved account %q (%s) to %s — IMAP not verified.\n", a.Alias, a.Email, res.ConfigPath)
+	fmt.Printf("  host=%s port=%d tls=%v mailbox=%s pw_len=%d\n", a.ImapHost, a.ImapPort, a.UseTLS, a.Mailbox, len(pw))
 	return nil
 }
 
@@ -224,11 +197,7 @@ func decodeRawForDoctor(b64 string) ([]byte, error) {
 	return base64StdDecode(b64)
 }
 
-// cmd_flagWasSet is a tiny helper kept simple to avoid threading *cobra.Command
-// through. It always returns false, meaning the auto-derived primary.UseTLS
-// will only be applied when the user did not pass --tls explicitly. We keep
-// this conservative: respect the flag default.
-func cmd_flagWasSet(_ string) bool { return false }
+// (cmd_flagWasSet was removed when runAddQuick moved to core.AddAccount.)
 
 func newWatchCmd() *cobra.Command {
 	return &cobra.Command{
@@ -565,35 +534,35 @@ func runAdd() error {
 		return err
 	}
 
-	cfg.UpsertAccount(config.Account{
-		Alias:       alias,
-		Email:       email,
-		PasswordB64: config.EncodePassword(password),
-		ImapHost:    host,
-		ImapPort:    port,
-		UseTLS:      useTLS,
-		Mailbox:     mailbox,
+	res, err := core.AddAccount(core.AccountInput{
+		Alias:          alias,
+		Email:          email,
+		PlainPassword:  password,
+		ImapHost:       host,
+		ImapPort:       port,
+		UseTLS:         useTLS,
+		UseTLSExplicit: true, // user just confirmed via survey prompt
+		Mailbox:        mailbox,
 	})
-	if err := config.Save(cfg); err != nil {
-		return errtrace.Wrap(err, "save config")
+	if err != nil {
+		return err
 	}
-	p, _ := config.Path()
-	fmt.Printf("Saved account %q to %s\n", alias, p)
+	fmt.Printf("Saved account %q to %s\n", res.Account.Alias, res.ConfigPath)
 	return nil
 }
 
 func runList() error {
-	cfg, err := config.Load()
+	accts, err := core.ListAccounts()
 	if err != nil {
-		return errtrace.Wrap(err, "load config")
+		return err
 	}
-	if len(cfg.Accounts) == 0 {
+	if len(accts) == 0 {
 		fmt.Println("No accounts configured. Run `email-read add` to add one.")
 		return nil
 	}
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, "ALIAS\tEMAIL\tIMAP HOST\tPORT\tTLS\tMAILBOX")
-	for _, a := range cfg.Accounts {
+	for _, a := range accts {
 		fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%v\t%s\n",
 			a.Alias, a.Email, a.ImapHost, a.ImapPort, a.UseTLS, a.Mailbox)
 	}
@@ -601,15 +570,8 @@ func runList() error {
 }
 
 func runRemove(alias string) error {
-	cfg, err := config.Load()
-	if err != nil {
-		return errtrace.Wrap(err, "load config")
-	}
-	if !cfg.RemoveAccount(alias) {
-		return errtrace.New(fmt.Sprintf("no account with alias %q", alias))
-	}
-	if err := config.Save(cfg); err != nil {
-		return errtrace.Wrap(err, "save config")
+	if err := core.RemoveAccount(alias); err != nil {
+		return err
 	}
 	fmt.Printf("Removed account %q\n", alias)
 	return nil
