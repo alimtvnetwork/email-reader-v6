@@ -240,29 +240,45 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 			logger.Printf("    uid=%d duplicate (already in DB) subj=%q", m.Uid, m.Subject)
 		}
 
-		// Rules → URLs → browser
-		if opts.Engine != nil && opts.Launcher != nil {
-			matches := opts.Engine.Evaluate(m)
-			if len(matches) > 0 || v {
-				logger.Printf("    matched %d rule URL(s)", len(matches))
+		// Rules → URLs → browser. Always log the per-rule outcome (even in
+		// quiet mode) so the user can see why "new mail arrived but nothing
+		// opened" — this was the #1 source of confusion before.
+		if opts.Engine != nil {
+			matches, traces := opts.Engine.Evaluate(m), []rules.RuleTrace(nil)
+			matches, traces = opts.Engine.EvaluateWithTrace(m)
+			if len(traces) == 0 {
+				logger.Printf("    rules: 0 enabled rules — nothing to evaluate (add one in data/config.json)")
+			} else {
+				for _, t := range traces {
+					if len(t.UrlsFound) > 0 {
+						logger.Printf("    rules: ✓ %q → %d url(s)", t.RuleName, len(t.UrlsFound))
+					} else {
+						logger.Printf("    rules: ✗ %q → %s", t.RuleName, t.Reason)
+					}
+				}
+			}
+			if opts.Launcher == nil && len(matches) > 0 {
+				logger.Printf("    ⚠ %d URL(s) matched but no browser launcher attached", len(matches))
 			}
 			for _, match := range matches {
+				if opts.Launcher == nil {
+					break
+				}
 				inserted, err := opts.Store.RecordOpenedUrl(ctx, emailId, match.RuleName, match.Url)
 				if err != nil {
 					logger.Printf("    ✗ dedup url:\n%s", errtrace.Format(err))
 					continue
 				}
 				if !inserted {
-					if v {
-						logger.Printf("    skip %s (already opened)", match.Url)
-					}
+					logger.Printf("    ↻ skip %s (already opened previously for this email)", match.Url)
 					continue
 				}
+				logger.Printf("    → opening in incognito: %s (rule=%s)", match.Url, match.RuleName)
 				if err := opts.Launcher.Open(match.Url); err != nil {
-					logger.Printf("    ✗ open %s:\n%s", match.Url, errtrace.Format(err))
+					logger.Printf("    ✗ browser launch failed for %s:\n%s", match.Url, errtrace.Format(err))
 					continue
 				}
-				logger.Printf("    → opened %s (rule=%s)", match.Url, match.RuleName)
+				logger.Printf("    ✓ launched")
 			}
 		}
 
