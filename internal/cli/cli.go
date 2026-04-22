@@ -15,6 +15,7 @@ import (
 
 	"github.com/lovable/email-read/internal/browser"
 	"github.com/lovable/email-read/internal/config"
+	"github.com/lovable/email-read/internal/errtrace"
 	"github.com/lovable/email-read/internal/imapdef"
 	"github.com/lovable/email-read/internal/mailclient"
 	"github.com/lovable/email-read/internal/rules"
@@ -102,11 +103,11 @@ If --host/--port/--tls are omitted, they are derived from the email domain
 // runAddQuick saves an account non-interactively. No IMAP connection is made.
 func runAddQuick(email, alias, password, host string, port int, useTLS bool, mailbox string) error {
 	if email == "" || alias == "" || password == "" {
-		return fmt.Errorf("--email, --alias and --password are required")
+		return errtrace.New("--email, --alias and --password are required")
 	}
 	cfg, err := config.Load()
 	if err != nil {
-		return err
+		return errtrace.Wrap(err, "load config")
 	}
 
 	// Derive host/port/TLS from the email domain when not supplied.
@@ -140,7 +141,7 @@ func runAddQuick(email, alias, password, host string, port int, useTLS bool, mai
 		Mailbox:     mailbox,
 	})
 	if err := config.Save(cfg); err != nil {
-		return err
+		return errtrace.Wrap(err, "save config")
 	}
 	p, _ := config.Path()
 	fmt.Printf("Saved account %q (%s) to %s — IMAP not verified.\n", alias, email, p)
@@ -187,10 +188,10 @@ func newDiagnoseCmd() *cobra.Command {
 func runDiagnose(alias string) error {
 	cfg, err := config.Load()
 	if err != nil {
-		return err
+		return errtrace.Wrap(err, "load config")
 	}
 	if len(cfg.Accounts) == 0 {
-		return fmt.Errorf("no accounts configured. Run `email-read add` first")
+		return errtrace.New("no accounts configured. Run `email-read add` first")
 	}
 
 	var acct config.Account
@@ -200,7 +201,7 @@ func runDiagnose(alias string) error {
 	} else {
 		p := cfg.FindAccount(alias)
 		if p == nil {
-			return fmt.Errorf("no account with alias %q (run `email-read list`)", alias)
+			return errtrace.Wrapf(nil, "no account with alias %q (run `email-read list`)", alias)
 		}
 		acct = *p
 	}
@@ -215,7 +216,7 @@ func runDiagnose(alias string) error {
 	fmt.Println("\n1) Connecting and logging in...")
 	mc, err := mailclient.Dial(acct)
 	if err != nil {
-		return err
+		return errtrace.Wrap(err, "dial imap")
 	}
 	defer mc.Close()
 	fmt.Println("   OK: login succeeded")
