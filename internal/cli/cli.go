@@ -394,6 +394,26 @@ func runWatch(parent context.Context, alias string, verbose bool) error {
 	}
 	defer st.Close()
 
+	// Auto-seed a default "open-any-url" rule if the user has zero enabled
+	// rules. This makes the tool work out-of-the-box: any http(s) link in
+	// any incoming email body will be opened in incognito. The user can
+	// disable or replace it later with `rules disable` / `rules add`.
+	if countEnabledRules(cfg.Rules) == 0 {
+		seeded := config.Rule{
+			Name:     "default-open-any-url",
+			Enabled:  true,
+			UrlRegex: `https?://[^\s<>"'\)\]]+`,
+		}
+		cfg.Rules = append(cfg.Rules, seeded)
+		if err := config.Save(cfg); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not save seeded rule: %v\n", err)
+		} else {
+			p, _ := config.Path()
+			fmt.Printf("ℹ no enabled rules found — seeded default rule %q (matches any http(s) URL) in %s\n",
+				seeded.Name, p)
+		}
+	}
+
 	engine, ruleErr := rules.New(cfg.Rules)
 	if ruleErr != nil {
 		fmt.Fprintf(os.Stderr, "warning: %v\n", ruleErr)
