@@ -121,11 +121,4 @@ func newStatCard(title, initial string) statCard {
 	}
 }
 
-// formatEmailsValue prefers the alias-scoped count when an alias is selected
-// so the dashboard reflects the user's current focus.
-func formatEmailsValue(s core.DashboardStats) string {
-	if s.Alias != "" {
-		return fmt.Sprintf("%d (%d total)", s.EmailsForAlias, s.EmailsTotal)
-	}
-	return fmt.Sprintf("%d", s.EmailsTotal)
-}
+// (formatEmailsValue lives in format.go so it can be unit-tested without cgo.)
