@@ -95,6 +95,7 @@ func Run(ctx context.Context, opts Options) error {
 	}
 	logger.Printf("│  mode    : %s", mode)
 	logger.Printf("└──────────────────────────────────────────────────")
+	opts.Bus.Publish(Event{Kind: EventStarted, Alias: alias})
 
 	tick := time.NewTimer(0)
 	defer tick.Stop()
@@ -117,6 +118,7 @@ func Run(ctx context.Context, opts Options) error {
 			logger.Printf("")
 			logger.Printf("%s  ■ stopped — ran %s, %d polls",
 				ts(), time.Since(startedAt).Round(time.Second), pollCount)
+			opts.Bus.Publish(Event{Kind: EventStopped, Alias: alias})
 			return nil
 		case <-tick.C:
 			pollCount++
@@ -131,6 +133,7 @@ func Run(ctx context.Context, opts Options) error {
 					}
 					lastError = msg
 				}
+				opts.Bus.Publish(Event{Kind: EventPollError, Alias: alias, Err: err})
 			} else if stats != nil {
 				lastError = ""
 				if havePrev {
@@ -138,6 +141,7 @@ func Run(ctx context.Context, opts Options) error {
 						logger.Printf("")
 						logger.Printf("%s  ⚠ [%s] UIDVALIDITY changed %d → %d (mailbox reset on server, baseline will reset)",
 							ts(), alias, prevUidValidity, stats.UidValidity)
+						opts.Bus.Publish(Event{Kind: EventUidValReset, Alias: alias, Stats: stats})
 					}
 					if opts.Verbose && (stats.Messages != prevMessages || stats.UidNext != prevUidNext) {
 						logger.Printf("%s  · [%s] server state: messages %d→%d, uidNext %d→%d",
@@ -148,11 +152,13 @@ func Run(ctx context.Context, opts Options) error {
 				prevUidNext = stats.UidNext
 				prevUidValidity = stats.UidValidity
 				havePrev = true
+				opts.Bus.Publish(Event{Kind: EventPollOK, Alias: alias, Stats: stats})
 
 				if pollCount%heartbeatEvery == 0 {
 					logger.Printf("")
 					logger.Printf("%s  ♥ [%s] alive — %s, %d polls · mailbox messages=%d uidNext=%d (no new mail)",
 						ts(), alias, time.Since(startedAt).Round(time.Second), pollCount, stats.Messages, stats.UidNext)
+					opts.Bus.Publish(Event{Kind: EventHeartbeat, Alias: alias, Stats: stats})
 				}
 			}
 			tick.Reset(poll)
