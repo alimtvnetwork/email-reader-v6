@@ -20,7 +20,6 @@ import (
 	"github.com/lovable/email-read/internal/core"
 	"github.com/lovable/email-read/internal/errtrace"
 	"github.com/lovable/email-read/internal/imapdef"
-	"github.com/lovable/email-read/internal/mailclient"
 	"github.com/lovable/email-read/internal/rules"
 	"github.com/lovable/email-read/internal/store"
 	"github.com/lovable/email-read/internal/watcher"
