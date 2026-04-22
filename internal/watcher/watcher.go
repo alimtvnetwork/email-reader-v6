@@ -28,6 +28,7 @@ type Options struct {
 	Store       *store.Store
 	Logger      *log.Logger // optional; defaults to stdout
 	Verbose     bool        // if true, log every poll step. Default: only state changes.
+	Bus         *Bus        // optional; structured event stream for the UI. CLI leaves nil.
 }
 
 // ts returns the compact HH:MM:SS prefix we put on every line. The CLI
@@ -94,6 +95,7 @@ func Run(ctx context.Context, opts Options) error {
 	}
 	logger.Printf("│  mode    : %s", mode)
 	logger.Printf("└──────────────────────────────────────────────────")
+	opts.Bus.Publish(Event{Kind: EventStarted, Alias: alias})
 
 	tick := time.NewTimer(0)
 	defer tick.Stop()
@@ -116,6 +118,7 @@ func Run(ctx context.Context, opts Options) error {
 			logger.Printf("")
 			logger.Printf("%s  ■ stopped — ran %s, %d polls",
 				ts(), time.Since(startedAt).Round(time.Second), pollCount)
+			opts.Bus.Publish(Event{Kind: EventStopped, Alias: alias})
 			return nil
 		case <-tick.C:
 			pollCount++
@@ -130,6 +133,7 @@ func Run(ctx context.Context, opts Options) error {
 					}
 					lastError = msg
 				}
+				opts.Bus.Publish(Event{Kind: EventPollError, Alias: alias, Err: err})
 			} else if stats != nil {
 				lastError = ""
 				if havePrev {
@@ -137,6 +141,7 @@ func Run(ctx context.Context, opts Options) error {
 						logger.Printf("")
 						logger.Printf("%s  ⚠ [%s] UIDVALIDITY changed %d → %d (mailbox reset on server, baseline will reset)",
 							ts(), alias, prevUidValidity, stats.UidValidity)
+						opts.Bus.Publish(Event{Kind: EventUidValReset, Alias: alias, Stats: stats})
 					}
 					if opts.Verbose && (stats.Messages != prevMessages || stats.UidNext != prevUidNext) {
 						logger.Printf("%s  · [%s] server state: messages %d→%d, uidNext %d→%d",
@@ -147,11 +152,13 @@ func Run(ctx context.Context, opts Options) error {
 				prevUidNext = stats.UidNext
 				prevUidValidity = stats.UidValidity
 				havePrev = true
+				opts.Bus.Publish(Event{Kind: EventPollOK, Alias: alias, Stats: stats})
 
 				if pollCount%heartbeatEvery == 0 {
 					logger.Printf("")
 					logger.Printf("%s  ♥ [%s] alive — %s, %d polls · mailbox messages=%d uidNext=%d (no new mail)",
 						ts(), alias, time.Since(startedAt).Round(time.Second), pollCount, stats.Messages, stats.UidNext)
+					opts.Bus.Publish(Event{Kind: EventHeartbeat, Alias: alias, Stats: stats})
 				}
 			}
 			tick.Reset(poll)
@@ -223,6 +230,7 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 		logger.Printf("")
 		logger.Printf("%s  ⚑ [%s] baseline set: UID=%d (history skipped, watching for UID > %d)",
 			ts(), alias, baseline, baseline)
+		opts.Bus.Publish(Event{Kind: EventBaseline, Alias: alias, Stats: &stats})
 		return &stats, nil
 	}
 
@@ -264,6 +272,7 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 		logger.Printf("%s  ✉ [%s] new mail · uid=%d", ts(), alias, m.Uid)
 		logger.Printf("        from    : %s", shortAddr(m.From))
 		logger.Printf("        subject : %s", m.Subject)
+		opts.Bus.Publish(Event{Kind: EventNewMail, Alias: alias, Message: m})
 
 		path, saveErr := mailclient.SaveRaw(alias, m)
 		if saveErr != nil {
@@ -338,14 +347,17 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 					continue
 				}
 				logger.Printf("        → open  : %s", truncURL(match.Url))
+				opts.Bus.Publish(Event{Kind: EventRuleMatch, Alias: alias, RuleName: match.RuleName, Url: match.Url})
 				if err := opts.Launcher.Open(match.Url); err != nil {
 					logger.Printf("        ✗ launch failed:")
 					for _, line := range strings.Split(strings.TrimRight(errtrace.Format(err), "\n"), "\n") {
 						logger.Printf("            %s", line)
 					}
+					opts.Bus.Publish(Event{Kind: EventUrlOpened, Alias: alias, RuleName: match.RuleName, Url: match.Url, OpenOK: false, Err: err})
 					continue
 				}
 				logger.Printf("                   ✓ launched in incognito")
+				opts.Bus.Publish(Event{Kind: EventUrlOpened, Alias: alias, RuleName: match.RuleName, Url: match.Url, OpenOK: true})
 				urlsLaunched++
 			}
 		}
