@@ -230,6 +230,7 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 		logger.Printf("")
 		logger.Printf("%s  ⚑ [%s] baseline set: UID=%d (history skipped, watching for UID > %d)",
 			ts(), alias, baseline, baseline)
+		opts.Bus.Publish(Event{Kind: EventBaseline, Alias: alias, Stats: &stats})
 		return &stats, nil
 	}
 
@@ -271,6 +272,7 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 		logger.Printf("%s  ✉ [%s] new mail · uid=%d", ts(), alias, m.Uid)
 		logger.Printf("        from    : %s", shortAddr(m.From))
 		logger.Printf("        subject : %s", m.Subject)
+		opts.Bus.Publish(Event{Kind: EventNewMail, Alias: alias, Message: m})
 
 		path, saveErr := mailclient.SaveRaw(alias, m)
 		if saveErr != nil {
@@ -345,14 +347,17 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 					continue
 				}
 				logger.Printf("        → open  : %s", truncURL(match.Url))
+				opts.Bus.Publish(Event{Kind: EventRuleMatch, Alias: alias, RuleName: match.RuleName, Url: match.Url})
 				if err := opts.Launcher.Open(match.Url); err != nil {
 					logger.Printf("        ✗ launch failed:")
 					for _, line := range strings.Split(strings.TrimRight(errtrace.Format(err), "\n"), "\n") {
 						logger.Printf("            %s", line)
 					}
+					opts.Bus.Publish(Event{Kind: EventUrlOpened, Alias: alias, RuleName: match.RuleName, Url: match.Url, OpenOK: false, Err: err})
 					continue
 				}
 				logger.Printf("                   ✓ launched in incognito")
+				opts.Bus.Publish(Event{Kind: EventUrlOpened, Alias: alias, RuleName: match.RuleName, Url: match.Url, OpenOK: true})
 				urlsLaunched++
 			}
 		}
