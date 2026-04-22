@@ -4,11 +4,11 @@
 package rules
 
 import (
-	"fmt"
 	"regexp"
 	"sync"
 
 	"github.com/lovable/email-read/internal/config"
+	"github.com/lovable/email-read/internal/errtrace"
 	"github.com/lovable/email-read/internal/mailclient"
 )
 
@@ -46,19 +46,19 @@ func New(rs []config.Rule) (*Engine, error) {
 		c := compiled{rule: r}
 		var err error
 		if c.from, err = compileOpt(r.FromRegex); err != nil && firstErr == nil {
-			firstErr = fmt.Errorf("rule %q fromRegex: %w", r.Name, err)
+			firstErr = errtrace.Wrapf(err, "rule %q fromRegex", r.Name)
 			continue
 		}
 		if c.subject, err = compileOpt(r.SubjectRegex); err != nil && firstErr == nil {
-			firstErr = fmt.Errorf("rule %q subjectRegex: %w", r.Name, err)
+			firstErr = errtrace.Wrapf(err, "rule %q subjectRegex", r.Name)
 			continue
 		}
 		if c.body, err = compileOpt(r.BodyRegex); err != nil && firstErr == nil {
-			firstErr = fmt.Errorf("rule %q bodyRegex: %w", r.Name, err)
+			firstErr = errtrace.Wrapf(err, "rule %q bodyRegex", r.Name)
 			continue
 		}
 		if c.url, err = compileOpt(r.UrlRegex); err != nil && firstErr == nil {
-			firstErr = fmt.Errorf("rule %q urlRegex: %w", r.Name, err)
+			firstErr = errtrace.Wrapf(err, "rule %q urlRegex", r.Name)
 			continue
 		}
 		e.compiled = append(e.compiled, c)

@@ -5,10 +5,11 @@ package config
 import (
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/lovable/email-read/internal/errtrace"
 )
 
 // Account represents a single IMAP account.
@@ -75,7 +76,7 @@ func EncodePassword(plain string) string {
 func DecodePassword(b64 string) (string, error) {
 	b, err := base64.StdEncoding.DecodeString(b64)
 	if err != nil {
-		return "", fmt.Errorf("decode password: %w", err)
+		return "", errtrace.Wrap(err, "decode password")
 	}
 	return string(b), nil
 }
@@ -98,11 +99,11 @@ func ExeDir() (string, error) {
 func DataDir() (string, error) {
 	root, err := ExeDir()
 	if err != nil {
-		return "", err
+		return "", errtrace.Wrap(err, "exe dir")
 	}
 	dir := filepath.Join(root, "data")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", fmt.Errorf("create data dir: %w", err)
+		return "", errtrace.Wrap(err, "create data dir")
 	}
 	return dir, nil
 }
@@ -111,11 +112,11 @@ func DataDir() (string, error) {
 func EmailDir() (string, error) {
 	root, err := ExeDir()
 	if err != nil {
-		return "", err
+		return "", errtrace.Wrap(err, "exe dir")
 	}
 	dir := filepath.Join(root, "email")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", fmt.Errorf("create email dir: %w", err)
+		return "", errtrace.Wrap(err, "create email dir")
 	}
 	return dir, nil
 }
@@ -124,7 +125,7 @@ func EmailDir() (string, error) {
 func Path() (string, error) {
 	d, err := DataDir()
 	if err != nil {
-		return "", err
+		return "", errtrace.Wrap(err, "path: data dir")
 	}
 	return filepath.Join(d, "config.json"), nil
 }
@@ -136,18 +137,18 @@ func Load() (*Config, error) {
 
 	p, err := Path()
 	if err != nil {
-		return nil, err
+		return nil, errtrace.Wrap(err, "load: path")
 	}
 	b, err := os.ReadFile(p)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return Default(), nil
 		}
-		return nil, fmt.Errorf("read config: %w", err)
+		return nil, errtrace.Wrapf(err, "read config %s", p)
 	}
 	var c Config
 	if err := json.Unmarshal(b, &c); err != nil {
-		return nil, fmt.Errorf("parse config: %w", err)
+		return nil, errtrace.Wrapf(err, "parse config %s", p)
 	}
 	if c.Watch.PollSeconds <= 0 {
 		c.Watch.PollSeconds = 3
@@ -168,18 +169,18 @@ func Save(c *Config) error {
 
 	p, err := Path()
 	if err != nil {
-		return err
+		return errtrace.Wrap(err, "save: path")
 	}
 	b, err := json.MarshalIndent(c, "", "  ")
 	if err != nil {
-		return fmt.Errorf("marshal config: %w", err)
+		return errtrace.Wrap(err, "marshal config")
 	}
 	tmp := p + ".tmp"
 	if err := os.WriteFile(tmp, b, 0o600); err != nil {
-		return fmt.Errorf("write config: %w", err)
+		return errtrace.Wrapf(err, "write config %s", tmp)
 	}
 	if err := os.Rename(tmp, p); err != nil {
-		return fmt.Errorf("rename config: %w", err)
+		return errtrace.Wrapf(err, "rename config %s -> %s", tmp, p)
 	}
 	return nil
 }
