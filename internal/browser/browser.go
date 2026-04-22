@@ -4,7 +4,6 @@
 package browser
 
 import (
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/lovable/email-read/internal/config"
+	"github.com/lovable/email-read/internal/errtrace"
 )
 
 // Launcher launches URLs in private mode using a detected browser.
@@ -59,7 +59,7 @@ func (l *Launcher) Open(url string) error {
 
 	cmd := exec.Command(path, args...)
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("launch %s: %w", path, err)
+		return errtrace.Wrapf(err, "launch %s", path)
 	}
 	// Detach: don't wait. Reap in background to avoid zombies on *nix.
 	go func() { _ = cmd.Wait() }()
@@ -97,7 +97,7 @@ func (l *Launcher) resolve() {
 			return
 		}
 	}
-	l.resolveErr = fmt.Errorf("no Chrome/Chromium-family browser found; set config.browser.chromePath or EMAIL_READ_CHROME")
+	l.resolveErr = errtrace.New("no Chrome/Chromium-family browser found; set config.browser.chromePath or EMAIL_READ_CHROME")
 }
 
 func osDefaults() []string {

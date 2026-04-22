@@ -6,13 +6,13 @@ package watcher
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"log"
 	"time"
 
 	"github.com/lovable/email-read/internal/browser"
 	"github.com/lovable/email-read/internal/config"
+	"github.com/lovable/email-read/internal/errtrace"
 	"github.com/lovable/email-read/internal/mailclient"
 	"github.com/lovable/email-read/internal/rules"
 	"github.com/lovable/email-read/internal/store"
@@ -70,7 +70,7 @@ func Run(ctx context.Context, opts Options) error {
 			pollCount++
 			stats, err := pollOnce(ctx, opts, logger)
 			if err != nil {
-				logger.Printf("[%s] poll error: %v", opts.Account.Alias, err)
+				logger.Printf("[%s] poll error:\n%s", opts.Account.Alias, errtrace.Format(err))
 			} else if stats != nil {
 				// Diagnostic: compare server-reported mailbox state vs previous poll.
 				if havePrev {
@@ -109,7 +109,7 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 
 	ws, err := opts.Store.GetWatchState(ctx, alias)
 	if err != nil {
-		return nil, fmt.Errorf("get watch state: %w", err)
+		return nil, errtrace.Wrap(err, "get watch state")
 	}
 	logger.Printf("[%s] watch state loaded: lastUid=%d lastSubject=%q",
 		alias, ws.LastUid, ws.LastSubject)
@@ -119,14 +119,14 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 		opts.Account.UseTLS, opts.Account.Email)
 	mc, err := mailclient.Dial(opts.Account)
 	if err != nil {
-		return nil, err
+		return nil, errtrace.Wrap(err, "dial imap")
 	}
 	defer mc.Close()
 	logger.Printf("[%s] connected and logged in (took %s)", alias, time.Since(start).Round(time.Millisecond))
 
 	stats, err := mc.SelectInbox()
 	if err != nil {
-		return nil, err
+		return nil, errtrace.Wrap(err, "select inbox")
 	}
 	logger.Printf("[%s] mailbox %q stats: messages=%d recent=%d unseen=%d uidNext=%d uidValidity=%d",
 		alias, stats.Name, stats.Messages, stats.Recent, stats.Unseen, stats.UidNext, stats.UidValidity)
@@ -139,7 +139,7 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 		}
 		ws.LastUid = baseline
 		if err := opts.Store.UpsertWatchState(ctx, ws); err != nil {
-			return &stats, fmt.Errorf("baseline watch state: %w", err)
+			return &stats, errtrace.Wrap(err, "baseline watch state")
 		}
 		logger.Printf("[%s] baseline set to UID=%d (skipping history). New mail with UID > %d will be processed.",
 			alias, baseline, baseline)
@@ -150,7 +150,7 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 		alias, ws.LastUid, stats.UidNext)
 	msgs, err := mc.FetchSince(ws.LastUid)
 	if err != nil {
-		return &stats, err
+		return &stats, errtrace.Wrap(err, "fetch since")
 	}
 	if len(msgs) == 0 {
 		logger.Printf("[%s] no new messages (poll completed in %s)",
@@ -161,11 +161,11 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 
 	for _, m := range msgs {
 		if err := ctx.Err(); err != nil {
-			return &stats, err
+			return &stats, errtrace.Wrap(err, "context cancelled mid-batch")
 		}
 		path, err := mailclient.SaveRaw(alias, m)
 		if err != nil {
-			logger.Printf("[%s] save raw uid=%d: %v", alias, m.Uid, err)
+			logger.Printf("[%s] save raw uid=%d:\n%s", alias, m.Uid, errtrace.Format(err))
 		}
 		row := &store.Email{
 			Alias:      alias,
@@ -182,7 +182,7 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 		}
 		emailId, inserted, err := opts.Store.UpsertEmail(ctx, row)
 		if err != nil {
-			logger.Printf("[%s] upsert uid=%d: %v", alias, m.Uid, err)
+			logger.Printf("[%s] upsert uid=%d:\n%s", alias, m.Uid, errtrace.Format(err))
 			continue
 		}
 		if inserted {
@@ -199,7 +199,7 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 			for _, match := range matches {
 				inserted, err := opts.Store.RecordOpenedUrl(ctx, emailId, match.RuleName, match.Url)
 				if err != nil {
-					logger.Printf("[%s] dedup url: %v", alias, err)
+					logger.Printf("[%s] dedup url:\n%s", alias, errtrace.Format(err))
 					continue
 				}
 				if !inserted {
@@ -207,7 +207,7 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 					continue
 				}
 				if err := opts.Launcher.Open(match.Url); err != nil {
-					logger.Printf("[%s] open url %s: %v", alias, match.Url, err)
+					logger.Printf("[%s] open url %s:\n%s", alias, match.Url, errtrace.Format(err))
 					continue
 				}
 				logger.Printf("[%s] opened %s (rule=%s)", alias, match.Url, match.RuleName)
@@ -223,7 +223,7 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 	}
 
 	if err := opts.Store.UpsertWatchState(ctx, ws); err != nil {
-		return &stats, fmt.Errorf("update watch state: %w", err)
+		return &stats, errtrace.Wrap(err, "update watch state")
 	}
 	logger.Printf("[%s] poll complete: processed=%d newLastUid=%d total=%s",
 		alias, len(msgs), ws.LastUid, time.Since(start).Round(time.Millisecond))

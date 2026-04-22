@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/lovable/email-read/internal/config"
+	"github.com/lovable/email-read/internal/errtrace"
 	"github.com/lovable/email-read/internal/exporter"
 	"github.com/lovable/email-read/internal/store"
 )
@@ -43,7 +44,7 @@ func newRulesCmd() *cobra.Command {
 func runRulesList() error {
 	cfg, err := config.Load()
 	if err != nil {
-		return err
+		return errtrace.Wrap(err, "load config")
 	}
 	if len(cfg.Rules) == 0 {
 		fmt.Println("No rules configured. Edit data/config.json to add some.")
@@ -62,15 +63,15 @@ func runRulesList() error {
 func runRulesToggle(name string, enabled bool) error {
 	cfg, err := config.Load()
 	if err != nil {
-		return err
+		return errtrace.Wrap(err, "load config")
 	}
 	r := cfg.FindRule(name)
 	if r == nil {
-		return fmt.Errorf("no rule with name %q", name)
+		return errtrace.New(fmt.Sprintf("no rule with name %q", name))
 	}
 	r.Enabled = enabled
 	if err := config.Save(cfg); err != nil {
-		return err
+		return errtrace.Wrap(err, "save config")
 	}
 	state := "disabled"
 	if enabled {
@@ -96,12 +97,12 @@ func runExportCsv(ctx context.Context) error {
 	}
 	st, err := store.Open()
 	if err != nil {
-		return err
+		return errtrace.Wrap(err, "open store")
 	}
 	defer st.Close()
 	path, err := exporter.ExportCSV(ctx, st)
 	if err != nil {
-		return err
+		return errtrace.Wrap(err, "export csv")
 	}
 	fmt.Printf("Exported to %s\n", path)
 	return nil

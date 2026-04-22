@@ -5,13 +5,13 @@ package store
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"path/filepath"
 	"time"
 
 	_ "modernc.org/sqlite" // pure-Go SQLite driver, no CGO required
 
 	"github.com/lovable/email-read/internal/config"
+	"github.com/lovable/email-read/internal/errtrace"
 )
 
 // Store is a thin wrapper around *sql.DB providing typed helpers.
@@ -49,7 +49,7 @@ type WatchState struct {
 func Open() (*Store, error) {
 	d, err := config.DataDir()
 	if err != nil {
-		return nil, err
+		return nil, errtrace.Wrap(err, "data dir")
 	}
 	return OpenAt(filepath.Join(d, "emails.db"))
 }
@@ -58,15 +58,15 @@ func Open() (*Store, error) {
 func OpenAt(path string) (*Store, error) {
 	db, err := sql.Open("sqlite", path+"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)")
 	if err != nil {
-		return nil, fmt.Errorf("open sqlite: %w", err)
+		return nil, errtrace.Wrap(err, "open sqlite")
 	}
 	if err := db.Ping(); err != nil {
-		return nil, fmt.Errorf("ping sqlite: %w", err)
+		return nil, errtrace.Wrap(err, "ping sqlite")
 	}
 	s := &Store{DB: db, Path: path}
 	if err := s.migrate(); err != nil {
 		_ = db.Close()
-		return nil, err
+		return nil, errtrace.Wrap(err, "migrate")
 	}
 	return s, nil
 }
@@ -112,7 +112,7 @@ func (s *Store) migrate() error {
 	}
 	for _, q := range stmts {
 		if _, err := s.DB.Exec(q); err != nil {
-			return fmt.Errorf("migrate: %w (stmt: %s)", err, q)
+			return errtrace.Wrapf(err, "migrate stmt: %s", q)
 		}
 	}
 	return nil
@@ -130,7 +130,7 @@ func (s *Store) UpsertEmail(ctx context.Context, e *Email) (int64, bool, error) 
 		e.Subject, e.BodyText, e.BodyHtml, e.ReceivedAt, e.FilePath,
 	)
 	if err != nil {
-		return 0, false, fmt.Errorf("insert email: %w", err)
+		return 0, false, errtrace.Wrap(err, "insert email")
 	}
 	if n, _ := res.RowsAffected(); n > 0 {
 		id, _ := res.LastInsertId()
@@ -141,7 +141,7 @@ func (s *Store) UpsertEmail(ctx context.Context, e *Email) (int64, bool, error) 
 	if err := s.DB.QueryRowContext(ctx,
 		`SELECT Id FROM Emails WHERE MessageId = ?`, e.MessageId,
 	).Scan(&id); err != nil {
-		return 0, false, fmt.Errorf("select existing email: %w", err)
+		return 0, false, errtrace.Wrap(err, "select existing email")
 	}
 	return id, false, nil
 }
@@ -158,7 +158,7 @@ func (s *Store) GetWatchState(ctx context.Context, alias string) (WatchState, er
 		return WatchState{Alias: alias}, nil
 	}
 	if err != nil {
-		return WatchState{}, fmt.Errorf("get watch state: %w", err)
+		return WatchState{}, errtrace.Wrap(err, "get watch state")
 	}
 	if received.Valid {
 		ws.LastReceivedAt = received.Time
@@ -179,7 +179,7 @@ func (s *Store) UpsertWatchState(ctx context.Context, ws WatchState) error {
 		ws.Alias, ws.LastUid, ws.LastSubject, ws.LastReceivedAt,
 	)
 	if err != nil {
-		return fmt.Errorf("upsert watch state: %w", err)
+		return errtrace.Wrap(err, "upsert watch state")
 	}
 	return nil
 }
@@ -194,7 +194,7 @@ func (s *Store) RecordOpenedUrl(ctx context.Context, emailId int64, ruleName, ur
 		emailId, ruleName, url,
 	)
 	if err != nil {
-		return false, fmt.Errorf("record opened url: %w", err)
+		return false, errtrace.Wrap(err, "record opened url")
 	}
 	n, _ := res.RowsAffected()
 	return n > 0, nil
@@ -208,7 +208,7 @@ func (s *Store) HasOpenedUrl(ctx context.Context, emailId int64, url string) (bo
 		emailId, url,
 	).Scan(&n)
 	if err != nil {
-		return false, err
+		return false, errtrace.Wrap(err, "has opened url")
 	}
 	return n > 0, nil
 }
