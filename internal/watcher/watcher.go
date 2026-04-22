@@ -205,10 +205,25 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 	// New mail arrived — always announce in both modes.
 	logger.Printf("[%s] ✉ %d new message(s)", alias, len(msgs))
 
-	for _, m := range msgs {
+	// 10-second cooldown after we open URL(s) for a message — gives the
+	// verification page time to load before we hammer the next message
+	// (and the next poll cycle). Honors ctx so Ctrl+C is responsive.
+	const postOpenCooldown = 10 * time.Second
+	openedAny := false
+
+	for i, m := range msgs {
 		if err := ctx.Err(); err != nil {
 			return &stats, errtrace.Wrap(err, "context cancelled mid-batch")
 		}
+		// Apply the 10s gap BETWEEN URL-bearing messages in the same batch.
+		if openedAny && i > 0 {
+			logger.Printf("    ⏳ waiting 10s before processing next message in batch…")
+			if err := sleepCtx(ctx, postOpenCooldown); err != nil {
+				return &stats, errtrace.Wrap(err, "cooldown between messages")
+			}
+			openedAny = false
+		}
+
 		path, err := mailclient.SaveRaw(alias, m)
 		if err != nil {
 			logger.Printf("[%s] ✗ save raw uid=%d:\n%s", alias, m.Uid, errtrace.Format(err))
@@ -233,7 +248,7 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 		}
 		if inserted {
 			logger.Printf("    uid=%d  from=%s  subj=%q", m.Uid, shortAddr(m.From), m.Subject)
-			if v {
+			if path != "" {
 				logger.Printf("    saved → %s", path)
 			}
 		} else if v {
@@ -243,6 +258,7 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 		// Rules → URLs → browser. Always log the per-rule outcome (even in
 		// quiet mode) so the user can see why "new mail arrived but nothing
 		// opened" — this was the #1 source of confusion before.
+		urlsLaunched := 0
 		if opts.Engine != nil {
 			matches, traces := opts.Engine.EvaluateWithTrace(m)
 			if len(traces) == 0 {
@@ -278,7 +294,12 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 					continue
 				}
 				logger.Printf("    ✓ launched")
+				urlsLaunched++
 			}
+		}
+
+		if urlsLaunched > 0 {
+			openedAny = true
 		}
 
 		if m.Uid > ws.LastUid {
@@ -291,11 +312,35 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 	if err := opts.Store.UpsertWatchState(ctx, ws); err != nil {
 		return &stats, errtrace.Wrap(err, "update watch state")
 	}
+
+	// 10s gap before the NEXT poll cycle, but only if we actually opened
+	// a URL during this batch. Otherwise we'd just slow down idle polling.
+	if openedAny {
+		logger.Printf("[%s] ⏳ opened URL(s) — waiting 10s before next poll…", alias)
+		if err := sleepCtx(ctx, postOpenCooldown); err != nil {
+			return &stats, errtrace.Wrap(err, "cooldown before next poll")
+		}
+	}
+
 	if v {
 		logger.Printf("[%s] poll complete: processed=%d newLastUid=%d total=%s",
 			alias, len(msgs), ws.LastUid, time.Since(start).Round(time.Millisecond))
 	}
 	return &stats, nil
+}
+
+// sleepCtx pauses for d but returns early if ctx is cancelled. The
+// returned error is non-nil only when ctx is cancelled, so callers can wrap
+// it with errtrace and bubble up cleanly on Ctrl+C.
+func sleepCtx(ctx context.Context, d time.Duration) error {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
+	}
 }
 
 // shortAddr trims the long `"Display Name" <addr@host>` form down to just

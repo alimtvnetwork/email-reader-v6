@@ -292,8 +292,17 @@ func (c *Client) FetchSince(lastUid uint32) ([]*Message, error) {
 	return out, nil
 }
 
-// SaveRaw writes the raw .eml file under email/<alias>/<YYYY-MM-DD>/<safe-id>.eml
+// SaveRaw writes the raw .eml file under
+//   email/<alias>/<YYYY-MM-DD>/HH.MM.SS__<from>__<subject>__uid<N>.eml
 // and returns the absolute path written.
+//
+// The filename format is human-readable and time-ordered:
+//   - HH.MM.SS prefix (from the message's ReceivedAt) so files sort
+//     chronologically inside the day folder.
+//   - sanitized sender address (e.g. "abdullah-mahin-rasia-gmail-com").
+//   - sanitized subject (trimmed to keep total filename reasonable).
+//   - "__uidN" suffix as the dedup key — guarantees uniqueness even when
+//     two emails share second + sender + subject.
 func SaveRaw(alias string, m *Message) (string, error) {
 	root, err := config.EmailDir()
 	if err != nil {
@@ -307,16 +316,26 @@ func SaveRaw(alias string, m *Message) (string, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", errtrace.Wrap(err, "mkdir email dir")
 	}
-	name := sanitize(strings.Trim(m.MessageId, "<>"))
-	if name == "" {
-		name = fmt.Sprintf("uid-%d", m.Uid)
+
+	timePrefix := when.Format("15.04.05")
+	fromPart := sanitizeReadable(extractEmailAddr(m.From))
+	if fromPart == "" {
+		fromPart = "unknown-sender"
 	}
-	if len(name) > 120 {
-		name = name[:120]
+	if len(fromPart) > 60 {
+		fromPart = fromPart[:60]
 	}
-	path := filepath.Join(dir, name+".eml")
+	subjPart := sanitizeReadable(m.Subject)
+	if subjPart == "" {
+		subjPart = "no-subject"
+	}
+	if len(subjPart) > 80 {
+		subjPart = subjPart[:80]
+	}
+	name := fmt.Sprintf("%s__%s__%s__uid%d.eml", timePrefix, fromPart, subjPart, m.Uid)
+	path := filepath.Join(dir, name)
 	if err := os.WriteFile(path, m.Raw, 0o600); err != nil {
-		return "", errtrace.Wrap(err, "write eml")
+		return "", errtrace.Wrapf(err, "write eml %s", path)
 	}
 	return path, nil
 }
@@ -325,9 +344,38 @@ func SaveRaw(alias string, m *Message) (string, error) {
 
 var unsafePathChars = regexp.MustCompile(`[^A-Za-z0-9._@-]+`)
 
+// sanitize is the strict path-safe sanitizer used for alias/folder names.
 func sanitize(s string) string {
 	s = unsafePathChars.ReplaceAllString(s, "_")
 	return strings.Trim(s, "_")
+}
+
+// readableUnsafeChars matches anything that's not a lowercase letter, digit,
+// or hyphen. Used to convert "Re: Check!" -> "re-check" for filenames.
+var readableUnsafeChars = regexp.MustCompile(`[^a-z0-9]+`)
+
+// sanitizeReadable produces a lowercase, hyphen-separated, filesystem-safe
+// fragment suitable for human-readable filenames. Examples:
+//
+//	"Re: Check"                              -> "re-check"
+//	"abdullah.mahin.rasia@gmail.com"         -> "abdullah-mahin-rasia-gmail-com"
+//	`"Abdullah Al Mahin" <a.b@c.com>`        -> "abdullah-al-mahin-a-b-c-com"
+func sanitizeReadable(s string) string {
+	s = strings.ToLower(s)
+	s = readableUnsafeChars.ReplaceAllString(s, "-")
+	return strings.Trim(s, "-")
+}
+
+// extractEmailAddr pulls "addr@host" out of `"Display" <addr@host>` if
+// present, otherwise returns the input unchanged. Keeps filenames focused on
+// the actual mailbox rather than the (often long) display name.
+func extractEmailAddr(s string) string {
+	if i := strings.IndexByte(s, '<'); i >= 0 {
+		if j := strings.IndexByte(s[i:], '>'); j > 0 {
+			return s[i+1 : i+j]
+		}
+	}
+	return s
 }
 
 func formatAddr(a *imap.Address) string {

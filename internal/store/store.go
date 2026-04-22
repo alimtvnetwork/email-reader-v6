@@ -212,3 +212,25 @@ func (s *Store) HasOpenedUrl(ctx context.Context, emailId int64, url string) (bo
 	}
 	return n > 0, nil
 }
+
+// GetEmailByUid returns a previously saved email row identified by
+// (alias, uid). Returns sql.ErrNoRows-wrapped error if no such row exists.
+func (s *Store) GetEmailByUid(ctx context.Context, alias string, uid uint32) (*Email, error) {
+	var e Email
+	var received sql.NullTime
+	err := s.DB.QueryRowContext(ctx, `
+		SELECT Id, Alias, MessageId, Uid, FromAddr, ToAddr, CcAddr, Subject,
+		       BodyText, BodyHtml, ReceivedAt, FilePath
+		FROM Emails
+		WHERE Alias = ? AND Uid = ?`,
+		alias, uid,
+	).Scan(&e.Id, &e.Alias, &e.MessageId, &e.Uid, &e.FromAddr, &e.ToAddr,
+		&e.CcAddr, &e.Subject, &e.BodyText, &e.BodyHtml, &received, &e.FilePath)
+	if err != nil {
+		return nil, errtrace.Wrapf(err, "select email alias=%s uid=%d", alias, uid)
+	}
+	if received.Valid {
+		e.ReceivedAt = received.Time
+	}
+	return &e, nil
+}
