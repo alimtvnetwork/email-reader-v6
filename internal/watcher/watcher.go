@@ -28,6 +28,7 @@ type Options struct {
 	Store       *store.Store
 	Logger      *log.Logger // optional; defaults to stdout
 	Verbose     bool        // if true, log every poll step. Default: only state changes.
+	Bus         *Bus        // optional; structured event stream for the UI. CLI leaves nil.
 }
 
 // ts returns the compact HH:MM:SS prefix we put on every line. The CLI
