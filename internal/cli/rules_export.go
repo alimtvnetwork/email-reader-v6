@@ -10,9 +10,6 @@ import (
 
 	"github.com/lovable/email-read/internal/config"
 	"github.com/lovable/email-read/internal/core"
-	"github.com/lovable/email-read/internal/errtrace"
-	"github.com/lovable/email-read/internal/exporter"
-	"github.com/lovable/email-read/internal/store"
 )
 
 // countEnabledRules is a thin wrapper kept so existing call sites in
@@ -136,17 +133,9 @@ func newExportCsvCmd() *cobra.Command {
 }
 
 func runExportCsv(ctx context.Context) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	st, err := store.Open()
+	path, err := core.ExportCSV(ctx)
 	if err != nil {
-		return errtrace.Wrap(err, "open store")
-	}
-	defer st.Close()
-	path, err := exporter.ExportCSV(ctx, st)
-	if err != nil {
-		return errtrace.Wrap(err, "export csv")
+		return err
 	}
 	fmt.Printf("Exported to %s\n", path)
 	return nil
