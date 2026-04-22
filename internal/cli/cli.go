@@ -49,9 +49,11 @@ and automatically opens matching URLs in Chrome incognito based on regex rules.`
 			if len(args) == 1 {
 				alias = args[0]
 			}
-			return runWatch(cmd.Context(), alias)
+			verbose, _ := cmd.Flags().GetBool("verbose")
+			return runWatch(cmd.Context(), alias, verbose)
 		},
 	}
+	root.PersistentFlags().BoolP("verbose", "v", false, "verbose logging (log every poll step, not just state changes)")
 
 	// Set custom help template for cleaner output
 	root.SetHelpTemplate(helpTemplate)
