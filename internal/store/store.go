@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite" // pure-Go SQLite driver, no CGO required
@@ -233,4 +234,87 @@ func (s *Store) GetEmailByUid(ctx context.Context, alias string, uid uint32) (*E
 		e.ReceivedAt = received.Time
 	}
 	return &e, nil
+}
+
+// EmailQuery filters and pages a list of stored emails. All fields are optional.
+//   - Alias: when non-empty, restrict to one account.
+//   - Search: substring match (LIKE %s%) against Subject + FromAddr (case-insensitive).
+//   - Limit: max rows to return; 0 means "no limit". Negative is treated as 0.
+//   - Offset: rows to skip; useful for paging.
+// Results are ordered by Uid DESC (newest first), tie-broken by Id DESC.
+type EmailQuery struct {
+	Alias  string
+	Search string
+	Limit  int
+	Offset int
+}
+
+// ListEmails returns email rows matching the query. Body fields are populated
+// so the UI can render snippets without a second round-trip.
+func (s *Store) ListEmails(ctx context.Context, q EmailQuery) ([]Email, error) {
+	sqlStr := `SELECT Id, Alias, MessageId, Uid, FromAddr, ToAddr, CcAddr, Subject,
+	                  BodyText, BodyHtml, ReceivedAt, FilePath
+	           FROM Emails`
+	var args []any
+	var where []string
+	if q.Alias != "" {
+		where = append(where, "Alias = ?")
+		args = append(args, q.Alias)
+	}
+	if q.Search != "" {
+		where = append(where, "(LOWER(Subject) LIKE ? OR LOWER(FromAddr) LIKE ?)")
+		needle := "%" + strings.ToLower(q.Search) + "%"
+		args = append(args, needle, needle)
+	}
+	if len(where) > 0 {
+		sqlStr += " WHERE " + strings.Join(where, " AND ")
+	}
+	sqlStr += " ORDER BY Uid DESC, Id DESC"
+	if q.Limit > 0 {
+		sqlStr += " LIMIT ?"
+		args = append(args, q.Limit)
+		if q.Offset > 0 {
+			sqlStr += " OFFSET ?"
+			args = append(args, q.Offset)
+		}
+	}
+	rows, err := s.DB.QueryContext(ctx, sqlStr, args...)
+	if err != nil {
+		return nil, errtrace.Wrap(err, "list emails")
+	}
+	defer rows.Close()
+	var out []Email
+	for rows.Next() {
+		var e Email
+		var received sql.NullTime
+		if err := rows.Scan(&e.Id, &e.Alias, &e.MessageId, &e.Uid, &e.FromAddr,
+			&e.ToAddr, &e.CcAddr, &e.Subject, &e.BodyText, &e.BodyHtml,
+			&received, &e.FilePath); err != nil {
+			return nil, errtrace.Wrap(err, "scan email row")
+		}
+		if received.Valid {
+			e.ReceivedAt = received.Time
+		}
+		out = append(out, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, errtrace.Wrap(err, "iterate email rows")
+	}
+	return out, nil
+}
+
+// CountEmails returns the row count matching the alias (or all when empty).
+func (s *Store) CountEmails(ctx context.Context, alias string) (int, error) {
+	var n int
+	var err error
+	if alias == "" {
+		err = s.DB.QueryRowContext(ctx, `SELECT COUNT(1) FROM Emails`).Scan(&n)
+	} else {
+		err = s.DB.QueryRowContext(ctx,
+			`SELECT COUNT(1) FROM Emails WHERE Alias = ?`, alias).Scan(&n)
+	}
+	if err != nil {
+		return 0, errtrace.Wrap(err, "count emails")
+	}
+	return n, nil
 }
