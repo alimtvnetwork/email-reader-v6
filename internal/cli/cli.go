@@ -383,7 +383,7 @@ func newRemoveCmd() *cobra.Command {
 func runAdd() error {
 	cfg, err := config.Load()
 	if err != nil {
-		return err
+		return errtrace.Wrap(err, "load config")
 	}
 
 	seedAlias, seedEmail, seedSrv := imapdef.SeedAccount()
@@ -477,7 +477,7 @@ func runAdd() error {
 		Mailbox:     mailbox,
 	})
 	if err := config.Save(cfg); err != nil {
-		return err
+		return errtrace.Wrap(err, "save config")
 	}
 	p, _ := config.Path()
 	fmt.Printf("Saved account %q to %s\n", alias, p)
@@ -487,7 +487,7 @@ func runAdd() error {
 func runList() error {
 	cfg, err := config.Load()
 	if err != nil {
-		return err
+		return errtrace.Wrap(err, "load config")
 	}
 	if len(cfg.Accounts) == 0 {
 		fmt.Println("No accounts configured. Run `email-read add` to add one.")
@@ -505,13 +505,13 @@ func runList() error {
 func runRemove(alias string) error {
 	cfg, err := config.Load()
 	if err != nil {
-		return err
+		return errtrace.Wrap(err, "load config")
 	}
 	if !cfg.RemoveAccount(alias) {
-		return fmt.Errorf("no account with alias %q", alias)
+		return errtrace.New(fmt.Sprintf("no account with alias %q", alias))
 	}
 	if err := config.Save(cfg); err != nil {
-		return err
+		return errtrace.Wrap(err, "save config")
 	}
 	fmt.Printf("Removed account %q\n", alias)
 	return nil
