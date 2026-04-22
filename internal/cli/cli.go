@@ -294,10 +294,10 @@ func runDiagnose(alias string) error {
 func runWatch(parent context.Context, alias string) error {
 	cfg, err := config.Load()
 	if err != nil {
-		return err
+		return errtrace.Wrap(err, "load config")
 	}
 	if len(cfg.Accounts) == 0 {
-		return fmt.Errorf("no accounts configured. Run `email-read add` first")
+		return errtrace.New("no accounts configured. Run `email-read add` first")
 	}
 
 	var acct config.Account
@@ -307,14 +307,14 @@ func runWatch(parent context.Context, alias string) error {
 	} else {
 		p := cfg.FindAccount(alias)
 		if p == nil {
-			return fmt.Errorf("no account with alias %q (run `email-read list`)", alias)
+			return errtrace.New(fmt.Sprintf("no account with alias %q (run `email-read list`)", alias))
 		}
 		acct = *p
 	}
 
 	st, err := store.Open()
 	if err != nil {
-		return err
+		return errtrace.Wrap(err, "open store")
 	}
 	defer st.Close()
 
