@@ -30,8 +30,9 @@ func TestSnippet_PrefersTextThenStripsHtml(t *testing.T) {
 		long += "a"
 	}
 	got := snippet(long, "")
-	if len(got) > 140 || got[len(got)-1] != []rune("…")[len([]rune("…"))-1] {
-		t.Fatalf("expected truncated snippet, got len=%d %q", len(got), got)
+	runes := []rune(got)
+	if len(runes) > 140 || runes[len(runes)-1] != '…' {
+		t.Fatalf("expected truncated snippet, got len=%d %q", len(runes), got)
 	}
 }
 
