@@ -12,6 +12,11 @@
 //	fyne package -os darwin  -src ./cmd/email-read-ui
 //	fyne package -os windows -src ./cmd/email-read-ui
 //	fyne package -os linux   -src ./cmd/email-read-ui
+//
+// Build tag: gated off when -tags nofyne is passed so headless CI can run
+// `go test ./...` (the rest of the tree) without the cgo display libs.
+//go:build !nofyne
+
 package main
 
 import "github.com/lovable/email-read/internal/ui"
