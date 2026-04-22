@@ -81,7 +81,7 @@ func runRead(parent context.Context, alias string, uid uint32) error {
 		return errtrace.Wrapf(err, "load email alias=%s uid=%d", alias, uid)
 	}
 
-	logger := log.New(os.Stdout, "", log.LstdFlags)
+	logger := log.New(os.Stdout, "", 0)
 	logger.Printf("[%s] read uid=%d  from=%s  subj=%q", alias, row.Uid, shortAddrCli(row.FromAddr), row.Subject)
 	if row.FilePath != "" {
 		logger.Printf("    file: %s", row.FilePath)

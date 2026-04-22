@@ -8,6 +8,7 @@ import (
 	"context"
 	"io"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/lovable/email-read/internal/browser"
@@ -29,6 +30,20 @@ type Options struct {
 	Verbose     bool        // if true, log every poll step. Default: only state changes.
 }
 
+// ts returns the compact HH:MM:SS prefix we put on every line. The CLI
+// configures the logger with no flags so we have full control of formatting.
+func ts() string { return time.Now().Format("15:04:05") }
+
+// truncURL keeps URL log lines readable when the query string is huge
+// (Lovable verify links can be 200+ chars).
+func truncURL(u string) string {
+	const max = 90
+	if len(u) <= max {
+		return u
+	}
+	return u[:max-1] + "…"
+}
+
 // Run blocks until ctx is cancelled. It logs progress and tolerates
 // transient IMAP errors by reconnecting on the next tick.
 //
@@ -47,30 +62,38 @@ func Run(ctx context.Context, opts Options) error {
 	}
 
 	alias := opts.Account.Alias
-	logger.Printf("[%s] watching %s @ %s:%d (poll=%s)  press Ctrl+C to stop",
-		alias, opts.Account.Email, opts.Account.ImapHost, opts.Account.ImapPort, poll)
-	if !opts.Verbose {
-		logger.Printf("[%s] quiet mode — only new mail / errors / heartbeat will be shown. Re-run with --verbose for full trace.", alias)
-	}
-	// Always announce rule + browser readiness so the user can immediately tell
-	// why "new mail" arrives but nothing opens.
+
+	// ── Startup banner ────────────────────────────────────────────────
+	logger.Printf("┌─ email-read · watching [%s] ────────────────────", alias)
+	logger.Printf("│  account : %s", opts.Account.Email)
+	logger.Printf("│  server  : %s:%d (tls=%v)", opts.Account.ImapHost, opts.Account.ImapPort, opts.Account.UseTLS)
+	logger.Printf("│  poll    : %s   (Ctrl+C to stop)", poll)
+
 	if opts.Engine == nil {
-		logger.Printf("[%s] ⚠ no rules engine attached — incoming mail will be saved but no URLs will be opened", alias)
+		logger.Printf("│  rules   : ⚠ engine not attached — saved only, no opens")
 	} else {
 		n := opts.Engine.RuleCount()
 		if n == 0 {
-			logger.Printf("[%s] ⚠ 0 enabled rules loaded — incoming mail will be saved but no URLs will be opened. Add a rule in data/config.json (rules[].enabled=true with a urlRegex).", alias)
+			logger.Printf("│  rules   : ⚠ 0 enabled — add one in data/config.json")
 		} else {
-			logger.Printf("[%s] %d enabled rule(s) loaded", alias, n)
+			logger.Printf("│  rules   : %d enabled", n)
 		}
 	}
+
 	if opts.Launcher == nil {
-		logger.Printf("[%s] ⚠ no browser launcher attached — URLs will be matched but never opened", alias)
+		logger.Printf("│  browser : ⚠ no launcher — URLs matched but never opened")
 	} else if path, err := opts.Launcher.Path(); err != nil {
-		logger.Printf("[%s] ⚠ browser not resolved yet:\n%s", alias, errtrace.Format(err))
+		logger.Printf("│  browser : ⚠ not resolved (see error below)")
+		logger.Printf("%s", errtrace.Format(err))
 	} else {
-		logger.Printf("[%s] browser ready: %s (incognito flag=%q)", alias, path, opts.Launcher.IncognitoArg())
+		logger.Printf("│  browser : %s  (incognito %s)", shortPath(path), opts.Launcher.IncognitoArg())
 	}
+	mode := "quiet"
+	if opts.Verbose {
+		mode = "verbose"
+	}
+	logger.Printf("│  mode    : %s", mode)
+	logger.Printf("└──────────────────────────────────────────────────")
 
 	tick := time.NewTimer(0)
 	defer tick.Stop()
@@ -90,7 +113,9 @@ func Run(ctx context.Context, opts Options) error {
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Printf("[%s] stopped (%s, %d polls)", alias, time.Since(startedAt).Round(time.Second), pollCount)
+			logger.Printf("")
+			logger.Printf("%s  ■ stopped — ran %s, %d polls",
+				ts(), time.Since(startedAt).Round(time.Second), pollCount)
 			return nil
 		case <-tick.C:
 			pollCount++
@@ -98,19 +123,24 @@ func Run(ctx context.Context, opts Options) error {
 			if err != nil {
 				msg := err.Error()
 				if opts.Verbose || msg != lastError {
-					logger.Printf("[%s] ✗ poll error:\n%s", alias, errtrace.Format(err))
+					logger.Printf("")
+					logger.Printf("%s  ✗ [%s] poll error", ts(), alias)
+					for _, line := range strings.Split(strings.TrimRight(errtrace.Format(err), "\n"), "\n") {
+						logger.Printf("        %s", line)
+					}
 					lastError = msg
 				}
 			} else if stats != nil {
 				lastError = ""
 				if havePrev {
 					if stats.UidValidity != prevUidValidity {
-						logger.Printf("[%s] ⚠ UIDVALIDITY changed %d → %d (mailbox reset on server, baseline will reset)",
-							alias, prevUidValidity, stats.UidValidity)
+						logger.Printf("")
+						logger.Printf("%s  ⚠ [%s] UIDVALIDITY changed %d → %d (mailbox reset on server, baseline will reset)",
+							ts(), alias, prevUidValidity, stats.UidValidity)
 					}
 					if opts.Verbose && (stats.Messages != prevMessages || stats.UidNext != prevUidNext) {
-						logger.Printf("[%s] server state: messages %d→%d, uidNext %d→%d",
-							alias, prevMessages, stats.Messages, prevUidNext, stats.UidNext)
+						logger.Printf("%s  · [%s] server state: messages %d→%d, uidNext %d→%d",
+							ts(), alias, prevMessages, stats.Messages, prevUidNext, stats.UidNext)
 					}
 				}
 				prevMessages = stats.Messages
@@ -119,13 +149,23 @@ func Run(ctx context.Context, opts Options) error {
 				havePrev = true
 
 				if pollCount%heartbeatEvery == 0 {
-					logger.Printf("[%s] ♥ alive — %s, %d polls, mailbox messages=%d uidNext=%d (no new mail since last heartbeat)",
-						alias, time.Since(startedAt).Round(time.Second), pollCount, stats.Messages, stats.UidNext)
+					logger.Printf("")
+					logger.Printf("%s  ♥ [%s] alive — %s, %d polls · mailbox messages=%d uidNext=%d (no new mail)",
+						ts(), alias, time.Since(startedAt).Round(time.Second), pollCount, stats.Messages, stats.UidNext)
 				}
 			}
 			tick.Reset(poll)
 		}
 	}
+}
+
+// shortPath strips a long /Applications/.../Google Chrome path to just the
+// app name so the startup banner stays narrow.
+func shortPath(p string) string {
+	if i := strings.LastIndex(p, "/"); i >= 0 && i < len(p)-1 {
+		return p[i+1:]
+	}
+	return p
 }
 
 // pollOnce performs a single connect → fetch → persist → match → open cycle.
@@ -137,7 +177,7 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 	v := opts.Verbose
 
 	if v {
-		logger.Printf("[%s] poll start", alias)
+		logger.Printf("%s  · [%s] poll start", ts(), alias)
 	}
 
 	ws, err := opts.Store.GetWatchState(ctx, alias)
@@ -145,10 +185,10 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 		return nil, errtrace.Wrap(err, "get watch state")
 	}
 	if v {
-		logger.Printf("[%s] watch state loaded: lastUid=%d lastSubject=%q",
-			alias, ws.LastUid, ws.LastSubject)
-		logger.Printf("[%s] dialing IMAP %s:%d (tls=%v) as %s",
-			alias, opts.Account.ImapHost, opts.Account.ImapPort,
+		logger.Printf("%s  · [%s] watch state: lastUid=%d lastSubject=%q",
+			ts(), alias, ws.LastUid, ws.LastSubject)
+		logger.Printf("%s  · [%s] dial %s:%d (tls=%v) as %s",
+			ts(), alias, opts.Account.ImapHost, opts.Account.ImapPort,
 			opts.Account.UseTLS, opts.Account.Email)
 	}
 
@@ -158,7 +198,7 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 	}
 	defer mc.Close()
 	if v {
-		logger.Printf("[%s] connected and logged in (took %s)", alias, time.Since(start).Round(time.Millisecond))
+		logger.Printf("%s  · [%s] connected (%s)", ts(), alias, time.Since(start).Round(time.Millisecond))
 	}
 
 	stats, err := mc.SelectInbox()
@@ -166,8 +206,8 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 		return nil, errtrace.Wrap(err, "select inbox")
 	}
 	if v {
-		logger.Printf("[%s] mailbox %q stats: messages=%d recent=%d unseen=%d uidNext=%d uidValidity=%d",
-			alias, stats.Name, stats.Messages, stats.Recent, stats.Unseen, stats.UidNext, stats.UidValidity)
+		logger.Printf("%s  · [%s] mailbox %q messages=%d unseen=%d uidNext=%d uidValidity=%d",
+			ts(), alias, stats.Name, stats.Messages, stats.Unseen, stats.UidNext, stats.UidValidity)
 	}
 
 	// First-run baseline: don't replay history. Snapshot UIDNEXT-1 and exit.
@@ -180,15 +220,15 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 		if err := opts.Store.UpsertWatchState(ctx, ws); err != nil {
 			return &stats, errtrace.Wrap(err, "baseline watch state")
 		}
-		// Always log baseline — it's a one-time meaningful event.
-		logger.Printf("[%s] baseline set to UID=%d (skipping history). Watching for UID > %d.",
-			alias, baseline, baseline)
+		logger.Printf("")
+		logger.Printf("%s  ⚑ [%s] baseline set: UID=%d (history skipped, watching for UID > %d)",
+			ts(), alias, baseline, baseline)
 		return &stats, nil
 	}
 
 	if v {
-		logger.Printf("[%s] fetching messages with UID > %d (server uidNext=%d)",
-			alias, ws.LastUid, stats.UidNext)
+		logger.Printf("%s  · [%s] fetch UID > %d (server uidNext=%d)",
+			ts(), alias, ws.LastUid, stats.UidNext)
 	}
 	msgs, err := mc.FetchSince(ws.LastUid)
 	if err != nil {
@@ -196,18 +236,13 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 	}
 	if len(msgs) == 0 {
 		if v {
-			logger.Printf("[%s] no new messages (poll completed in %s)",
-				alias, time.Since(start).Round(time.Millisecond))
+			logger.Printf("%s  · [%s] no new messages (%s)",
+				ts(), alias, time.Since(start).Round(time.Millisecond))
 		}
 		return &stats, nil
 	}
 
-	// New mail arrived — always announce in both modes.
-	logger.Printf("[%s] ✉ %d new message(s)", alias, len(msgs))
-
-	// 10-second cooldown after we open URL(s) for a message — gives the
-	// verification page time to load before we hammer the next message
-	// (and the next poll cycle). Honors ctx so Ctrl+C is responsive.
+	// 10-second cooldown after we open URL(s) for a message.
 	const postOpenCooldown = 10 * time.Second
 	openedAny := false
 
@@ -217,17 +252,27 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 		}
 		// Apply the 10s gap BETWEEN URL-bearing messages in the same batch.
 		if openedAny && i > 0 {
-			logger.Printf("    ⏳ waiting 10s before processing next message in batch…")
+			logger.Printf("        ⏳ waiting 10s before next message in batch…")
 			if err := sleepCtx(ctx, postOpenCooldown); err != nil {
 				return &stats, errtrace.Wrap(err, "cooldown between messages")
 			}
 			openedAny = false
 		}
 
-		path, err := mailclient.SaveRaw(alias, m)
-		if err != nil {
-			logger.Printf("[%s] ✗ save raw uid=%d:\n%s", alias, m.Uid, errtrace.Format(err))
+		// ── New-message block ───────────────────────────────────
+		logger.Printf("")
+		logger.Printf("%s  ✉ [%s] new mail · uid=%d", ts(), alias, m.Uid)
+		logger.Printf("        from    : %s", shortAddr(m.From))
+		logger.Printf("        subject : %s", m.Subject)
+
+		path, saveErr := mailclient.SaveRaw(alias, m)
+		if saveErr != nil {
+			logger.Printf("        ✗ save failed:")
+			for _, line := range strings.Split(strings.TrimRight(errtrace.Format(saveErr), "\n"), "\n") {
+				logger.Printf("            %s", line)
+			}
 		}
+
 		row := &store.Email{
 			Alias:      alias,
 			MessageId:  m.MessageId,
@@ -243,37 +288,38 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 		}
 		emailId, inserted, err := opts.Store.UpsertEmail(ctx, row)
 		if err != nil {
-			logger.Printf("[%s] ✗ upsert uid=%d:\n%s", alias, m.Uid, errtrace.Format(err))
+			logger.Printf("        ✗ db upsert failed:")
+			for _, line := range strings.Split(strings.TrimRight(errtrace.Format(err), "\n"), "\n") {
+				logger.Printf("            %s", line)
+			}
 			continue
 		}
-		if inserted {
-			logger.Printf("    uid=%d  from=%s  subj=%q", m.Uid, shortAddr(m.From), m.Subject)
-			if path != "" {
-				logger.Printf("    saved → %s", path)
+		if inserted && path != "" {
+			logger.Printf("        saved   : %s", path)
+		} else if !inserted {
+			logger.Printf("        (already in database — duplicate)")
+			if !v {
+				continue
 			}
-		} else if v {
-			logger.Printf("    uid=%d duplicate (already in DB) subj=%q", m.Uid, m.Subject)
 		}
 
-		// Rules → URLs → browser. Always log the per-rule outcome (even in
-		// quiet mode) so the user can see why "new mail arrived but nothing
-		// opened" — this was the #1 source of confusion before.
+		// ── Rules section ───────────────────────────────────────
 		urlsLaunched := 0
 		if opts.Engine != nil {
 			matches, traces := opts.Engine.EvaluateWithTrace(m)
 			if len(traces) == 0 {
-				logger.Printf("    rules: 0 enabled rules — nothing to evaluate (add one in data/config.json)")
+				logger.Printf("        rules   : 0 enabled — nothing to evaluate")
 			} else {
 				for _, t := range traces {
 					if len(t.UrlsFound) > 0 {
-						logger.Printf("    rules: ✓ %q → %d url(s)", t.RuleName, len(t.UrlsFound))
+						logger.Printf("        rules   : ✓ %s → %d url(s)", t.RuleName, len(t.UrlsFound))
 					} else {
-						logger.Printf("    rules: ✗ %q → %s", t.RuleName, t.Reason)
+						logger.Printf("        rules   : ✗ %s → %s", t.RuleName, t.Reason)
 					}
 				}
 			}
 			if opts.Launcher == nil && len(matches) > 0 {
-				logger.Printf("    ⚠ %d URL(s) matched but no browser launcher attached", len(matches))
+				logger.Printf("        ⚠ %d URL(s) matched but no browser launcher attached", len(matches))
 			}
 			for _, match := range matches {
 				if opts.Launcher == nil {
@@ -281,19 +327,25 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 				}
 				inserted, err := opts.Store.RecordOpenedUrl(ctx, emailId, match.RuleName, match.Url)
 				if err != nil {
-					logger.Printf("    ✗ dedup url:\n%s", errtrace.Format(err))
+					logger.Printf("        ✗ dedup url failed:")
+					for _, line := range strings.Split(strings.TrimRight(errtrace.Format(err), "\n"), "\n") {
+						logger.Printf("            %s", line)
+					}
 					continue
 				}
 				if !inserted {
-					logger.Printf("    ↻ skip %s (already opened previously for this email)", match.Url)
+					logger.Printf("        ↻ skip (already opened): %s", truncURL(match.Url))
 					continue
 				}
-				logger.Printf("    → opening in incognito: %s (rule=%s)", match.Url, match.RuleName)
+				logger.Printf("        → open  : %s", truncURL(match.Url))
 				if err := opts.Launcher.Open(match.Url); err != nil {
-					logger.Printf("    ✗ browser launch failed for %s:\n%s", match.Url, errtrace.Format(err))
+					logger.Printf("        ✗ launch failed:")
+					for _, line := range strings.Split(strings.TrimRight(errtrace.Format(err), "\n"), "\n") {
+						logger.Printf("            %s", line)
+					}
 					continue
 				}
-				logger.Printf("    ✓ launched")
+				logger.Printf("                   ✓ launched in incognito")
 				urlsLaunched++
 			}
 		}
@@ -316,15 +368,15 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 	// 10s gap before the NEXT poll cycle, but only if we actually opened
 	// a URL during this batch. Otherwise we'd just slow down idle polling.
 	if openedAny {
-		logger.Printf("[%s] ⏳ opened URL(s) — waiting 10s before next poll…", alias)
+		logger.Printf("        ⏳ waiting 10s before next poll cycle…")
 		if err := sleepCtx(ctx, postOpenCooldown); err != nil {
 			return &stats, errtrace.Wrap(err, "cooldown before next poll")
 		}
 	}
 
 	if v {
-		logger.Printf("[%s] poll complete: processed=%d newLastUid=%d total=%s",
-			alias, len(msgs), ws.LastUid, time.Since(start).Round(time.Millisecond))
+		logger.Printf("%s  · [%s] poll done: processed=%d newLastUid=%d (%s)",
+			ts(), alias, len(msgs), ws.LastUid, time.Since(start).Round(time.Millisecond))
 	}
 	return &stats, nil
 }

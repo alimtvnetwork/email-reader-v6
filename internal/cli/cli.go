@@ -429,7 +429,9 @@ func runWatch(parent context.Context, alias string, verbose bool) error {
 	ctx, stop := signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	logger := log.New(os.Stdout, "", log.LstdFlags)
+	// Plain logger — the watcher prepends its own compact HH:MM:SS prefix
+	// so we don't want Go's default "2026/04/22 20:17:00" noise on every line.
+	logger := log.New(os.Stdout, "", 0)
 
 	return watcher.Run(ctx, watcher.Options{
 		Account:     acct,
