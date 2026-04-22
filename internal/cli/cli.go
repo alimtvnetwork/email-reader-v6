@@ -366,7 +366,7 @@ func runDiagnose(alias string) error {
 
 
 // until SIGINT/SIGTERM. Empty alias picks the first configured account.
-func runWatch(parent context.Context, alias string) error {
+func runWatch(parent context.Context, alias string, verbose bool) error {
 	cfg, err := config.Load()
 	if err != nil {
 		return errtrace.Wrap(err, "load config")
@@ -409,7 +409,6 @@ func runWatch(parent context.Context, alias string) error {
 	defer stop()
 
 	logger := log.New(os.Stdout, "", log.LstdFlags)
-	logger.Printf("press Ctrl+C to stop")
 
 	return watcher.Run(ctx, watcher.Options{
 		Account:     acct,
@@ -418,6 +417,7 @@ func runWatch(parent context.Context, alias string) error {
 		Launcher:    launcher,
 		Store:       st,
 		Logger:      logger,
+		Verbose:     verbose,
 	})
 }
 
