@@ -10,8 +10,8 @@ import (
 
 // Version is the CLI version. Bumped per release in lockstep with
 // internal/ui.AppVersion so both binaries advertise the same release.
-// 0.21.0 — Phase 2 / Step 10: account picker + AppState wired into the UI shell.
-const Version = "0.21.0"
+// 0.22.0 — Phase 3 / Step 11: Dashboard view (counts + Start Watch CTA).
+const Version = "0.22.0"
 
 func main() {
 	root := cli.NewRoot(Version)
