@@ -411,102 +411,83 @@ func newRemoveCmd() *cobra.Command {
 // runAdd walks the user through an interactive account setup using survey.
 // It pre-fills sensible defaults: the seed `atto` account on first run,
 // and IMAP host/port/TLS suggestions based on the email domain.
+// addAccountDefaults bundles per-prompt defaults derived from config + IMAP catalog.
+type addAccountDefaults struct {
+	email, alias       string
+	primary, secondary imapdef.Server
+	known              bool
+}
+
+// resolveAddDefaults computes the seed/lookup-derived defaults for the `add` flow.
+func resolveAddDefaults(cfg config.Config, email string) addAccountDefaults {
+	seedAlias, seedEmail, seedSrv := imapdef.SeedAccount()
+	d := addAccountDefaults{}
+	if email == "" && len(cfg.Accounts) == 0 {
+		d.email = seedEmail
+	}
+	if email == seedEmail {
+		d.primary, d.known, d.alias = seedSrv, true, seedAlias
+		return d
+	}
+	d.primary, d.secondary, d.known = imapdef.Lookup(email)
+	return d
+}
+
+// promptAddIdentity asks for email + alias + password.
+func promptAddIdentity(cfg config.Config) (email, alias, password string, d addAccountDefaults, err error) {
+	d = resolveAddDefaults(cfg, "")
+	if err = survey.AskOne(&survey.Input{Message: "Email address:", Default: d.email},
+		&email, survey.WithValidator(survey.Required)); err != nil {
+		return
+	}
+	d = resolveAddDefaults(cfg, email)
+	if err = survey.AskOne(&survey.Input{Message: "Alias (short name to refer to this account):", Default: d.alias},
+		&alias, survey.WithValidator(survey.Required)); err != nil {
+		return
+	}
+	err = survey.AskOne(&survey.Password{Message: "Password (will be stored Base64-encoded):"},
+		&password, survey.WithValidator(survey.Required))
+	return
+}
+
+// promptAddServer asks for host/port/tls/mailbox using the resolved defaults.
+func promptAddServer(d addAccountDefaults) (host string, port int, useTLS bool, mailbox string, err error) {
+	host, port, useTLS, mailbox = d.primary.Host, d.primary.Port, d.primary.UseTLS, "INBOX"
+	if !d.known && d.secondary.Host != "" {
+		fmt.Printf("Domain not recognised. Suggested IMAP host: %s (fallback: %s)\n",
+			d.primary.Host, d.secondary.Host)
+	}
+	if err = survey.AskOne(&survey.Input{Message: "IMAP host:", Default: host},
+		&host, survey.WithValidator(survey.Required)); err != nil {
+		return
+	}
+	if err = survey.AskOne(&survey.Input{Message: "IMAP port:", Default: fmt.Sprintf("%d", port)}, &port); err != nil {
+		return
+	}
+	if err = survey.AskOne(&survey.Confirm{Message: "Use TLS?", Default: useTLS}, &useTLS); err != nil {
+		return
+	}
+	err = survey.AskOne(&survey.Input{Message: "Mailbox:", Default: mailbox}, &mailbox)
+	return
+}
+
 func runAdd() error {
 	cfg, err := config.Load()
 	if err != nil {
 		return errtrace.Wrap(err, "load config")
 	}
-
-	seedAlias, seedEmail, seedSrv := imapdef.SeedAccount()
-	defaultEmail := ""
-	if len(cfg.Accounts) == 0 {
-		// First-run convenience: offer the seed account.
-		defaultEmail = seedEmail
-	}
-
-	var email string
-	if err := survey.AskOne(&survey.Input{
-		Message: "Email address:",
-		Default: defaultEmail,
-	}, &email, survey.WithValidator(survey.Required)); err != nil {
+	email, alias, password, defs, err := promptAddIdentity(cfg)
+	if err != nil {
 		return err
 	}
-
-	// Suggest defaults from the domain or seed.
-	var primary imapdef.Server
-	var secondary imapdef.Server
-	var known bool
-	if email == seedEmail {
-		primary, known = seedSrv, true
-	} else {
-		primary, secondary, known = imapdef.Lookup(email)
-	}
-
-	defaultAlias := ""
-	if email == seedEmail {
-		defaultAlias = seedAlias
-	}
-
-	var alias string
-	if err := survey.AskOne(&survey.Input{
-		Message: "Alias (short name to refer to this account):",
-		Default: defaultAlias,
-	}, &alias, survey.WithValidator(survey.Required)); err != nil {
+	host, port, useTLS, mailbox, err := promptAddServer(defs)
+	if err != nil {
 		return err
 	}
-
-	var password string
-	if err := survey.AskOne(&survey.Password{
-		Message: "Password (will be stored Base64-encoded):",
-	}, &password, survey.WithValidator(survey.Required)); err != nil {
-		return err
-	}
-
-	host := primary.Host
-	port := primary.Port
-	useTLS := primary.UseTLS
-
-	if !known && secondary.Host != "" {
-		fmt.Printf("Domain not recognised. Suggested IMAP host: %s (fallback: %s)\n",
-			primary.Host, secondary.Host)
-	}
-
-	if err := survey.AskOne(&survey.Input{
-		Message: "IMAP host:",
-		Default: host,
-	}, &host, survey.WithValidator(survey.Required)); err != nil {
-		return err
-	}
-	if err := survey.AskOne(&survey.Input{
-		Message: "IMAP port:",
-		Default: fmt.Sprintf("%d", port),
-	}, &port); err != nil {
-		return err
-	}
-	if err := survey.AskOne(&survey.Confirm{
-		Message: "Use TLS?",
-		Default: useTLS,
-	}, &useTLS); err != nil {
-		return err
-	}
-
-	mailbox := "INBOX"
-	if err := survey.AskOne(&survey.Input{
-		Message: "Mailbox:",
-		Default: mailbox,
-	}, &mailbox); err != nil {
-		return err
-	}
-
 	res, err := core.AddAccount(core.AccountInput{
-		Alias:          alias,
-		Email:          email,
-		PlainPassword:  password,
-		ImapHost:       host,
-		ImapPort:       port,
-		UseTLS:         useTLS,
-		UseTLSExplicit: true, // user just confirmed via survey prompt
-		Mailbox:        mailbox,
+		Alias: alias, Email: email, PlainPassword: password,
+		ImapHost: host, ImapPort: port, UseTLS: useTLS,
+		UseTLSExplicit: true, Mailbox: mailbox,
 	})
 	if err != nil {
 		return err
