@@ -1,6 +1,6 @@
 # Project plan — email-read
 
-Single source of truth for the project roadmap. The detailed step-by-step build plan also lives in `spec/21-golang-email-reader/plan.md` (kept in sync).
+Single source of truth for the project roadmap. The original CLI build plan now lives at `spec/21-app/legacy/plan-cli.md` (archived; all 10 steps complete). The Fyne UI work is specified at `spec/21-app/02-features/` per the App Project Template.
 
 ## Active
 

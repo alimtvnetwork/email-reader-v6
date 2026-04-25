@@ -2,10 +2,23 @@
 
 ## Active Suggestions
 
+### Implement Fyne UI per spec/21-app/02-features/
+- **Status:** Pending
+- **Priority:** High
+- **Description:** Spec authored 2026-04-25 covering 7 features (dashboard, emails, rules, accounts, watch, tools, settings) with 35 acceptance criteria. Existing `internal/ui/` and `cmd/email-read-ui/` code is throwaway per user decision — implementation should follow the spec from scratch. Suggested phasing: (1) `internal/core` extraction per `01-fundamentals.md` §2; (2) sidebar shell + account picker; (3) read-only views (Dashboard, Emails, Rules, Accounts); (4) inline forms (Add account, Add rule, Tools); (5) Watch live cards + raw log; (6) Settings + theme + build scripts.
+- **Added:** 2026-04-25 spec session
+
+### Author 23-app-database and 24-app-design-system-and-ui
+- **Status:** Pending
+- **Priority:** Medium
+- **Description:** Both folders exist with placeholder `00-overview.md`. The `21-app` spec references them for SQLite schema details (`23-app-database`) and Fyne theming/component standards (`24-app-design-system-and-ui`). Without them, those references resolve to empty stubs.
+- **Added:** 2026-04-25 spec session
+
+
 ### Rotate seeded credentials in spec
 - **Status:** Pending
 - **Priority:** High
-- **Description:** The spec under `spec/21-golang-email-reader/spec.md` may contain seeded `atto` account credentials used during development. After end-to-end verification, rotate the IMAP app password and scrub or redact the spec.
+- **Description:** The legacy spec at `spec/21-app/legacy/spec.md` (formerly `spec/21-golang-email-reader/spec.md`) may contain seeded `atto` account credentials used during development. After end-to-end verification, rotate the IMAP app password and scrub or redact the legacy spec.
 - **Added:** 2026-04-21 session
 
 ### Add unit tests for rules edge cases
