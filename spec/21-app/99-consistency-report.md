@@ -165,6 +165,7 @@ The following are known places where the **spec is ahead of the implementation**
 | 2026-04-25 | Calibrated `check-fn-length.sh` (paren-depth tracking) and refactored `internal/ui/views/add_account_form.go` (`BuildAddAccountForm` 38 → ≤ 15) + `add_rule_form.go` (`BuildAddRuleForm` 33 → ≤ 15) by extracting widget construction, submit handlers, and message formatters into focused helpers. Linter now reports **12 real violations** (down from 21). |
 | 2026-04-25 | Refactored `internal/cli/cli.go:runAdd` (30 → ≤ 15) by extracting `addAccountDefaults` struct + `resolveAddDefaults` / `promptAddIdentity` / `promptAddServer` helpers. Linter now reports **11 real violations**. |
 | 2026-04-25 | Refactored `internal/watcher/watcher.go`: `Run` 21 → ≤ 15 (extracted `logStartupBanner` + `pollState` struct + `logPollError` + `handlePollOK`) and `pollOnce` 26 → ≤ 15 (extracted `connectAndSelect`, `handleBaseline`, `fetchAndCheckEmpty`, `processBatch`, `processMessage`, `persistMessage`, `evaluateRules`, `launchMatches`, `finalizeBatch`, `loadWatchState`, `logPollDone`, `advanceCursor`). Linter now reports **9 real violations**. |
+| 2026-04-25 | Refactored `internal/core/read.go:ReadEmail` (28 → ≤ 15) by extracting `loadEmailDetail`, `ensureSeededRule`, `buildEngineAndLauncher`, `rowToMessage`, `evaluateMatches`, `openMatches`, `openOneMatch`. Linter now reports **8 real violations**. |
 
 ---
 
