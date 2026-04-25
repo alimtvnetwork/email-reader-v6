@@ -146,6 +146,8 @@ The following are known places where the **spec is ahead of the implementation**
 | 5 | Issues regressions | Each of the 8 solved issues has a regression test (`Regress_Issue0N_*`)                                            | Test names defined in AC-PROJ §1.7; tests themselves to be written.                                          |
 | 6 | Doctor + Tools UI  | `email-read doctor` rune-dump + Tools card                                                                         | Doctor exists in CLI; Tools UI card to be built per `06-tools/02-frontend.md`.                              |
 | 7 | Pre-existing UI    | The current `internal/ui/` and `cmd/email-read-ui/` are treated as throwaway per `99-cr` v1.0; spec is authoritative. | Carry-over rule from v1.0 still applies.                                                                |
+| 8 | Fn-length linter   | AC-PROJ-20: every Go fn ≤ 15 statements (`linter-scripts/check-fn-length.sh`)                                                                                                                                                | **21 violations** across 13 files (`internal/cli/cli.go`: `runAdd`/`newAddQuickCmd`/`runWatch`; `internal/core/{accounts,diagnose,read}.go`; `internal/exporter/exporter.go`; `internal/mailclient/mailclient.go:SaveRaw`; `internal/store/store.go` (anon at 254); `internal/watcher/watcher.go`: `Run`/`pollOnce`; `internal/ui/sidebar.go`; `internal/ui/views/{accounts,add_account_form,add_rule_form,dashboard,emails,rules,tools}.go`). Run script for full list. |
+| 9 | Internal-link linter | AC-PROJ-33: every `./` / `../` Markdown link resolves (`linter-scripts/check-internal-links.sh`)                                                                                                                              | ✅ **PASS** — 322/322 links resolve across 72 spec files (verified 2026-04-25, post Task #35).                                                                                                                                                                                                                                                                                                                                                                       |
 
 ---
 
@@ -159,6 +161,7 @@ The following are known places where the **spec is ahead of the implementation**
 | 2026-04-25 | Migrated 8 solved issues from `.lovable/solved-issues/` → `spec/21-app/03-issues/solved/`; closed Watch OI-1 / OI-2 (Task #34).               |
 | 2026-04-25 | Rewrote `97-acceptance-criteria.md` (v1.0 → v2.0): 35 AC-PROJ rows + 700-criterion roll-up + sign-off ladder (Task #35).                       |
 | 2026-04-25 | Rewrote `99-consistency-report.md` (v1.0 → v2.0): full inventory + cross-ref validation + open-issues table + implementation deltas (Task #35). |
+| 2026-04-25 | Implemented `linter-scripts/check-internal-links.sh` (AC-PROJ-33) and `linter-scripts/check-fn-length.sh` (AC-PROJ-20); both runnable, both produced real findings (links 322/322 PASS; fn-length 21 violations — see §6 Delta #8). |
 
 ---
 
