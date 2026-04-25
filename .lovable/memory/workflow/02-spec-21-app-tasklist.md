@@ -16,7 +16,7 @@ Citations are pinned to `spec/12-consolidated-guidelines/` (read 2026-04-25):
 - [x] 01 — Read selected guideline folders (01, 02, 03, 04, 07, 10, 12, 13, 16) + linters
 - [x] 02 — Move `.lovable/linters/` → `linters/` and `.lovable/linter-scripts/` → `linter-scripts/`; update references (no refs found — clean rename)
 - [x] 03 — Author `spec/21-app/04-coding-standards.md` (central code-style reference, cites 02-coding)
-- [ ] 04 — Author `spec/21-app/05-logging-strategy.md` (log format, levels, trace IDs, heartbeat invariant)
+- [x] 04 — Author `spec/21-app/05-logging-strategy.md` (log format, levels, trace IDs, heartbeat invariant)
 - [ ] 05 — Author `spec/21-app/06-error-registry.md` (every error code, message, layer, recovery via internal/errtrace)
 - [ ] 06 — Author `spec/21-app/07-architecture.md` (internal/core API surface, package dependency graph)
 - [ ] 07 — Dashboard feature: write `02-features/01-dashboard/00-overview.md`
