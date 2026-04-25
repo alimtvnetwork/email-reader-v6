@@ -52,6 +52,105 @@ func truncURL(u string) string {
 //   - Quiet (default): only startup banner, baseline, new-mail events,
 //     errors, and a periodic heartbeat. Idle polls are silent.
 //   - Verbose (--verbose): every poll step is logged.
+// logStartupBanner prints the multi-line startup card describing the account,
+// server, poll interval, rules, browser launcher, and verbosity mode.
+func logStartupBanner(logger *log.Logger, opts Options, poll time.Duration) {
+	alias := opts.Account.Alias
+	logger.Printf("┌─ email-read · watching [%s] ────────────────────", alias)
+	logger.Printf("│  account : %s", opts.Account.Email)
+	logger.Printf("│  server  : %s:%d (tls=%v)", opts.Account.ImapHost, opts.Account.ImapPort, opts.Account.UseTLS)
+	logger.Printf("│  poll    : %s   (Ctrl+C to stop)", poll)
+	logBannerRules(logger, opts)
+	logBannerBrowser(logger, opts)
+	mode := "quiet"
+	if opts.Verbose {
+		mode = "verbose"
+	}
+	logger.Printf("│  mode    : %s", mode)
+	logger.Printf("└──────────────────────────────────────────────────")
+}
+
+func logBannerRules(logger *log.Logger, opts Options) {
+	if opts.Engine == nil {
+		logger.Printf("│  rules   : ⚠ engine not attached — saved only, no opens")
+		return
+	}
+	n := opts.Engine.RuleCount()
+	if n == 0 {
+		logger.Printf("│  rules   : ⚠ 0 enabled — add one in data/config.json")
+		return
+	}
+	logger.Printf("│  rules   : %d enabled", n)
+}
+
+func logBannerBrowser(logger *log.Logger, opts Options) {
+	if opts.Launcher == nil {
+		logger.Printf("│  browser : ⚠ no launcher — URLs matched but never opened")
+		return
+	}
+	path, err := opts.Launcher.Path()
+	if err != nil {
+		logger.Printf("│  browser : ⚠ not resolved (see error below)")
+		logger.Printf("%s", errtrace.Format(err))
+		return
+	}
+	logger.Printf("│  browser : %s  (incognito %s)", shortPath(path), opts.Launcher.IncognitoArg())
+}
+
+// pollState carries cross-poll diagnostic state for a watcher loop.
+type pollState struct {
+	prevMessages, prevUidNext, prevUidValidity uint32
+	pollCount                                  int
+	startedAt                                  time.Time
+	havePrev                                   bool
+	lastError                                  string
+}
+
+const heartbeatEvery = 60 // ~ every 60 polls (~3 min at 3s poll)
+
+// logPollError emits a poll-error block, de-duping repeated identical errors
+// when not in verbose mode.
+func logPollError(logger *log.Logger, opts Options, st *pollState, err error) {
+	msg := err.Error()
+	if opts.Verbose || msg != st.lastError {
+		logger.Printf("")
+		logger.Printf("%s  ✗ [%s] poll error", ts(), opts.Account.Alias)
+		for _, line := range strings.Split(strings.TrimRight(errtrace.Format(err), "\n"), "\n") {
+			logger.Printf("        %s", line)
+		}
+		st.lastError = msg
+	}
+	opts.Bus.Publish(Event{Kind: EventPollError, Alias: opts.Account.Alias, Err: err})
+}
+
+// handlePollOK processes a successful poll: emits UIDVALIDITY/state-change
+// notes, publishes the OK event, and emits a periodic heartbeat.
+func handlePollOK(logger *log.Logger, opts Options, st *pollState, stats *mailclient.MailboxStats) {
+	alias := opts.Account.Alias
+	st.lastError = ""
+	if st.havePrev {
+		if stats.UidValidity != st.prevUidValidity {
+			logger.Printf("")
+			logger.Printf("%s  ⚠ [%s] UIDVALIDITY changed %d → %d (mailbox reset on server, baseline will reset)",
+				ts(), alias, st.prevUidValidity, stats.UidValidity)
+			opts.Bus.Publish(Event{Kind: EventUidValReset, Alias: alias, Stats: stats})
+		}
+		if opts.Verbose && (stats.Messages != st.prevMessages || stats.UidNext != st.prevUidNext) {
+			logger.Printf("%s  · [%s] server state: messages %d→%d, uidNext %d→%d",
+				ts(), alias, st.prevMessages, stats.Messages, st.prevUidNext, stats.UidNext)
+		}
+	}
+	st.prevMessages, st.prevUidNext, st.prevUidValidity = stats.Messages, stats.UidNext, stats.UidValidity
+	st.havePrev = true
+	opts.Bus.Publish(Event{Kind: EventPollOK, Alias: alias, Stats: stats})
+	if st.pollCount%heartbeatEvery == 0 {
+		logger.Printf("")
+		logger.Printf("%s  ♥ [%s] alive — %s, %d polls · mailbox messages=%d uidNext=%d (no new mail)",
+			ts(), alias, time.Since(st.startedAt).Round(time.Second), st.pollCount, stats.Messages, stats.UidNext)
+		opts.Bus.Publish(Event{Kind: EventHeartbeat, Alias: alias, Stats: stats})
+	}
+}
+
 func Run(ctx context.Context, opts Options) error {
 	logger := opts.Logger
 	if logger == nil {
@@ -61,105 +160,27 @@ func Run(ctx context.Context, opts Options) error {
 	if poll <= 0 {
 		poll = 3 * time.Second
 	}
-
 	alias := opts.Account.Alias
-
-	// ── Startup banner ────────────────────────────────────────────────
-	logger.Printf("┌─ email-read · watching [%s] ────────────────────", alias)
-	logger.Printf("│  account : %s", opts.Account.Email)
-	logger.Printf("│  server  : %s:%d (tls=%v)", opts.Account.ImapHost, opts.Account.ImapPort, opts.Account.UseTLS)
-	logger.Printf("│  poll    : %s   (Ctrl+C to stop)", poll)
-
-	if opts.Engine == nil {
-		logger.Printf("│  rules   : ⚠ engine not attached — saved only, no opens")
-	} else {
-		n := opts.Engine.RuleCount()
-		if n == 0 {
-			logger.Printf("│  rules   : ⚠ 0 enabled — add one in data/config.json")
-		} else {
-			logger.Printf("│  rules   : %d enabled", n)
-		}
-	}
-
-	if opts.Launcher == nil {
-		logger.Printf("│  browser : ⚠ no launcher — URLs matched but never opened")
-	} else if path, err := opts.Launcher.Path(); err != nil {
-		logger.Printf("│  browser : ⚠ not resolved (see error below)")
-		logger.Printf("%s", errtrace.Format(err))
-	} else {
-		logger.Printf("│  browser : %s  (incognito %s)", shortPath(path), opts.Launcher.IncognitoArg())
-	}
-	mode := "quiet"
-	if opts.Verbose {
-		mode = "verbose"
-	}
-	logger.Printf("│  mode    : %s", mode)
-	logger.Printf("└──────────────────────────────────────────────────")
+	logStartupBanner(logger, opts, poll)
 	opts.Bus.Publish(Event{Kind: EventStarted, Alias: alias})
-
 	tick := time.NewTimer(0)
 	defer tick.Stop()
-
-	// Cross-poll diagnostic state.
-	var (
-		prevMessages    uint32
-		prevUidNext     uint32
-		prevUidValidity uint32
-		pollCount       int
-		startedAt       = time.Now()
-		havePrev        bool
-		lastError       string // de-dupe spammy repeated errors in quiet mode
-	)
-	const heartbeatEvery = 60 // ~ every 60 polls (~3 min at 3s poll)
-
+	st := &pollState{startedAt: time.Now()}
 	for {
 		select {
 		case <-ctx.Done():
 			logger.Printf("")
 			logger.Printf("%s  ■ stopped — ran %s, %d polls",
-				ts(), time.Since(startedAt).Round(time.Second), pollCount)
+				ts(), time.Since(st.startedAt).Round(time.Second), st.pollCount)
 			opts.Bus.Publish(Event{Kind: EventStopped, Alias: alias})
 			return nil
 		case <-tick.C:
-			pollCount++
+			st.pollCount++
 			stats, err := pollOnce(ctx, opts, logger)
 			if err != nil {
-				msg := err.Error()
-				if opts.Verbose || msg != lastError {
-					logger.Printf("")
-					logger.Printf("%s  ✗ [%s] poll error", ts(), alias)
-					for _, line := range strings.Split(strings.TrimRight(errtrace.Format(err), "\n"), "\n") {
-						logger.Printf("        %s", line)
-					}
-					lastError = msg
-				}
-				opts.Bus.Publish(Event{Kind: EventPollError, Alias: alias, Err: err})
+				logPollError(logger, opts, st, err)
 			} else if stats != nil {
-				lastError = ""
-				if havePrev {
-					if stats.UidValidity != prevUidValidity {
-						logger.Printf("")
-						logger.Printf("%s  ⚠ [%s] UIDVALIDITY changed %d → %d (mailbox reset on server, baseline will reset)",
-							ts(), alias, prevUidValidity, stats.UidValidity)
-						opts.Bus.Publish(Event{Kind: EventUidValReset, Alias: alias, Stats: stats})
-					}
-					if opts.Verbose && (stats.Messages != prevMessages || stats.UidNext != prevUidNext) {
-						logger.Printf("%s  · [%s] server state: messages %d→%d, uidNext %d→%d",
-							ts(), alias, prevMessages, stats.Messages, prevUidNext, stats.UidNext)
-					}
-				}
-				prevMessages = stats.Messages
-				prevUidNext = stats.UidNext
-				prevUidValidity = stats.UidValidity
-				havePrev = true
-				opts.Bus.Publish(Event{Kind: EventPollOK, Alias: alias, Stats: stats})
-
-				if pollCount%heartbeatEvery == 0 {
-					logger.Printf("")
-					logger.Printf("%s  ♥ [%s] alive — %s, %d polls · mailbox messages=%d uidNext=%d (no new mail)",
-						ts(), alias, time.Since(startedAt).Round(time.Second), pollCount, stats.Messages, stats.UidNext)
-					opts.Bus.Publish(Event{Kind: EventHeartbeat, Alias: alias, Stats: stats})
-				}
+				handlePollOK(logger, opts, st, stats)
 			}
 			tick.Reset(poll)
 		}
