@@ -47,4 +47,10 @@ Citations are pinned to `spec/12-consolidated-guidelines/` (read 2026-04-25):
 - [x] 32 — Author `spec/23-app-database/` (overview rewrite + 01-schema + 02-queries + 03-migrations + 04-retention-and-vacuum + 97-acceptance-criteria + 99-consistency-report)
 - [x] 33 — Author `spec/24-app-design-system-and-ui/` (overview rewrite + 01-tokens + 02-theme-implementation + 03-layout-and-shell + 04-components + 05-accessibility + 97-acceptance-criteria + 99-consistency-report; **resolves Watch OI-1**)
 - [x] 34 — Populate `spec/21-app/03-issues/` from `.lovable/solved-issues/` + `.lovable/pending-issues/` (8 solved issues migrated to `solved/`, empty `pending/` seeded, `00-overview.md` rewritten as severity-tagged index, Watch OI-1 referenced as closed in issue 08)
-- [ ] 35 — Finalize `spec/21-app/97-acceptance-criteria.md` + `99-consistency-report.md`
+- [x] 35 — Finalize `spec/21-app/97-acceptance-criteria.md` + `99-consistency-report.md` (v1.0 → v2.0; added 35 AC-PROJ cross-feature criteria, indexed 700 total criteria across 9 source files, sign-off ladder, full inventory of 71 spec files, audited error-code / named-query / forward-reference resolution, recorded 7 known spec-vs-implementation deltas, confirmed Watch OI-1 / OI-2 closed)
+
+---
+
+## Status: Spec authoring round COMPLETE ✅
+
+All 35 tasks done. The next phase (implementation work) is tracked under `spec/21-app/99-consistency-report.md` §6 "Implementation deltas" and is **out of scope** for this tasklist.
