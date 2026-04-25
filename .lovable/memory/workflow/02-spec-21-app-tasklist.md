@@ -34,7 +34,7 @@ Citations are pinned to `spec/12-consolidated-guidelines/` (read 2026-04-25):
 - [x] 19 — Accounts feature: write `02-features/04-accounts/00-overview.md`
 - [x] 20 — Accounts feature: write `01-backend.md`
 - [x] 21 — Accounts feature: write `02-frontend.md`
-- [ ] 22 — Accounts feature: write `97-acceptance-criteria.md` + `99-consistency-report.md`
+- [x] 22 — Accounts feature: write `97-acceptance-criteria.md` + `99-consistency-report.md`
 - [ ] 23 — Watch feature: write `02-features/05-watch/00-overview.md`
 - [ ] 24 — Watch feature: write `01-backend.md` (poll loop, heartbeat, event fan-out)
 - [ ] 25 — Watch feature: write `02-frontend.md` (live log + structured cards)
