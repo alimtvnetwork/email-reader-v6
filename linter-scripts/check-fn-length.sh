@@ -92,7 +92,7 @@ for f in "${GO_FILES[@]}"; do
       return out
     }
 
-    BEGIN { depth = 0; in_func = 0; fn_name = ""; fn_line = 0; stmt_count = 0 }
+    BEGIN { depth = 0; pdepth = 0; in_func = 0; fn_name = ""; fn_line = 0; stmt_count = 0 }
 
     {
       raw = $0
@@ -116,26 +116,37 @@ for f in "${GO_FILES[@]}"; do
         fn_line = NR
         in_func = 1
         depth = 1
+        pdepth = 0
         stmt_count = 0
         next
       }
 
       if (!in_func) next
 
-      # Update brace depth using stripped line.
-      # Count braces explicitly so multiple per line are honored.
+      # Snapshot paren depth at line start. Lines that *start* inside a
+      # multi-line call expression are continuations of an existing
+      # statement, not new statements — even at brace depth 1.
+      pdepth_start = pdepth
+
+      # Update brace + paren depth using the stripped line.
       # NOTE: avoid the reserved awk function name "close".
-      n_open  = gsub(/\{/, "{", stripped)
-      n_close = gsub(/\}/, "}", stripped)
+      n_open    = gsub(/\{/, "{", stripped)
+      n_close   = gsub(/\}/, "}", stripped)
+      n_popen   = gsub(/\(/, "(", stripped)
+      n_pclose  = gsub(/\)/, ")", stripped)
+      n_bopen   = gsub(/\[/, "[", stripped)
+      n_bclose  = gsub(/\]/, "]", stripped)
 
       # A "statement" is a non-empty, non-pure-brace line at depth == 1
-      # (siblings of the function body), counted BEFORE depth changes
-      # caused by this line take effect.
-      if (depth == 1 && trimmed != "" && trimmed !~ /^[\{\}[:space:]]+$/) {
+      # AND not a continuation of an open call/index expression from a
+      # previous line. Counted BEFORE depth changes from this line apply.
+      if (depth == 1 && pdepth_start == 0 && trimmed != "" && trimmed !~ /^[\{\}\(\)\[\][:space:]]+$/) {
         stmt_count++
       }
 
-      depth += n_open - n_close
+      depth  += n_open  - n_close
+      pdepth += n_popen - n_pclose + n_bopen - n_bclose
+      if (pdepth < 0) pdepth = 0
 
       if (depth <= 0) {
         if (stmt_count > max) {
@@ -146,6 +157,7 @@ for f in "${GO_FILES[@]}"; do
         }
         in_func = 0
         depth = 0
+        pdepth = 0
         fn_name = ""
         stmt_count = 0
       }
