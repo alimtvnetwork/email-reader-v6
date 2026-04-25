@@ -28,102 +28,136 @@ type AddRuleFormOptions struct {
 	OnSaved func()
 }
 
+// ruleFormEntries holds the six Fyne widgets that make up the Add Rule
+// form. Grouping them keeps BuildAddRuleForm under the 15-statement limit
+// (AC-PROJ-20).
+type ruleFormEntries struct {
+	name         *widget.Entry
+	urlRegex     *widget.Entry
+	fromRegex    *widget.Entry
+	subjectRegex *widget.Entry
+	bodyRegex    *widget.Entry
+	enabled      *widget.Check
+}
+
 // BuildAddRuleForm returns the inline Add Rule form widget.
 func BuildAddRuleForm(opts AddRuleFormOptions) fyne.CanvasObject {
 	if opts.Save == nil {
 		opts.Save = core.AddRule
 	}
-
-	name := widget.NewEntry()
-	name.SetPlaceHolder("e.g. lovable-magic-link")
-
-	urlRegex := widget.NewEntry()
-	urlRegex.SetPlaceHolder(`required — e.g. https://app\.example\.com/auth\?token=\S+`)
-
-	fromRegex := widget.NewEntry()
-	fromRegex.SetPlaceHolder("optional — e.g. noreply@example\\.com")
-
-	subjectRegex := widget.NewEntry()
-	subjectRegex.SetPlaceHolder("optional — e.g. (?i)sign.?in")
-
-	bodyRegex := widget.NewEntry()
-	bodyRegex.SetPlaceHolder("optional — body must match this pattern")
-
-	enabled := widget.NewCheck("Enabled", nil)
-	enabled.SetChecked(true)
-
-	status := widget.NewLabel("")
-	status.Wrapping = fyne.TextWrapWord
-
-	form := widget.NewForm(
-		widget.NewFormItem("Name", name),
-		widget.NewFormItem("URL regex", urlRegex),
-		widget.NewFormItem("From regex", fromRegex),
-		widget.NewFormItem("Subject regex", subjectRegex),
-		widget.NewFormItem("Body regex", bodyRegex),
-		widget.NewFormItem("Enabled", enabled),
-	)
-
-	clear := func() {
-		name.SetText("")
-		urlRegex.SetText("")
-		fromRegex.SetText("")
-		subjectRegex.SetText("")
-		bodyRegex.SetText("")
-		enabled.SetChecked(true)
-	}
-
-	submit := widget.NewButton("Save rule", func() {
-		v := ValidateRuleForm(RuleFormInput{
-			Name:         name.Text,
-			UrlRegex:     urlRegex.Text,
-			FromRegex:    fromRegex.Text,
-			SubjectRegex: subjectRegex.Text,
-			BodyRegex:    bodyRegex.Text,
-			Enabled:      enabled.Checked,
-		})
-		if !v.Valid {
-			status.SetText("⚠ " + strings.Join(v.Errors, " · "))
-			return
-		}
-		res, err := opts.Save(core.RuleInput{
-			Name:         v.Name,
-			UrlRegex:     v.UrlRegex,
-			FromRegex:    v.FromRegex,
-			SubjectRegex: v.SubjectRegex,
-			BodyRegex:    v.BodyRegex,
-			Enabled:      v.Enabled,
-		})
-		if err != nil {
-			status.SetText("⚠ Save failed: " + err.Error())
-			return
-		}
-		verb := "Saved"
-		if res.Replaced {
-			verb = "Replaced"
-		}
-		state := "enabled"
-		if !res.Rule.Enabled {
-			state = "disabled"
-		}
-		status.SetText(fmt.Sprintf("✓ %s %q (%s). Config: %s",
-			verb, res.Rule.Name, state, res.ConfigPath))
-		clear()
-		if opts.OnSaved != nil {
-			opts.OnSaved()
-		}
-	})
-	submit.Importance = widget.HighImportance
-
-	clearBtn := widget.NewButton("Clear", func() {
-		clear()
-		status.SetText("")
-	})
-
+	e := newRuleFormEntries()
+	status := newStatusLabel()
+	form := buildRuleForm(e)
+	clear := func() { resetRuleEntries(e) }
+	submit := newRuleSubmitButton(opts, e, status, clear)
+	clearBtn := widget.NewButton("Clear", func() { clear(); status.SetText("") })
 	return container.NewPadded(container.NewVBox(
 		form,
 		widget.NewSeparator(),
 		container.NewHBox(submit, clearBtn),
 		status,
 	))
+}
+
+// newRuleFormEntries constructs the six entry widgets with their
+// placeholders.
+func newRuleFormEntries() *ruleFormEntries {
+	name := widget.NewEntry()
+	name.SetPlaceHolder("e.g. lovable-magic-link")
+	urlRegex := widget.NewEntry()
+	urlRegex.SetPlaceHolder(`required — e.g. https://app\.example\.com/auth\?token=\S+`)
+	fromRegex := widget.NewEntry()
+	fromRegex.SetPlaceHolder("optional — e.g. noreply@example\\.com")
+	subjectRegex := widget.NewEntry()
+	subjectRegex.SetPlaceHolder("optional — e.g. (?i)sign.?in")
+	bodyRegex := widget.NewEntry()
+	bodyRegex.SetPlaceHolder("optional — body must match this pattern")
+	enabled := widget.NewCheck("Enabled", nil)
+	enabled.SetChecked(true)
+	return &ruleFormEntries{name, urlRegex, fromRegex, subjectRegex, bodyRegex, enabled}
+}
+
+// buildRuleForm composes the widget.Form rows from the six entries.
+func buildRuleForm(e *ruleFormEntries) *widget.Form {
+	return widget.NewForm(
+		widget.NewFormItem("Name", e.name),
+		widget.NewFormItem("URL regex", e.urlRegex),
+		widget.NewFormItem("From regex", e.fromRegex),
+		widget.NewFormItem("Subject regex", e.subjectRegex),
+		widget.NewFormItem("Body regex", e.bodyRegex),
+		widget.NewFormItem("Enabled", e.enabled),
+	)
+}
+
+// resetRuleEntries clears every input back to its initial state.
+func resetRuleEntries(e *ruleFormEntries) {
+	e.name.SetText("")
+	e.urlRegex.SetText("")
+	e.fromRegex.SetText("")
+	e.subjectRegex.SetText("")
+	e.bodyRegex.SetText("")
+	e.enabled.SetChecked(true)
+}
+
+// newRuleSubmitButton wires the primary "Save rule" button: validate →
+// call opts.Save → render status → run OnSaved hook on success.
+func newRuleSubmitButton(opts AddRuleFormOptions, e *ruleFormEntries, status *widget.Label, clear func()) *widget.Button {
+	submit := widget.NewButton("Save rule", func() {
+		v := ValidateRuleForm(ruleFormInputFromEntries(e))
+		if !v.Valid {
+			status.SetText("⚠ " + strings.Join(v.Errors, " · "))
+			return
+		}
+		res, err := opts.Save(ruleInputFromValid(v))
+		if err != nil {
+			status.SetText("⚠ Save failed: " + err.Error())
+			return
+		}
+		status.SetText(formatRuleSavedMessage(res))
+		clear()
+		if opts.OnSaved != nil {
+			opts.OnSaved()
+		}
+	})
+	submit.Importance = widget.HighImportance
+	return submit
+}
+
+// ruleFormInputFromEntries pulls the current entry values into the
+// validation input struct.
+func ruleFormInputFromEntries(e *ruleFormEntries) RuleFormInput {
+	return RuleFormInput{
+		Name:         e.name.Text,
+		UrlRegex:     e.urlRegex.Text,
+		FromRegex:    e.fromRegex.Text,
+		SubjectRegex: e.subjectRegex.Text,
+		BodyRegex:    e.bodyRegex.Text,
+		Enabled:      e.enabled.Checked,
+	}
+}
+
+// ruleInputFromValid maps a validated form into core.RuleInput.
+func ruleInputFromValid(v RuleFormResult) core.RuleInput {
+	return core.RuleInput{
+		Name:         v.Name,
+		UrlRegex:     v.UrlRegex,
+		FromRegex:    v.FromRegex,
+		SubjectRegex: v.SubjectRegex,
+		BodyRegex:    v.BodyRegex,
+		Enabled:      v.Enabled,
+	}
+}
+
+// formatRuleSavedMessage renders the success banner including whether an
+// existing rule was replaced and the resulting Enabled state.
+func formatRuleSavedMessage(res *core.AddRuleResult) string {
+	verb := "Saved"
+	if res.Replaced {
+		verb = "Replaced"
+	}
+	state := "enabled"
+	if !res.Rule.Enabled {
+		state = "disabled"
+	}
+	return fmt.Sprintf("✓ %s %q (%s). Config: %s", verb, res.Rule.Name, state, res.ConfigPath)
 }
