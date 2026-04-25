@@ -38,7 +38,7 @@ Citations are pinned to `spec/12-consolidated-guidelines/` (read 2026-04-25):
 - [x] 23 — Watch feature: write `02-features/05-watch/00-overview.md`
 - [x] 24 — Watch feature: write `01-backend.md` (poll loop, heartbeat, event fan-out)
 - [x] 25 — Watch feature: write `02-frontend.md` (live log + structured cards)
-- [ ] 26 — Watch feature: write `97-acceptance-criteria.md` + `99-consistency-report.md`
+- [x] 26 — Watch feature: write `97-acceptance-criteria.md` + `99-consistency-report.md`
 - [ ] 27 — Tools feature: write `02-features/06-tools/00-overview.md`
 - [ ] 28 — Tools feature: write `01-backend.md`
 - [ ] 29 — Tools feature: write `02-frontend.md`
