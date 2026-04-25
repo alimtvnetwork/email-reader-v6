@@ -40,7 +40,7 @@ Citations are pinned to `spec/12-consolidated-guidelines/` (read 2026-04-25):
 - [x] 25 — Watch feature: write `02-frontend.md` (live log + structured cards)
 - [x] 26 — Watch feature: write `97-acceptance-criteria.md` + `99-consistency-report.md`
 - [x] 27 — Tools feature: write `02-features/06-tools/00-overview.md`
-- [ ] 28 — Tools feature: write `01-backend.md`
+- [x] 28 — Tools feature: write `01-backend.md`
 - [ ] 29 — Tools feature: write `02-frontend.md`
 - [ ] 30 — Tools feature: write `97-acceptance-criteria.md` + `99-consistency-report.md`
 - [ ] 31 — Settings feature: write `02-features/07-settings/00-overview.md` + `01-backend.md` + `02-frontend.md` + acceptance/consistency
