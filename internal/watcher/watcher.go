@@ -373,10 +373,45 @@ func advanceCursor(ws *store.WatchState, m mailclient.Message) {
 	}
 }
 
+// finalizeBatch persists the advanced watch state and applies the
+// post-cycle cooldown when any URL was launched in this batch.
+func finalizeBatch(ctx context.Context, opts Options, logger *log.Logger, ws store.WatchState, openedAny bool) error {
+	if err := opts.Store.UpsertWatchState(ctx, ws); err != nil {
+		return errtrace.Wrap(err, "update watch state")
+	}
+	if !openedAny {
+		return nil
+	}
+	logger.Printf("        ⏳ waiting 10s before next poll cycle…")
+	if err := sleepCtx(ctx, postOpenCooldown); err != nil {
+		return errtrace.Wrap(err, "cooldown before next poll")
+	}
+	return nil
+}
+
+// fetchAndCheckEmpty fetches messages > ws.LastUid and logs the empty-batch
+// case. Returns (msgs, true) when the caller should exit early with no work.
+func fetchAndCheckEmpty(opts Options, logger *log.Logger, mc *mailclient.Client, ws store.WatchState, stats mailclient.MailboxStats, start time.Time) ([]mailclient.Message, bool, error) {
+	alias, v := opts.Account.Alias, opts.Verbose
+	if v {
+		logger.Printf("%s  · [%s] fetch UID > %d (server uidNext=%d)", ts(), alias, ws.LastUid, stats.UidNext)
+	}
+	msgs, err := mc.FetchSince(ws.LastUid)
+	if err != nil {
+		return nil, false, errtrace.Wrap(err, "fetch since")
+	}
+	if len(msgs) == 0 {
+		if v {
+			logger.Printf("%s  · [%s] no new messages (%s)", ts(), alias, time.Since(start).Round(time.Millisecond))
+		}
+		return nil, true, nil
+	}
+	return msgs, false, nil
+}
+
 func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclient.MailboxStats, error) {
 	start := time.Now()
-	alias := opts.Account.Alias
-	v := opts.Verbose
+	alias, v := opts.Account.Alias, opts.Verbose
 	if v {
 		logger.Printf("%s  · [%s] poll start", ts(), alias)
 	}
@@ -385,8 +420,7 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 		return nil, errtrace.Wrap(err, "get watch state")
 	}
 	if v {
-		logger.Printf("%s  · [%s] watch state: lastUid=%d lastSubject=%q",
-			ts(), alias, ws.LastUid, ws.LastSubject)
+		logger.Printf("%s  · [%s] watch state: lastUid=%d lastSubject=%q", ts(), alias, ws.LastUid, ws.LastSubject)
 	}
 	mc, stats, err := connectAndSelect(opts, logger, start)
 	if err != nil {
@@ -396,31 +430,16 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 	if done, berr := handleBaseline(ctx, opts, logger, &ws, &stats); done {
 		return &stats, berr
 	}
-	if v {
-		logger.Printf("%s  · [%s] fetch UID > %d (server uidNext=%d)", ts(), alias, ws.LastUid, stats.UidNext)
-	}
-	msgs, err := mc.FetchSince(ws.LastUid)
-	if err != nil {
-		return &stats, errtrace.Wrap(err, "fetch since")
-	}
-	if len(msgs) == 0 {
-		if v {
-			logger.Printf("%s  · [%s] no new messages (%s)", ts(), alias, time.Since(start).Round(time.Millisecond))
-		}
-		return &stats, nil
+	msgs, empty, err := fetchAndCheckEmpty(opts, logger, mc, ws, stats, start)
+	if err != nil || empty {
+		return &stats, err
 	}
 	openedAny, err := processBatch(ctx, opts, logger, &ws, msgs)
 	if err != nil {
 		return &stats, err
 	}
-	if err := opts.Store.UpsertWatchState(ctx, ws); err != nil {
-		return &stats, errtrace.Wrap(err, "update watch state")
-	}
-	if openedAny {
-		logger.Printf("        ⏳ waiting 10s before next poll cycle…")
-		if err := sleepCtx(ctx, postOpenCooldown); err != nil {
-			return &stats, errtrace.Wrap(err, "cooldown before next poll")
-		}
+	if err := finalizeBatch(ctx, opts, logger, ws, openedAny); err != nil {
+		return &stats, err
 	}
 	if v {
 		logger.Printf("%s  · [%s] poll done: processed=%d newLastUid=%d (%s)",
