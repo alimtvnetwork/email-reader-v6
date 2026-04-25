@@ -25,7 +25,7 @@ Citations are pinned to `spec/12-consolidated-guidelines/` (read 2026-04-25):
 - [x] 10 — Dashboard feature: write `97-acceptance-criteria.md` + `99-consistency-report.md`
 - [x] 11 — Emails feature: write `02-features/02-emails/00-overview.md`
 - [x] 12 — Emails feature: write `01-backend.md`
-- [ ] 13 — Emails feature: write `02-frontend.md`
+- [x] 13 — Emails feature: write `02-frontend.md`
 - [ ] 14 — Emails feature: write `97-acceptance-criteria.md` + `99-consistency-report.md`
 - [ ] 15 — Rules feature: write `02-features/03-rules/00-overview.md`
 - [ ] 16 — Rules feature: write `01-backend.md`
