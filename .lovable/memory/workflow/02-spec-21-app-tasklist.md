@@ -19,7 +19,7 @@ Citations are pinned to `spec/12-consolidated-guidelines/` (read 2026-04-25):
 - [x] 04 — Author `spec/21-app/05-logging-strategy.md` (log format, levels, trace IDs, heartbeat invariant)
 - [x] 05 — Author `spec/21-app/06-error-registry.md` (every error code, message, layer, recovery via internal/errtrace)
 - [x] 06 — Author `spec/21-app/07-architecture.md` (internal/core API surface, package dependency graph)
-- [ ] 07 — Dashboard feature: write `02-features/01-dashboard/00-overview.md`
+- [x] 07 — Dashboard feature: write `02-features/01-dashboard/00-overview.md`
 - [ ] 08 — Dashboard feature: write `01-backend.md` (core.Dashboard signatures + queries)
 - [ ] 09 — Dashboard feature: write `02-frontend.md` (Fyne widget tree, every container/widget)
 - [ ] 10 — Dashboard feature: write `97-acceptance-criteria.md` + `99-consistency-report.md`
