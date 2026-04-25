@@ -124,8 +124,9 @@ for f in "${GO_FILES[@]}"; do
 
       # Update brace depth using stripped line.
       # Count braces explicitly so multiple per line are honored.
-      open = gsub(/\{/, "{", stripped)
-      close = gsub(/\}/, "}", stripped)
+      # NOTE: avoid the reserved awk function name "close".
+      n_open  = gsub(/\{/, "{", stripped)
+      n_close = gsub(/\}/, "}", stripped)
 
       # A "statement" is a non-empty, non-pure-brace line at depth == 1
       # (siblings of the function body), counted BEFORE depth changes
@@ -134,7 +135,7 @@ for f in "${GO_FILES[@]}"; do
         stmt_count++
       }
 
-      depth += open - close
+      depth += n_open - n_close
 
       if (depth <= 0) {
         if (stmt_count > max) {
