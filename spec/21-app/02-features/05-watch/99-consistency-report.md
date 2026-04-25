@@ -269,12 +269,12 @@ Because the heartbeat invariant is the documented regression sentinel (`solved-i
 
 ## 14. Open Issues
 
-| #   | Issue                                                                                  | Owner          | Resolves in task |
-|-----|----------------------------------------------------------------------------------------|----------------|------------------|
-| OI-1 | `ColorWatchDot*` design tokens referenced in frontend §3 but not yet registered in `spec/24-app-design-system-and-ui/` | Design system  | Task #33 |
-| OI-2 | `core.Tools.OpenUrl(ctx, url)` signature referenced in frontend §2.3.1 / §4 but Tools spec not yet authored | Tools feature  | Tasks #27–30 |
+| #   | Issue                                                                                  | Owner          | Status |
+|-----|----------------------------------------------------------------------------------------|----------------|--------|
+| OI-1 | `ColorWatchDot*` design tokens referenced in frontend §3 but not yet registered in `spec/24-app-design-system-and-ui/` | Design system  | ✅ **Closed** by Task #33 — tokens defined in `spec/24-app-design-system-and-ui/01-tokens.md` and the live-log row component formalised in `04-components.md`; cross-referenced from `spec/21-app/03-issues/solved/08-readable-watcher-logs.md`. |
+| OI-2 | `core.Tools.OpenUrl(ctx, url)` signature referenced in frontend §2.3.1 / §4 but Tools spec not yet authored | Tools feature  | ✅ **Closed** by Tasks #27–30 — signature documented in `spec/21-app/02-features/06-tools/01-backend.md`. |
 
-Both are forward-references to scheduled tasks; **no rework** required in Watch when those land — just verify the signatures match.
+Both forward-references are now resolved; no rework required in Watch.
 
 ---
 
@@ -282,9 +282,9 @@ Both are forward-references to scheduled tasks; **no rework** required in Watch 
 
 A merge into `main` for the Watch feature requires:
 
-- [ ] Every checkbox in §1–§13 above is ✅ (none ⚠ except OI-1 / OI-2 which are scheduled).
+- [ ] Every checkbox in §1–§13 above is ✅ (OI-1 and OI-2 are now closed).
 - [ ] CI green for every test in `97-acceptance-criteria.md`.
-- [ ] OI-1 and OI-2 closed when the corresponding feature tasks (#27–30, #33) merge.
+- [x] OI-1 and OI-2 closed by tasks #27–30 (Tools) and #33 (Design system) — verified 2026-04-25.
 - [ ] Code owner review by Watch lead.
 - [ ] Security lead sign-off on §10.
 - [ ] Product lead sign-off on the heartbeat invariant 🔴 (since it is THE differentiator).
