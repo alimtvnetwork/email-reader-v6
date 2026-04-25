@@ -150,15 +150,14 @@ for f in "${GO_FILES[@]}"; do
         stmt_count = 0
       }
     }
-  ' "$f" | grep -c "^__VIOLATION__$" | {
-    read -r n
-    VIOLATIONS=$((VIOLATIONS + n))
-    echo "$VIOLATIONS" > /tmp/_fnlen_violations
-  }
-  VIOLATIONS=$(cat /tmp/_fnlen_violations 2>/dev/null || echo 0)
+  ' "$f" >> /tmp/_fnlen_markers || true
 done
 
-rm -f /tmp/_fnlen_violations
+# Count violation markers (grep returns 1 when no matches; tolerate it).
+if [ -s /tmp/_fnlen_markers ]; then
+  VIOLATIONS=$(grep -c "^__VIOLATION__$" /tmp/_fnlen_markers || true)
+fi
+rm -f /tmp/_fnlen_markers
 
 echo
 if [ "$VIOLATIONS" -gt 0 ]; then
