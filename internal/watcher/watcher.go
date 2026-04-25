@@ -409,18 +409,37 @@ func fetchAndCheckEmpty(opts Options, logger *log.Logger, mc *mailclient.Client,
 	return msgs, false, nil
 }
 
-func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclient.MailboxStats, error) {
-	start := time.Now()
-	alias, v := opts.Account.Alias, opts.Verbose
-	if v {
+// loadWatchState fetches the persisted watch cursor and emits the verbose
+// poll-start + watch-state lines so pollOnce stays focused on flow control.
+func loadWatchState(ctx context.Context, opts Options, logger *log.Logger) (store.WatchState, error) {
+	alias := opts.Account.Alias
+	if opts.Verbose {
 		logger.Printf("%s  · [%s] poll start", ts(), alias)
 	}
 	ws, err := opts.Store.GetWatchState(ctx, alias)
 	if err != nil {
-		return nil, errtrace.Wrap(err, "get watch state")
+		return ws, errtrace.Wrap(err, "get watch state")
 	}
-	if v {
+	if opts.Verbose {
 		logger.Printf("%s  · [%s] watch state: lastUid=%d lastSubject=%q", ts(), alias, ws.LastUid, ws.LastSubject)
+	}
+	return ws, nil
+}
+
+// logPollDone emits the verbose end-of-poll summary line.
+func logPollDone(opts Options, logger *log.Logger, msgsCount int, lastUid uint32, start time.Time) {
+	if !opts.Verbose {
+		return
+	}
+	logger.Printf("%s  · [%s] poll done: processed=%d newLastUid=%d (%s)",
+		ts(), opts.Account.Alias, msgsCount, lastUid, time.Since(start).Round(time.Millisecond))
+}
+
+func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclient.MailboxStats, error) {
+	start := time.Now()
+	ws, err := loadWatchState(ctx, opts, logger)
+	if err != nil {
+		return nil, err
 	}
 	mc, stats, err := connectAndSelect(opts, logger, start)
 	if err != nil {
@@ -441,10 +460,7 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 	if err := finalizeBatch(ctx, opts, logger, ws, openedAny); err != nil {
 		return &stats, err
 	}
-	if v {
-		logger.Printf("%s  · [%s] poll done: processed=%d newLastUid=%d (%s)",
-			ts(), alias, len(msgs), ws.LastUid, time.Since(start).Round(time.Millisecond))
-	}
+	logPollDone(opts, logger, len(msgs), ws.LastUid, start)
 	return &stats, nil
 }
 
