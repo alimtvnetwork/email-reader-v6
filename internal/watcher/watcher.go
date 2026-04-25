@@ -199,15 +199,187 @@ func shortPath(p string) string {
 // pollOnce performs a single connect → fetch → persist → match → open cycle.
 // In quiet mode (opts.Verbose=false) it stays silent unless something
 // noteworthy happens (new mail, errors, baseline being set).
+// postOpenCooldown is the gap we enforce after opening URL(s) for a
+// message — both BETWEEN URL-bearing messages in a batch and BEFORE the
+// next poll cycle.
+const postOpenCooldown = 10 * time.Second
+
+// logErrLines wraps a multi-line errtrace.Format dump with a leader.
+func logErrLines(logger *log.Logger, leader string, err error) {
+	logger.Printf("        %s", leader)
+	for _, line := range strings.Split(strings.TrimRight(errtrace.Format(err), "\n"), "\n") {
+		logger.Printf("            %s", line)
+	}
+}
+
+// connectAndSelect dials IMAP and selects the inbox. The caller owns the
+// returned *mailclient.Client and must Close() it.
+func connectAndSelect(opts Options, logger *log.Logger, start time.Time) (*mailclient.Client, mailclient.MailboxStats, error) {
+	alias := opts.Account.Alias
+	v := opts.Verbose
+	if v {
+		logger.Printf("%s  · [%s] dial %s:%d (tls=%v) as %s",
+			ts(), alias, opts.Account.ImapHost, opts.Account.ImapPort, opts.Account.UseTLS, opts.Account.Email)
+	}
+	mc, err := mailclient.Dial(opts.Account)
+	if err != nil {
+		return nil, mailclient.MailboxStats{}, errtrace.Wrap(err, "dial imap")
+	}
+	if v {
+		logger.Printf("%s  · [%s] connected (%s)", ts(), alias, time.Since(start).Round(time.Millisecond))
+	}
+	stats, err := mc.SelectInbox()
+	if err != nil {
+		mc.Close()
+		return nil, mailclient.MailboxStats{}, errtrace.Wrap(err, "select inbox")
+	}
+	if v {
+		logger.Printf("%s  · [%s] mailbox %q messages=%d unseen=%d uidNext=%d uidValidity=%d",
+			ts(), alias, stats.Name, stats.Messages, stats.Unseen, stats.UidNext, stats.UidValidity)
+	}
+	return mc, stats, nil
+}
+
+// handleBaseline performs the first-run baseline snapshot when LastUid==0.
+// Returns true when baseline was applied (caller should exit pollOnce).
+func handleBaseline(ctx context.Context, opts Options, logger *log.Logger, ws *store.WatchState, stats *mailclient.MailboxStats) (bool, error) {
+	if ws.LastUid != 0 {
+		return false, nil
+	}
+	baseline := uint32(0)
+	if stats.UidNext > 0 {
+		baseline = stats.UidNext - 1
+	}
+	ws.LastUid = baseline
+	if err := opts.Store.UpsertWatchState(ctx, *ws); err != nil {
+		return true, errtrace.Wrap(err, "baseline watch state")
+	}
+	logger.Printf("")
+	logger.Printf("%s  ⚑ [%s] baseline set: UID=%d (history skipped, watching for UID > %d)",
+		ts(), opts.Account.Alias, baseline, baseline)
+	opts.Bus.Publish(Event{Kind: EventBaseline, Alias: opts.Account.Alias, Stats: stats})
+	return true, nil
+}
+
+// persistMessage writes the raw .eml + DB row. Returns emailId, inserted,
+// and the saved file path. A save failure is logged but non-fatal; a DB
+// upsert failure is fatal for this message.
+func persistMessage(ctx context.Context, opts Options, logger *log.Logger, m mailclient.Message) (int64, bool, string, error) {
+	path, saveErr := mailclient.SaveRaw(opts.Account.Alias, m)
+	if saveErr != nil {
+		logErrLines(logger, "✗ save failed:", saveErr)
+	}
+	row := &store.Email{
+		Alias: opts.Account.Alias, MessageId: m.MessageId, Uid: m.Uid,
+		FromAddr: m.From, ToAddr: m.To, CcAddr: m.Cc, Subject: m.Subject,
+		BodyText: m.BodyText, BodyHtml: m.BodyHtml,
+		ReceivedAt: m.ReceivedAt, FilePath: path,
+	}
+	emailId, inserted, err := opts.Store.UpsertEmail(ctx, row)
+	return emailId, inserted, path, err
+}
+
+// launchMatches opens each rule-matched URL through the launcher with
+// per-URL dedup. Returns the count of URLs successfully launched.
+func launchMatches(ctx context.Context, opts Options, logger *log.Logger, emailId int64, matches []rules.Match) int {
+	alias := opts.Account.Alias
+	launched := 0
+	if opts.Launcher == nil && len(matches) > 0 {
+		logger.Printf("        ⚠ %d URL(s) matched but no browser launcher attached", len(matches))
+		return 0
+	}
+	for _, match := range matches {
+		if opts.Launcher == nil {
+			break
+		}
+		inserted, err := opts.Store.RecordOpenedUrl(ctx, emailId, match.RuleName, match.Url)
+		if err != nil {
+			logErrLines(logger, "✗ dedup url failed:", err)
+			continue
+		}
+		if !inserted {
+			logger.Printf("        ↻ skip (already opened): %s", truncURL(match.Url))
+			continue
+		}
+		logger.Printf("        → open  : %s", truncURL(match.Url))
+		opts.Bus.Publish(Event{Kind: EventRuleMatch, Alias: alias, RuleName: match.RuleName, Url: match.Url})
+		if err := opts.Launcher.Open(match.Url); err != nil {
+			logErrLines(logger, "✗ launch failed:", err)
+			opts.Bus.Publish(Event{Kind: EventUrlOpened, Alias: alias, RuleName: match.RuleName, Url: match.Url, OpenOK: false, Err: err})
+			continue
+		}
+		logger.Printf("                   ✓ launched in incognito")
+		opts.Bus.Publish(Event{Kind: EventUrlOpened, Alias: alias, RuleName: match.RuleName, Url: match.Url, OpenOK: true})
+		launched++
+	}
+	return launched
+}
+
+// evaluateRules logs trace lines and launches matched URLs. Returns the
+// count launched (caller uses it to decide post-message cooldown).
+func evaluateRules(ctx context.Context, opts Options, logger *log.Logger, emailId int64, m mailclient.Message) int {
+	if opts.Engine == nil {
+		return 0
+	}
+	matches, traces := opts.Engine.EvaluateWithTrace(m)
+	if len(traces) == 0 {
+		logger.Printf("        rules   : 0 enabled — nothing to evaluate")
+	}
+	for _, t := range traces {
+		if len(t.UrlsFound) > 0 {
+			logger.Printf("        rules   : ✓ %s → %d url(s)", t.RuleName, len(t.UrlsFound))
+		} else {
+			logger.Printf("        rules   : ✗ %s → %s", t.RuleName, t.Reason)
+		}
+	}
+	return launchMatches(ctx, opts, logger, emailId, matches)
+}
+
+// processMessage handles one fetched message: persist, evaluate rules,
+// launch URLs, advance ws cursor. Returns whether any URL was launched
+// (used to decide the post-message cooldown).
+func processMessage(ctx context.Context, opts Options, logger *log.Logger, ws *store.WatchState, m mailclient.Message) (openedAny bool, err error) {
+	alias := opts.Account.Alias
+	logger.Printf("")
+	logger.Printf("%s  ✉ [%s] new mail · uid=%d", ts(), alias, m.Uid)
+	logger.Printf("        from    : %s", shortAddr(m.From))
+	logger.Printf("        subject : %s", m.Subject)
+	opts.Bus.Publish(Event{Kind: EventNewMail, Alias: alias, Message: m})
+
+	emailId, inserted, path, perr := persistMessage(ctx, opts, logger, m)
+	if perr != nil {
+		logErrLines(logger, "✗ db upsert failed:", perr)
+		return false, nil
+	}
+	if inserted && path != "" {
+		logger.Printf("        saved   : %s", path)
+	} else if !inserted {
+		logger.Printf("        (already in database — duplicate)")
+		if !opts.Verbose {
+			advanceCursor(ws, m)
+			return false, nil
+		}
+	}
+	urlsLaunched := evaluateRules(ctx, opts, logger, emailId, m)
+	advanceCursor(ws, m)
+	return urlsLaunched > 0, nil
+}
+
+func advanceCursor(ws *store.WatchState, m mailclient.Message) {
+	if m.Uid > ws.LastUid {
+		ws.LastUid = m.Uid
+		ws.LastSubject = m.Subject
+		ws.LastReceivedAt = m.ReceivedAt
+	}
+}
+
 func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclient.MailboxStats, error) {
 	start := time.Now()
 	alias := opts.Account.Alias
 	v := opts.Verbose
-
 	if v {
 		logger.Printf("%s  · [%s] poll start", ts(), alias)
 	}
-
 	ws, err := opts.Store.GetWatchState(ctx, alias)
 	if err != nil {
 		return nil, errtrace.Wrap(err, "get watch state")
@@ -215,49 +387,17 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 	if v {
 		logger.Printf("%s  · [%s] watch state: lastUid=%d lastSubject=%q",
 			ts(), alias, ws.LastUid, ws.LastSubject)
-		logger.Printf("%s  · [%s] dial %s:%d (tls=%v) as %s",
-			ts(), alias, opts.Account.ImapHost, opts.Account.ImapPort,
-			opts.Account.UseTLS, opts.Account.Email)
 	}
-
-	mc, err := mailclient.Dial(opts.Account)
+	mc, stats, err := connectAndSelect(opts, logger, start)
 	if err != nil {
-		return nil, errtrace.Wrap(err, "dial imap")
+		return nil, err
 	}
 	defer mc.Close()
-	if v {
-		logger.Printf("%s  · [%s] connected (%s)", ts(), alias, time.Since(start).Round(time.Millisecond))
-	}
-
-	stats, err := mc.SelectInbox()
-	if err != nil {
-		return nil, errtrace.Wrap(err, "select inbox")
+	if done, berr := handleBaseline(ctx, opts, logger, &ws, &stats); done {
+		return &stats, berr
 	}
 	if v {
-		logger.Printf("%s  · [%s] mailbox %q messages=%d unseen=%d uidNext=%d uidValidity=%d",
-			ts(), alias, stats.Name, stats.Messages, stats.Unseen, stats.UidNext, stats.UidValidity)
-	}
-
-	// First-run baseline: don't replay history. Snapshot UIDNEXT-1 and exit.
-	if ws.LastUid == 0 {
-		baseline := uint32(0)
-		if stats.UidNext > 0 {
-			baseline = stats.UidNext - 1
-		}
-		ws.LastUid = baseline
-		if err := opts.Store.UpsertWatchState(ctx, ws); err != nil {
-			return &stats, errtrace.Wrap(err, "baseline watch state")
-		}
-		logger.Printf("")
-		logger.Printf("%s  ⚑ [%s] baseline set: UID=%d (history skipped, watching for UID > %d)",
-			ts(), alias, baseline, baseline)
-		opts.Bus.Publish(Event{Kind: EventBaseline, Alias: alias, Stats: &stats})
-		return &stats, nil
-	}
-
-	if v {
-		logger.Printf("%s  · [%s] fetch UID > %d (server uidNext=%d)",
-			ts(), alias, ws.LastUid, stats.UidNext)
+		logger.Printf("%s  · [%s] fetch UID > %d (server uidNext=%d)", ts(), alias, ws.LastUid, stats.UidNext)
 	}
 	msgs, err := mc.FetchSince(ws.LastUid)
 	if err != nil {
@@ -265,153 +405,56 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 	}
 	if len(msgs) == 0 {
 		if v {
-			logger.Printf("%s  · [%s] no new messages (%s)",
-				ts(), alias, time.Since(start).Round(time.Millisecond))
+			logger.Printf("%s  · [%s] no new messages (%s)", ts(), alias, time.Since(start).Round(time.Millisecond))
 		}
 		return &stats, nil
 	}
-
-	// 10-second cooldown after we open URL(s) for a message.
-	const postOpenCooldown = 10 * time.Second
-	openedAny := false
-
-	for i, m := range msgs {
-		if err := ctx.Err(); err != nil {
-			return &stats, errtrace.Wrap(err, "context cancelled mid-batch")
-		}
-		// Apply the 10s gap BETWEEN URL-bearing messages in the same batch.
-		if openedAny && i > 0 {
-			logger.Printf("        ⏳ waiting 10s before next message in batch…")
-			if err := sleepCtx(ctx, postOpenCooldown); err != nil {
-				return &stats, errtrace.Wrap(err, "cooldown between messages")
-			}
-			openedAny = false
-		}
-
-		// ── New-message block ───────────────────────────────────
-		logger.Printf("")
-		logger.Printf("%s  ✉ [%s] new mail · uid=%d", ts(), alias, m.Uid)
-		logger.Printf("        from    : %s", shortAddr(m.From))
-		logger.Printf("        subject : %s", m.Subject)
-		opts.Bus.Publish(Event{Kind: EventNewMail, Alias: alias, Message: m})
-
-		path, saveErr := mailclient.SaveRaw(alias, m)
-		if saveErr != nil {
-			logger.Printf("        ✗ save failed:")
-			for _, line := range strings.Split(strings.TrimRight(errtrace.Format(saveErr), "\n"), "\n") {
-				logger.Printf("            %s", line)
-			}
-		}
-
-		row := &store.Email{
-			Alias:      alias,
-			MessageId:  m.MessageId,
-			Uid:        m.Uid,
-			FromAddr:   m.From,
-			ToAddr:     m.To,
-			CcAddr:     m.Cc,
-			Subject:    m.Subject,
-			BodyText:   m.BodyText,
-			BodyHtml:   m.BodyHtml,
-			ReceivedAt: m.ReceivedAt,
-			FilePath:   path,
-		}
-		emailId, inserted, err := opts.Store.UpsertEmail(ctx, row)
-		if err != nil {
-			logger.Printf("        ✗ db upsert failed:")
-			for _, line := range strings.Split(strings.TrimRight(errtrace.Format(err), "\n"), "\n") {
-				logger.Printf("            %s", line)
-			}
-			continue
-		}
-		if inserted && path != "" {
-			logger.Printf("        saved   : %s", path)
-		} else if !inserted {
-			logger.Printf("        (already in database — duplicate)")
-			if !v {
-				continue
-			}
-		}
-
-		// ── Rules section ───────────────────────────────────────
-		urlsLaunched := 0
-		if opts.Engine != nil {
-			matches, traces := opts.Engine.EvaluateWithTrace(m)
-			if len(traces) == 0 {
-				logger.Printf("        rules   : 0 enabled — nothing to evaluate")
-			} else {
-				for _, t := range traces {
-					if len(t.UrlsFound) > 0 {
-						logger.Printf("        rules   : ✓ %s → %d url(s)", t.RuleName, len(t.UrlsFound))
-					} else {
-						logger.Printf("        rules   : ✗ %s → %s", t.RuleName, t.Reason)
-					}
-				}
-			}
-			if opts.Launcher == nil && len(matches) > 0 {
-				logger.Printf("        ⚠ %d URL(s) matched but no browser launcher attached", len(matches))
-			}
-			for _, match := range matches {
-				if opts.Launcher == nil {
-					break
-				}
-				inserted, err := opts.Store.RecordOpenedUrl(ctx, emailId, match.RuleName, match.Url)
-				if err != nil {
-					logger.Printf("        ✗ dedup url failed:")
-					for _, line := range strings.Split(strings.TrimRight(errtrace.Format(err), "\n"), "\n") {
-						logger.Printf("            %s", line)
-					}
-					continue
-				}
-				if !inserted {
-					logger.Printf("        ↻ skip (already opened): %s", truncURL(match.Url))
-					continue
-				}
-				logger.Printf("        → open  : %s", truncURL(match.Url))
-				opts.Bus.Publish(Event{Kind: EventRuleMatch, Alias: alias, RuleName: match.RuleName, Url: match.Url})
-				if err := opts.Launcher.Open(match.Url); err != nil {
-					logger.Printf("        ✗ launch failed:")
-					for _, line := range strings.Split(strings.TrimRight(errtrace.Format(err), "\n"), "\n") {
-						logger.Printf("            %s", line)
-					}
-					opts.Bus.Publish(Event{Kind: EventUrlOpened, Alias: alias, RuleName: match.RuleName, Url: match.Url, OpenOK: false, Err: err})
-					continue
-				}
-				logger.Printf("                   ✓ launched in incognito")
-				opts.Bus.Publish(Event{Kind: EventUrlOpened, Alias: alias, RuleName: match.RuleName, Url: match.Url, OpenOK: true})
-				urlsLaunched++
-			}
-		}
-
-		if urlsLaunched > 0 {
-			openedAny = true
-		}
-
-		if m.Uid > ws.LastUid {
-			ws.LastUid = m.Uid
-			ws.LastSubject = m.Subject
-			ws.LastReceivedAt = m.ReceivedAt
-		}
+	openedAny, err := processBatch(ctx, opts, logger, &ws, msgs)
+	if err != nil {
+		return &stats, err
 	}
-
 	if err := opts.Store.UpsertWatchState(ctx, ws); err != nil {
 		return &stats, errtrace.Wrap(err, "update watch state")
 	}
-
-	// 10s gap before the NEXT poll cycle, but only if we actually opened
-	// a URL during this batch. Otherwise we'd just slow down idle polling.
 	if openedAny {
 		logger.Printf("        ⏳ waiting 10s before next poll cycle…")
 		if err := sleepCtx(ctx, postOpenCooldown); err != nil {
 			return &stats, errtrace.Wrap(err, "cooldown before next poll")
 		}
 	}
-
 	if v {
 		logger.Printf("%s  · [%s] poll done: processed=%d newLastUid=%d (%s)",
 			ts(), alias, len(msgs), ws.LastUid, time.Since(start).Round(time.Millisecond))
 	}
 	return &stats, nil
+}
+
+// processBatch iterates the fetched messages, applying the inter-message
+// cooldown when the previous message launched a URL. Returns true when any
+// message in the batch launched a URL (caller uses for the cycle cooldown).
+func processBatch(ctx context.Context, opts Options, logger *log.Logger, ws *store.WatchState, msgs []mailclient.Message) (bool, error) {
+	openedAny, batchOpened := false, false
+	for i, m := range msgs {
+		if err := ctx.Err(); err != nil {
+			return batchOpened, errtrace.Wrap(err, "context cancelled mid-batch")
+		}
+		if openedAny && i > 0 {
+			logger.Printf("        ⏳ waiting 10s before next message in batch…")
+			if err := sleepCtx(ctx, postOpenCooldown); err != nil {
+				return batchOpened, errtrace.Wrap(err, "cooldown between messages")
+			}
+			openedAny = false
+		}
+		opened, err := processMessage(ctx, opts, logger, ws, m)
+		if err != nil {
+			return batchOpened, err
+		}
+		if opened {
+			openedAny = true
+			batchOpened = true
+		}
+	}
+	return batchOpened, nil
 }
 
 // sleepCtx pauses for d but returns early if ctx is cancelled. The
