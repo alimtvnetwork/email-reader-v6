@@ -167,7 +167,7 @@ func accountFormInputFromEntries(e *accountFormEntries) AccountFormInput {
 
 // accountInputFromValid maps a validated form into the core.AccountInput
 // the Save side effect expects.
-func accountInputFromValid(v AccountFormValidation) core.AccountInput {
+func accountInputFromValid(v AccountFormResult) core.AccountInput {
 	return core.AccountInput{
 		Alias:          v.Alias,
 		Email:          v.Email,
