@@ -5,7 +5,7 @@
 ### Rotate seeded credentials in spec
 - **Status:** Pending
 - **Priority:** High
-- **Description:** The spec under `spec/21-golang-email-reader/spec.md` may contain seeded `atto` account credentials used during development. After end-to-end verification, rotate the IMAP app password and scrub or redact the spec.
+- **Description:** The legacy spec at `spec/21-app/legacy/spec.md` (formerly `spec/21-golang-email-reader/spec.md`) may contain seeded `atto` account credentials used during development. After end-to-end verification, rotate the IMAP app password and scrub or redact the legacy spec.
 - **Added:** 2026-04-21 session
 
 ### Add unit tests for rules edge cases

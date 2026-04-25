@@ -23,7 +23,11 @@ internal/
   browser/                    # Chrome incognito launcher + dedup
   watcher/                    # polling loop + Ctrl+C handling
   exporter/                   # CSV export of Emails table
-spec/21-golang-email-reader/  # spec.md + plan.md (10-step plan, all done)
+spec/21-app/                  # canonical app spec (App Project Template)
+                              #   ├── 00-overview.md, 01-fundamentals.md
+                              #   ├── 02-features/   (dashboard, emails, rules, accounts, watch, tools, settings)
+                              #   ├── 03-issues/
+                              #   └── legacy/        (archived original CLI spec + Fyne plan)
 run.ps1                       # one-command Windows bootstrap
 README.md                     # install, command reference, sample rules
 ```
