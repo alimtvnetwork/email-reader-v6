@@ -1,6 +1,6 @@
 # Workflow status
 
-Last updated: 2026-04-26 (UTC) — Settings view scaffold shipped
+Last updated: 2026-04-26 (UTC) — Delta #1 activated (Recent opens tab)
 
 ## Current milestone
 🎯 **Spec-21-app implementation Phase 2** — turning the spec/21-app deltas into shipped code. Spec authoring round (35 tasks) **closed**; tasklist archived to `mem://archive/02-spec-21-app-tasklist`.
@@ -19,18 +19,21 @@ Last updated: 2026-04-26 (UTC) — Settings view scaffold shipped
 | 8 | OpenedUrls Delta #1 PascalCase migration + 6 new columns + TraceId | `internal/store/store.go`, `internal/core/tools_invalidate.go` |
 | 9 | OFL font assets dropped (`Inter-Variable.ttf` + `JetBrainsMono-Variable.ttf`) | `internal/ui/theme/fonts/` |
 | 10 | `go vet` cleanup + `mem://go-verification-path` codified | `linter-scripts/validate-guidelines.go` |
-| 11 | **Settings view scaffold (this slice)** — NavSettings + theme/poll/Chrome/density form + pure helpers | `internal/ui/views/settings*.go`, `internal/ui/nav.go` |
+| 11 | Settings view scaffold — NavSettings + theme/poll/Chrome/density form + pure helpers | `internal/ui/views/settings*.go`, `internal/ui/nav.go` |
+| 12 | Real `watcher.Run` behind `core.LoopFactory` (factory + UI runtime singleton) | `internal/core/watch_factory.go`, `internal/ui/watch_runtime.go` |
+| 13 | `BridgeWatcherBus` + `TranslateWatcherEvent` (10 EventKind → core.WatchEvent) | `internal/ui/watch_runtime.go`, race tests |
+| 14 | **Delta #1 activated end-to-end (this slice)** — Recent opens tab, first prod caller of `Tools.RecentOpenedUrls`, Alias/Origin filters wired | `internal/ui/views/tools_recent_opens*.go`, `internal/ui/views/tools.go` |
 
-Verification: 16 packages green under `nix run nixpkgs#go -- {vet,test} -tags nofyne ./...`; fn-length linter still **0/0** across 78 files.
+Verification: 16 packages green under `nix run nixpkgs#go -- {vet,test} -tags nofyne ./...`; fn-length linter still **0/0** across 81 files.
 
 ## Remaining tracked work
 
 See `spec/21-app/99-consistency-report.md` §6 for the canonical delta list. Open items:
 
-1. **Wire real `watcher.Run` behind `core.LoopFactory`** — thread `config.Account` / `rules.Engine` / `browser.Launcher` / `store.Store` from CLI + UI; bridge `watcher.Bus` events into the `core.WatchEvent` stream (currently the factory uses a placeholder loop).
-2. **Activate Delta #1 `OpenedUrls` filters in callers** — schema + columns + filter validation done; no caller passes `Alias` / `Origin` yet through `Tools.RecentOpenedUrls`.
-3. **App boot smoke test** (user-side) — once the desktop binary can be launched, validate Settings page renders, theme live-switches, and density toggle visibly tightens paddings.
+1. **Dashboard live wiring** — wire dashboard counters (polls / new mail / matches / opens / errors) to the same `Bus.Subscribe` stream the Watch view consumes; today the dashboard view is still a placeholder.
+2. **Emails / Rules / Accounts views** — three of the seven nav entries still render placeholder bodies; lists + detail panes per `spec/21-app/02-features/{02-emails,03-rules,04-accounts}/02-frontend.md`.
+3. **App boot smoke test** (user-side) — launch desktop binary; validate Settings page renders, theme live-switches, density toggle tightens paddings, Watch Start/Stop drives the live cards + counters, and Recent opens tab returns rows from a populated DB.
 4. **Persist Density preference** (deferred per design-system §8) — when persistence lands, swap `Settings` view's local-only density handler for a `SettingsInput` field write.
 
 ## Next logical step for the next AI session
-Pick item **1** — the watcher wiring is the riskiest remaining slice and unblocks real end-to-end verification of the Watch view + dashboard counters.
+Pick item **1** — Dashboard live wiring is small, reuses the `WatchCounters` projection from slice #6, and lights up the landing page on app boot.
