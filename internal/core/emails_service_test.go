@@ -50,6 +50,14 @@ type fakeEmailsStore struct {
 	lastSetReadUids  []uint32
 	lastSetReadValue bool
 
+	// SetEmailDeletedAt programming + observation (Phase 4 P4.3)
+	setDeletedRows int64
+	setDeletedErr  error
+	setDeletedCalls int32
+	lastSetDeletedAlias string
+	lastSetDeletedUids  []uint32
+	lastSetDeletedAt    *int64 // copied so the caller can free its stamp
+
 	// observed inputs — for assertions
 	lastListQuery store.EmailQuery
 	lastGetAlias  string
@@ -79,6 +87,18 @@ func (f *fakeEmailsStore) SetEmailRead(_ context.Context, alias string, uids []u
 func (f *fakeEmailsStore) CountUnreadEmails(_ context.Context, alias string) (int, error) {
 	f.lastUnreadAls = alias
 	return f.unread, f.unreadErr
+}
+func (f *fakeEmailsStore) SetEmailDeletedAt(_ context.Context, alias string, uids []uint32, deletedAt *int64) (int64, error) {
+	atomic.AddInt32(&f.setDeletedCalls, 1)
+	f.lastSetDeletedAlias = alias
+	f.lastSetDeletedUids = append([]uint32(nil), uids...)
+	if deletedAt != nil {
+		v := *deletedAt
+		f.lastSetDeletedAt = &v
+	} else {
+		f.lastSetDeletedAt = nil
+	}
+	return f.setDeletedRows, f.setDeletedErr
 }
 
 // makeOpener returns a storeOpener that hands out the given fake and

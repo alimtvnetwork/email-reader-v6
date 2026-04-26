@@ -396,6 +396,15 @@ blocks:
       - const: ErrEmailsRefresherUnwired
         code: "ER-EML-22003"
         description: Refresh called before WithRefresher injected a Refresher (bootstrap gap).
+      - const: ErrEmailsLifecycleNotFound
+        code: "ER-EML-22020"
+        description: Delete/Undelete reported zero RowsAffected for a non-empty UID set — UIDs not present for this alias.
+      - const: ErrEmailsDeleteAlreadyDeleted
+        code: "ER-EML-22021"
+        description: Reserved — strict-mode Delete called on an already-soft-deleted UID (idempotent path does not surface this today).
+      - const: ErrEmailsUndeleteNotDeleted
+        code: "ER-EML-22022"
+        description: Reserved — strict-mode Undelete called on a UID whose DeletedAt was already NULL (idempotent path does not surface this today).
 
   - name: Unknown
     prefix: ER-UNKNOWN

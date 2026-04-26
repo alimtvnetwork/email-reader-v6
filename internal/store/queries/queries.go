@@ -308,3 +308,45 @@ func SetEmailRead(read bool, alias string, uids []uint32) (string, []any) {
 	return sb.String(), args
 }
 
+// ---------------- Email lifecycle (Phase 4 — Delete/Undelete, P4.3) ----------------
+
+// SetEmailDeletedAtMaxBatch caps a single UPDATE to the SQLite
+// `SQLITE_MAX_VARIABLE_NUMBER` floor (999) — same contract as
+// `SetEmailReadMaxBatch`. Larger inputs are split by the store-layer
+// shim into batches under one transaction.
+const SetEmailDeletedAtMaxBatch = 999
+
+// SetEmailDeletedAt composes the UPDATE that sets `Emails.DeletedAt`
+// for a given (Alias, Uid set). Bind order: deletedAtUnix-or-NULL,
+// alias, uid1, uid2, …
+//
+// `deletedAt == nil` writes SQL NULL (the undelete path). Non-nil
+// writes the dereferenced int64 (unix-seconds), matching the M0012
+// column type.
+//
+// Caller MUST ensure `len(uids) <= SetEmailDeletedAtMaxBatch` and
+// `len(uids) > 0` (an empty IN list is invalid SQL — same precondition
+// as `SetEmailRead`).
+func SetEmailDeletedAt(deletedAt *int64, alias string, uids []uint32) (string, []any) {
+	var sb strings.Builder
+	sb.WriteString(`UPDATE Emails SET DeletedAt = ? WHERE Alias = ? AND Uid IN (`)
+	for i := range uids {
+		if i > 0 {
+			sb.WriteByte(',')
+		}
+		sb.WriteByte('?')
+	}
+	sb.WriteByte(')')
+
+	args := make([]any, 0, 2+len(uids))
+	if deletedAt == nil {
+		args = append(args, nil) // SQL NULL = "not deleted"
+	} else {
+		args = append(args, *deletedAt)
+	}
+	args = append(args, alias)
+	for _, u := range uids {
+		args = append(args, u)
+	}
+	return sb.String(), args
+}
