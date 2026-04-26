@@ -29,6 +29,22 @@ const emailColumns = `Id, Alias, MessageId, Uid, FromAddr, ToAddr, CcAddr, Subje
 // EmailByUid selects a single email row by (Alias, Uid). Static query.
 const EmailByUid = `SELECT ` + emailColumns + ` FROM Emails WHERE Alias = ? AND Uid = ?`
 
+// EmailUpsert inserts a new Emails row; on MessageId conflict it leaves
+// the existing row untouched. Caller inspects RowsAffected to learn
+// whether the row is new. Static query.
+//
+// Args bind order: Alias, MessageId, Uid, FromAddr, ToAddr, CcAddr,
+// Subject, BodyText, BodyHtml, ReceivedAt, FilePath.
+const EmailUpsert = `INSERT INTO Emails
+       (Alias, MessageId, Uid, FromAddr, ToAddr, CcAddr, Subject, BodyText, BodyHtml, ReceivedAt, FilePath)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(MessageId) DO NOTHING`
+
+// EmailIdByMessageId fetches the existing Emails.Id for a known
+// MessageId. Used by UpsertEmail when the INSERT collapsed via the
+// ON CONFLICT branch above. Static query.
+const EmailIdByMessageId = `SELECT Id FROM Emails WHERE MessageId = ?`
+
 // EmailsCountAll counts every row in Emails. Static query.
 const EmailsCountAll = `SELECT COUNT(1) FROM Emails`
 
@@ -175,6 +191,17 @@ const openedUrlAuditColumns = `Id, EmailId, Alias, RuleName, Origin, Url,
 
 // HasOpenedUrl checks whether (EmailId, Url) is already recorded.
 const HasOpenedUrl = `SELECT COUNT(1) FROM OpenedUrls WHERE EmailId = ? AND Url = ?`
+
+// OpenedUrlInsert is the Delta-#1 rich INSERT for OpenedUrls. On
+// (EmailId, Url) conflict the row is left untouched (dedup hit) and
+// RowsAffected reports 0. Static query.
+//
+// Args bind order: EmailId, RuleName, Url, Alias, Origin, OriginalUrl,
+// IsDeduped (int 0/1), IsIncognito (int 0/1), TraceId.
+const OpenedUrlInsert = `INSERT INTO OpenedUrls (EmailId, RuleName, Url, Alias, Origin,
+                               OriginalUrl, IsDeduped, IsIncognito, TraceId)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(EmailId, Url) DO NOTHING`
 
 // OpenedUrlsListInput captures the filter knobs of RecentOpenedUrls.
 // Limit must be > 0; Before is required (zero ⇒ caller passes time.Now()).

@@ -184,11 +184,7 @@ func (s *Store) openedUrlsColumns() (map[string]bool, error) {
 // UpsertEmail inserts a new email row or returns the existing Id when the
 // MessageId is already known. Returns (id, inserted).
 func (s *Store) UpsertEmail(ctx context.Context, e *Email) (int64, bool, error) {
-	res, err := s.DB.ExecContext(ctx, `
-		INSERT INTO Emails
-			(Alias, MessageId, Uid, FromAddr, ToAddr, CcAddr, Subject, BodyText, BodyHtml, ReceivedAt, FilePath)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(MessageId) DO NOTHING`,
+	res, err := s.DB.ExecContext(ctx, queries.EmailUpsert,
 		e.Alias, e.MessageId, e.Uid, e.FromAddr, e.ToAddr, e.CcAddr,
 		e.Subject, e.BodyText, e.BodyHtml, formatRFC3339UTC(e.ReceivedAt), e.FilePath,
 	)
@@ -201,8 +197,7 @@ func (s *Store) UpsertEmail(ctx context.Context, e *Email) (int64, bool, error) 
 	}
 	// Already existed — fetch the existing Id.
 	var id int64
-	if err := s.DB.QueryRowContext(ctx,
-		`SELECT Id FROM Emails WHERE MessageId = ?`, e.MessageId,
+	if err := s.DB.QueryRowContext(ctx, queries.EmailIdByMessageId, e.MessageId,
 	).Scan(&id); err != nil {
 		return 0, false, errtrace.Wrap(err, "select existing email")
 	}
@@ -267,11 +262,7 @@ func (s *Store) RecordOpenedUrl(ctx context.Context, emailId int64, ruleName, ur
 // Origin, OriginalUrl, IsDeduped, IsIncognito, and TraceId alongside the
 // legacy columns. Returns true on insert, false on (EmailId, Url) conflict.
 func (s *Store) RecordOpenedUrlExt(ctx context.Context, in OpenedUrlInsert) (bool, error) {
-	res, err := s.DB.ExecContext(ctx, `
-		INSERT INTO OpenedUrls (EmailId, RuleName, Url, Alias, Origin,
-		                        OriginalUrl, IsDeduped, IsIncognito, TraceId)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(EmailId, Url) DO NOTHING`,
+	res, err := s.DB.ExecContext(ctx, queries.OpenedUrlInsert,
 		in.EmailId, in.RuleName, in.Url, in.Alias, in.Origin,
 		in.OriginalUrl, boolToInt(in.IsDeduped), boolToInt(in.IsIncognito), in.TraceId,
 	)
