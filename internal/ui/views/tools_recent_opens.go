@@ -23,39 +23,57 @@ import (
 // BuildRecentOpensTab returns the Recent-opens body: alias entry +
 // origin dropdown + limit entry + Refresh button + scrolling result.
 func BuildRecentOpensTab() fyne.CanvasObject {
-	heading := widget.NewLabelWithStyle("Recent opens — audit trail",
-		fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-	subtitle := widget.NewLabel("Read-only view over the OpenedUrls table. Filter by alias and origin (Delta #1).")
-	subtitle.Wrapping = fyne.TextWrapWord
+	in := newRecentOpensInputs()
+	output, status := newRecentOpensOutput()
+	refreshBtn := widget.NewButton("Refresh", func() {
+		runRecentOpensIntoUI(RecentOpensFilter{
+			Alias:    in.alias.Text,
+			Origin:   in.origin.Selected,
+			LimitStr: in.limit.Text,
+		}, output, status)
+	})
+	refreshBtn.Importance = widget.HighImportance
+	header := buildRecentOpensHeader(in, refreshBtn, status)
+	return container.NewBorder(header, nil, nil, nil, container.NewVScroll(output))
+}
 
-	aliasEntry := widget.NewEntry()
-	aliasEntry.SetPlaceHolder("alias (empty = all)")
-	originSelect := widget.NewSelect(OriginChoices, nil)
-	originSelect.SetSelected("All")
-	limitEntry := widget.NewEntry()
-	limitEntry.SetPlaceHolder("limit (1..1000, default 100)")
+// recentOpensInputs bundles the three editable fields so BuildRecentOpensTab
+// stays under the 15-statement function-length budget.
+type recentOpensInputs struct {
+	alias  *widget.Entry
+	origin *widget.Select
+	limit  *widget.Entry
+}
 
+func newRecentOpensInputs() recentOpensInputs {
+	alias := widget.NewEntry()
+	alias.SetPlaceHolder("alias (empty = all)")
+	origin := widget.NewSelect(OriginChoices, nil)
+	origin.SetSelected("All")
+	limit := widget.NewEntry()
+	limit.SetPlaceHolder("limit (1..1000, default 100)")
+	return recentOpensInputs{alias: alias, origin: origin, limit: limit}
+}
+
+func newRecentOpensOutput() (*widget.Entry, *widget.Label) {
 	output := widget.NewMultiLineEntry()
 	output.SetMinRowsVisible(18)
 	output.Disable()
 	status := widget.NewLabel("Click Refresh to query the audit table.")
+	return output, status
+}
 
-	refreshBtn := widget.NewButton("Refresh", func() {
-		runRecentOpensIntoUI(RecentOpensFilter{
-			Alias:    aliasEntry.Text,
-			Origin:   originSelect.Selected,
-			LimitStr: limitEntry.Text,
-		}, output, status)
-	})
-	refreshBtn.Importance = widget.HighImportance
-
+func buildRecentOpensHeader(in recentOpensInputs, refreshBtn *widget.Button, status *widget.Label) fyne.CanvasObject {
+	heading := widget.NewLabelWithStyle("Recent opens — audit trail",
+		fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	subtitle := widget.NewLabel("Read-only view over the OpenedUrls table. Filter by alias and origin (Delta #1).")
+	subtitle.Wrapping = fyne.TextWrapWord
 	form := container.NewGridWithColumns(3,
-		container.NewBorder(nil, nil, widget.NewLabel("Alias:"), nil, aliasEntry),
-		container.NewBorder(nil, nil, widget.NewLabel("Origin:"), nil, originSelect),
-		container.NewBorder(nil, nil, widget.NewLabel("Limit:"), refreshBtn, limitEntry),
+		container.NewBorder(nil, nil, widget.NewLabel("Alias:"), nil, in.alias),
+		container.NewBorder(nil, nil, widget.NewLabel("Origin:"), nil, in.origin),
+		container.NewBorder(nil, nil, widget.NewLabel("Limit:"), refreshBtn, in.limit),
 	)
-	header := container.NewVBox(heading, subtitle, form, status, widget.NewSeparator())
-	return container.NewBorder(header, nil, nil, nil, container.NewVScroll(output))
+	return container.NewVBox(heading, subtitle, form, status, widget.NewSeparator())
 }
 
 // runRecentOpensIntoUI builds the spec, calls core.Tools.RecentOpenedUrls,
