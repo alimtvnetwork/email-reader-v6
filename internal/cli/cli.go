@@ -114,7 +114,7 @@ If --host/--port/--tls are omitted, they are derived from the email domain
 // runAddQuick saves an account non-interactively. No IMAP connection is made.
 // Delegates the heavy lifting to internal/core so the same code powers the UI.
 func runAddQuick(email, alias, password, host string, port int, useTLS bool, mailbox string) error {
-	res, err := core.AddAccount(core.AccountInput{
+	r := core.AddAccount(core.AccountInput{
 		Alias:          alias,
 		Email:          email,
 		PlainPassword:  password,
@@ -124,9 +124,10 @@ func runAddQuick(email, alias, password, host string, port int, useTLS bool, mai
 		UseTLSExplicit: false, // CLI flag default is true; keep legacy behavior
 		Mailbox:        mailbox,
 	})
-	if err != nil {
-		return err
+	if r.HasError() {
+		return r.PropagateError()
 	}
+	res := r.Value()
 	if res.HiddenCharsRem > 0 {
 		fmt.Printf("⚠ password contained %d hidden char(s) (whitespace / zero-width). Sanitized before storing.\n", res.HiddenCharsRem)
 	}
@@ -501,23 +502,25 @@ func runAdd() error {
 	if err != nil {
 		return err
 	}
-	res, err := core.AddAccount(core.AccountInput{
+	r := core.AddAccount(core.AccountInput{
 		Alias: alias, Email: email, PlainPassword: password,
 		ImapHost: host, ImapPort: port, UseTLS: useTLS,
 		UseTLSExplicit: true, Mailbox: mailbox,
 	})
-	if err != nil {
-		return err
+	if r.HasError() {
+		return r.PropagateError()
 	}
+	res := r.Value()
 	fmt.Printf("Saved account %q to %s\n", res.Account.Alias, res.ConfigPath)
 	return nil
 }
 
 func runList() error {
-	accts, err := core.ListAccounts()
-	if err != nil {
-		return err
+	r := core.ListAccounts()
+	if r.HasError() {
+		return r.PropagateError()
 	}
+	accts := r.Value()
 	if len(accts) == 0 {
 		fmt.Println("No accounts configured. Run `email-read add` to add one.")
 		return nil
@@ -532,8 +535,8 @@ func runList() error {
 }
 
 func runRemove(alias string) error {
-	if err := core.RemoveAccount(alias); err != nil {
-		return err
+	if r := core.RemoveAccount(alias); r.HasError() {
+		return r.PropagateError()
 	}
 	fmt.Printf("Removed account %q\n", alias)
 	return nil
