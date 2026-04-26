@@ -65,7 +65,7 @@ Examples:
     --from-regex 'noreply@lovable\.dev' \
     --url-regex 'https://lovable\.dev/auth/action[^\s]+'`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			res, err := core.AddRule(core.RuleInput{
+			r := core.AddRule(core.RuleInput{
 				Name:         name,
 				UrlRegex:     urlRegex,
 				FromRegex:    fromRegex,
@@ -73,9 +73,10 @@ Examples:
 				BodyRegex:    bodyRegex,
 				Enabled:      !disabled,
 			})
-			if err != nil {
-				return err
+			if r.HasError() {
+				return r.PropagateError()
 			}
+			res := r.Value()
 			fmt.Printf("Saved rule %q (enabled=%v) to %s\n", res.Rule.Name, res.Rule.Enabled, res.ConfigPath)
 			return nil
 		},
@@ -92,10 +93,11 @@ Examples:
 }
 
 func runRulesList() error {
-	rs, err := core.ListRules()
-	if err != nil {
-		return err
+	res := core.ListRules()
+	if res.HasError() {
+		return res.PropagateError()
 	}
+	rs := res.Value()
 	if len(rs) == 0 {
 		fmt.Println("No rules configured. Edit data/config.json to add some.")
 		return nil
@@ -111,8 +113,8 @@ func runRulesList() error {
 }
 
 func runRulesToggle(name string, enabled bool) error {
-	if err := core.SetRuleEnabled(name, enabled); err != nil {
-		return err
+	if r := core.SetRuleEnabled(name, enabled); r.HasError() {
+		return r.PropagateError()
 	}
 	state := "disabled"
 	if enabled {

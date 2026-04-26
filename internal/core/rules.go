@@ -30,11 +30,14 @@ type AddRuleResult struct {
 // AddRule validates input, compiles regex patterns to catch syntax errors
 // before persisting, and writes the rule to config.json. If a rule with the
 // same name exists it is replaced (upsert semantics).
-func AddRule(in RuleInput) (*AddRuleResult, error) {
+func AddRule(in RuleInput) errtrace.Result[*AddRuleResult] {
 	in.Name = strings.TrimSpace(in.Name)
 	in.UrlRegex = strings.TrimSpace(in.UrlRegex)
 	if in.Name == "" || in.UrlRegex == "" {
-		return nil, errtrace.New("name and urlRegex are required")
+		return errtrace.Err[*AddRuleResult](errtrace.NewCoded(
+			errtrace.ErrCoreInvalidArgument, "name and urlRegex are required").
+			WithContext("name", in.Name).
+			WithContext("urlRegex", in.UrlRegex))
 	}
 	// Validate every regex up-front so we never persist a broken rule.
 	for label, pat := range map[string]string{
@@ -47,13 +50,17 @@ func AddRule(in RuleInput) (*AddRuleResult, error) {
 			continue
 		}
 		if _, err := regexp.Compile(pat); err != nil {
-			return nil, errtrace.Wrapf(err, "invalid %s", label)
+			return errtrace.Err[*AddRuleResult](errtrace.WrapCode(err,
+				errtrace.ErrRulePatternInvalid, "compile regex").
+				WithContext("field", label).
+				WithContext("pattern", pat))
 		}
 	}
 
 	cfg, err := config.Load()
 	if err != nil {
-		return nil, errtrace.Wrap(err, "load config")
+		return errtrace.Err[*AddRuleResult](errtrace.WrapCode(err,
+			errtrace.ErrConfigOpen, "load config"))
 	}
 	r := config.Rule{
 		Name:         in.Name,
@@ -71,70 +78,86 @@ func AddRule(in RuleInput) (*AddRuleResult, error) {
 		cfg.Rules = append(cfg.Rules, r)
 	}
 	if err := config.Save(cfg); err != nil {
-		return nil, errtrace.Wrap(err, "save config")
+		return errtrace.Err[*AddRuleResult](errtrace.WrapCode(err,
+			errtrace.ErrConfigEncode, "save config").
+			WithContext("rule", in.Name))
 	}
 	p, _ := config.Path()
-	return &AddRuleResult{Rule: r, ConfigPath: p, Replaced: replaced}, nil
+	return errtrace.Ok(&AddRuleResult{Rule: r, ConfigPath: p, Replaced: replaced})
 }
 
 // ListRules returns all configured rules (a copy — safe to mutate).
-func ListRules() ([]config.Rule, error) {
+func ListRules() errtrace.Result[[]config.Rule] {
 	cfg, err := config.Load()
 	if err != nil {
-		return nil, errtrace.Wrap(err, "load config")
+		return errtrace.Err[[]config.Rule](errtrace.WrapCode(err,
+			errtrace.ErrConfigOpen, "load config"))
 	}
 	out := make([]config.Rule, len(cfg.Rules))
 	copy(out, cfg.Rules)
-	return out, nil
+	return errtrace.Ok(out)
 }
 
 // GetRule returns the rule with the given name or an error.
-func GetRule(name string) (config.Rule, error) {
+func GetRule(name string) errtrace.Result[config.Rule] {
 	cfg, err := config.Load()
 	if err != nil {
-		return config.Rule{}, errtrace.Wrap(err, "load config")
+		return errtrace.Err[config.Rule](errtrace.WrapCode(err,
+			errtrace.ErrConfigOpen, "load config"))
 	}
 	r := cfg.FindRule(name)
 	if r == nil {
-		return config.Rule{}, errtrace.New(fmt.Sprintf("no rule with name %q", name))
+		return errtrace.Err[config.Rule](errtrace.NewCoded(
+			errtrace.ErrRuleNotFound, fmt.Sprintf("no rule with name %q", name)).
+			WithContext("name", name))
 	}
-	return *r, nil
+	return errtrace.Ok(*r)
 }
 
 // SetRuleEnabled flips the enabled flag of an existing rule.
-func SetRuleEnabled(name string, enabled bool) error {
+func SetRuleEnabled(name string, enabled bool) errtrace.Result[struct{}] {
 	cfg, err := config.Load()
 	if err != nil {
-		return errtrace.Wrap(err, "load config")
+		return errtrace.Err[struct{}](errtrace.WrapCode(err,
+			errtrace.ErrConfigOpen, "load config"))
 	}
 	r := cfg.FindRule(name)
 	if r == nil {
-		return errtrace.New(fmt.Sprintf("no rule with name %q", name))
+		return errtrace.Err[struct{}](errtrace.NewCoded(
+			errtrace.ErrRuleNotFound, fmt.Sprintf("no rule with name %q", name)).
+			WithContext("name", name))
 	}
 	r.Enabled = enabled
 	if err := config.Save(cfg); err != nil {
-		return errtrace.Wrap(err, "save config")
+		return errtrace.Err[struct{}](errtrace.WrapCode(err,
+			errtrace.ErrConfigEncode, "save config").
+			WithContext("name", name))
 	}
-	return nil
+	return errtrace.Ok(struct{}{})
 }
 
 // RemoveRule deletes the rule with the given name. Returns an error if
 // no such rule exists.
-func RemoveRule(name string) error {
+func RemoveRule(name string) errtrace.Result[struct{}] {
 	cfg, err := config.Load()
 	if err != nil {
-		return errtrace.Wrap(err, "load config")
+		return errtrace.Err[struct{}](errtrace.WrapCode(err,
+			errtrace.ErrConfigOpen, "load config"))
 	}
 	for i := range cfg.Rules {
 		if cfg.Rules[i].Name == name {
 			cfg.Rules = append(cfg.Rules[:i], cfg.Rules[i+1:]...)
 			if err := config.Save(cfg); err != nil {
-				return errtrace.Wrap(err, "save config")
+				return errtrace.Err[struct{}](errtrace.WrapCode(err,
+					errtrace.ErrConfigEncode, "save config").
+					WithContext("name", name))
 			}
-			return nil
+			return errtrace.Ok(struct{}{})
 		}
 	}
-	return errtrace.New(fmt.Sprintf("no rule with name %q", name))
+	return errtrace.Err[struct{}](errtrace.NewCoded(
+		errtrace.ErrRuleNotFound, fmt.Sprintf("no rule with name %q", name)).
+		WithContext("name", name))
 }
 
 // CountEnabledRules reports how many rules in the slice are enabled.
