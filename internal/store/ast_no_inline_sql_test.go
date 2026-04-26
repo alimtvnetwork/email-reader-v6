@@ -29,7 +29,6 @@ import (
 	"go/parser"
 	"go/token"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -63,11 +62,7 @@ var sqlStarters = []string{"SELECT ", "INSERT ", "UPDATE ", "DELETE "}
 func TestAST_NoInlineSQL(t *testing.T) {
 	t.Parallel()
 
-	// Walk up from this package's CWD to the module root (where go.mod lives).
-	root, err := findModuleRoot()
-	if err != nil {
-		t.Fatalf("findModuleRoot: %v", err)
-	}
+	root := repoRootForMaintenanceGuard(t)
 
 	type offence struct{ file string; line int; sample string }
 	var offences []offence
