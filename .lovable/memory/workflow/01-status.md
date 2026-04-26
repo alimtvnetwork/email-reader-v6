@@ -1,6 +1,6 @@
 # Workflow status
 
-Last updated: 2026-04-26 (UTC) — Dashboard auto-refresh on EventNewMail (debounced 750 ms)
+Last updated: 2026-04-26 (UTC) — Race-build sanity sweep PASSED (16 packages clean under -race, including 10× stress)
 
 ## Current milestone
 🎯 **Spec-21-app implementation Phase 2** — turning the spec/21-app deltas into shipped code. Spec authoring round (35 tasks) **closed**; tasklist archived to `mem://archive/02-spec-21-app-tasklist`.
