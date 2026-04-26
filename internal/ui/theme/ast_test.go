@@ -36,35 +36,24 @@ func repoRoot(t *testing.T) string {
 	return filepath.Clean(filepath.Join(abs, "..", "..", ".."))
 }
 
-// scanGoFiles invokes fn for every .go file under root, skipping vendor,
-// hidden dirs, testdata, and node_modules. Skips _test.go files unless
-// includeTests is true.
+// scanGoFiles invokes fn for every .go file under the project's
+// internal/ + cmd/ trees. Imports-only parse for speed; tests that need
+// statement bodies use scanGoFilesFull (see ast_helpers_test.go).
 func scanGoFiles(t *testing.T, root string, includeTests bool, fn func(path string, file *ast.File, fset *token.FileSet)) {
 	t.Helper()
-	internalDir := filepath.Join(root, "internal")
-	cmdDir := filepath.Join(root, "cmd")
-	for _, dir := range []string{internalDir, cmdDir} {
-		walkAndParse(t, dir, includeTests, fn)
+	for _, top := range []string{"internal", "cmd"} {
+		walkAndParse(t, filepath.Join(root, top), includeTests, fn)
 	}
 }
 
-// walkAndParse is the recursive workhorse for scanGoFiles. Split out so
-// scanGoFiles stays under the 15-stmt fn-length lint limit.
 func walkAndParse(t *testing.T, dir string, includeTests bool, fn func(string, *ast.File, *token.FileSet)) {
 	t.Helper()
 	fset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, dir, func(fi interface{ Name() string }) bool {
-		n := fi.Name()
-		if !includeTests && strings.HasSuffix(n, "_test.go") {
-			return false
-		}
-		return strings.HasSuffix(n, ".go")
-	}, parser.ImportsOnly|parser.ParseComments)
+	pkgs, err := parser.ParseDir(fset, dir, fileFilter(includeTests),
+		parser.ImportsOnly|parser.ParseComments)
 	collectAndRecurse(t, dir, includeTests, fn, fset, pkgs, err)
 }
 
-// collectAndRecurse runs fn over every parsed file at this dir level then
-// descends into subdirectories. Extracted so walkAndParse stays small.
 func collectAndRecurse(
 	t *testing.T, dir string, includeTests bool,
 	fn func(string, *ast.File, *token.FileSet),
@@ -78,31 +67,13 @@ func collectAndRecurse(
 			}
 		}
 	}
-	entries, _ := readDirNames(dir)
-	for _, name := range entries {
+	subs, _ := readSubdirs(dir)
+	for _, name := range subs {
 		if shouldSkipDir(name) {
 			continue
 		}
 		walkAndParse(t, filepath.Join(dir, name), includeTests, fn)
 	}
-}
-
-// shouldSkipDir filters out vendor, hidden dirs, testdata, and node_modules.
-func shouldSkipDir(name string) bool {
-	if strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_") {
-		return true
-	}
-	switch name {
-	case "vendor", "node_modules", "testdata":
-		return true
-	}
-	return false
-}
-
-// readDirNames returns subdirectory names (only directories). Wraps the
-// stdlib call so the parse helpers above don't need the os import twice.
-func readDirNames(dir string) ([]string, error) {
-	return readSubdirs(dir)
 }
 
 // AST-T1: only files under internal/ui/theme/ may write
