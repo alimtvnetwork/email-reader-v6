@@ -90,14 +90,15 @@ func buildSettingsForm(svc *core.Settings, snap core.SettingsSnapshot) fyne.Canv
 // settingsWidgets bundles the editable inputs so action handlers can read
 // them without a long parameter list.
 type settingsWidgets struct {
-	themeSelect   *widget.Select
-	pollEntry     *widget.Entry
-	chromeEntry   *widget.Entry
-	densitySelect *widget.Select
-	initial       core.SettingsSnapshot
+	themeSelect    *widget.Select
+	pollEntry      *widget.Entry
+	chromeEntry    *widget.Entry
+	densitySelect  *widget.Select
+	retentionEntry *widget.Entry
+	initial        core.SettingsSnapshot
 }
 
-// newSettingsWidgets constructs the four input widgets pre-populated from
+// newSettingsWidgets constructs the input widgets pre-populated from
 // the loaded snapshot.
 func newSettingsWidgets(snap core.SettingsSnapshot) *settingsWidgets {
 	w := &settingsWidgets{initial: snap}
@@ -115,6 +116,9 @@ func newSettingsWidgets(snap core.SettingsSnapshot) *settingsWidgets {
 		theme.SetDensity(theme.Density(ParseDensityChoice(v)))
 	})
 	w.densitySelect.SetSelected(DensityLabelFor(int(theme.ActiveDensity())))
+
+	w.retentionEntry = widget.NewEntry()
+	w.retentionEntry.SetText(strconv.Itoa(int(snap.OpenUrlsRetentionDays)))
 	return w
 }
 
