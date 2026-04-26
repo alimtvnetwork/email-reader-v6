@@ -124,7 +124,7 @@ func TestCF_A2_Concurrent_Settings_Accounts_NoLoss(t *testing.T) {
 			defer wg.Done()
 			for i := 0; i < iters; i++ {
 				in := DefaultSettingsInput()
-				in.PollSeconds = 5 + i%10
+				in.PollSeconds = uint16(5 + i%10)
 				_ = s.Save(context.Background(), in)
 			}
 		}()
