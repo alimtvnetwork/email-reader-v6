@@ -347,6 +347,7 @@ func snapshotFromRaw(raw *rawConfigWithSettings) (SettingsSnapshot, error) {
 			IncognitoArg: raw.cfg.Browser.IncognitoArg,
 		},
 		Theme:                 ext.theme,
+		Density:               ext.density,
 		OpenUrlAllowedSchemes: ext.schemes,
 		AllowLocalhostUrls:    raw.ext.AllowLocalhostUrls,
 		AutoStartWatch:        ext.autoStart,
@@ -388,6 +389,7 @@ func resolveSnapshotPaths() (snapshotPaths, error) {
 
 type projectedExtension struct {
 	theme     ThemeMode
+	density   Density
 	schemes   []string
 	autoStart bool
 	retention uint16
@@ -405,6 +407,10 @@ func projectExtension(ext settingsExtension) projectedExtension {
 	theme, _ := ParseThemeMode(ext.Theme)
 	if ext.Theme == "" {
 		theme = defaults.Theme
+	}
+	density, _ := ParseDensity(ext.Density)
+	if ext.Density == "" {
+		density = defaults.Density
 	}
 	schemes := canonSchemes(ext.OpenUrlAllowedSchemes)
 	if len(schemes) == 0 {
@@ -433,7 +439,7 @@ func projectExtension(ext settingsExtension) projectedExtension {
 		batchSize = defaults.PruneBatchSize
 	}
 	return projectedExtension{
-		theme: theme, schemes: schemes, autoStart: autoStart, retention: retention,
+		theme: theme, density: density, schemes: schemes, autoStart: autoStart, retention: retention,
 		weekday: weekday, vacHour: vacHour, walHours: walHours, batchSize: batchSize,
 	}
 }
