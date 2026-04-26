@@ -389,4 +389,61 @@ No behavior change is expected — only call shape and added `RuleStat` writes.
 
 ---
 
+## N. Symbol Map (AC → Go symbol)
+
+Authoritative bridge between `97-acceptance-criteria.md` IDs and the production Go identifiers an AI implementer must touch. **Status legend:** ✅ shipped on `main` · ⏳ planned · 🧪 test-only · 🟡 partial.
+
+### N.1 Service surface
+
+| AC IDs                    | Go symbol                                                                            | File                                  | Status |
+|---------------------------|--------------------------------------------------------------------------------------|---------------------------------------|:------:|
+| F-01, T-02                | `core.Rules` + `NewRules(config.Manager, store.Store, Clock) *Rules`                 | `internal/core/rules.go`              |   ⏳   |
+| F-01                      | `(*Rules).List(ctx) errtrace.Result[[]RuleView]`                                     | `internal/core/rules.go`              |   🟡   |
+| F-04                      | `(*Rules).Get(ctx, name) errtrace.Result[RuleView]`                                  | `internal/core/rules.go`              |   ✅   |
+| F-06                      | `(*Rules).Create(ctx, RuleInput) errtrace.Result[RuleView]`                          | `internal/core/rules.go`              |   ✅   |
+| F-07, F-08                | `(*Rules).Update(ctx, name, RuleInput) errtrace.Result[RuleView]`                    | `internal/core/rules.go`              |   ⏳   |
+| F-09, F-10                | `(*Rules).Rename(ctx, oldName, newName) errtrace.Result[Unit]` *(atomic txn)*        | `internal/core/rules.go`              |   ⏳   |
+| F-11                      | `(*Rules).Delete(ctx, name) errtrace.Result[Unit]`                                   | `internal/core/rules.go`              |   ✅   |
+| F-12                      | `(*Rules).SetEnabled(ctx, name, enabled bool) errtrace.Result[Unit]`                 | `internal/core/rules.go`              |   ✅   |
+| F-13, F-14                | `(*Rules).Reorder(ctx, []string) errtrace.Result[Unit]`                              | `internal/core/rules.go`              |   ⏳   |
+| F-15                      | `(*Rules).DryRun(ctx, name, EmailSample) errtrace.Result[DryRunReport]`              | `internal/core/rules.go`              |   ⏳   |
+| F-21, L-02                | `(*Rules).MatchAll(ctx, EmailSample) errtrace.Result[[]MatchedRule]`                 | `internal/core/rules.go`              |   ⏳   |
+| F-22                      | `(*Rules).BumpStat(ctx, ruleName, hitTime time.Time) errtrace.Result[Unit]`          | `internal/core/rules.go`              |   ⏳   |
+
+### N.2 Projection types
+
+| AC IDs              | Go symbol                                              | File                          | Status |
+|---------------------|--------------------------------------------------------|-------------------------------|:------:|
+| F-01, F-04          | `core.RuleView`, `core.RuleInput`, `core.RuleAction`   | `internal/core/rules.go`      |   🟡   |
+| F-15, F-21          | `core.EmailSample`, `core.MatchedRule`, `core.DryRunReport` | `internal/core/rules.go`  |   ⏳   |
+| L-01                | `core.RuleEvent` + `eventbus.Bus[RuleEvent]`           | `internal/core/rule_events.go` |   ⏳   |
+
+### N.3 Store / SQL surface
+
+| AC IDs   | Go symbol / SQL artefact                                                          | File                                  | Status |
+|----------|-----------------------------------------------------------------------------------|---------------------------------------|:------:|
+| D-01     | Migration `M0011_CreateRuleStat`                                                  | `internal/store/migrate/`             |   ⏳   |
+| D-02     | `RuleStat` table (`RuleName PK`, `HitCount`, `LastHitAt`)                         | `internal/store/store.go`             |   ⏳   |
+| D-03, F-10 | `Store.RenameRuleAtomic(ctx, oldName, newName) error` *(updates `RuleStat` + `OpenedUrl` in one txn)* | `internal/store/shims.go` |   ⏳   |
+| F-11     | `Store.DeleteRuleStat(ctx, name) error` *(preserves `OpenedUrl.RuleName`)*        | `internal/store/shims.go`             |   ⏳   |
+| F-22     | `Store.BumpRuleStat(ctx, name, at time.Time) error`                               | `internal/store/shims.go`             |   ⏳   |
+
+### N.4 Errors & logging
+
+| AC IDs        | Go symbol                                                              | File                                    | Status |
+|---------------|------------------------------------------------------------------------|-----------------------------------------|:------:|
+| E-01..E-06    | Codes 21300..21399 per §8 (e.g. `ErrRuleRenameTargetTaken` = 21314, `ErrRuleReorderSetMismatch` = 21320) | `internal/errtrace/codes_gen.go` | ⏳ |
+| G-01..G-06    | `rulesSlog` (`component=rules`) + `FormatRules*` helpers               | `internal/ui/rules_log.go`              |   ⏳   |
+
+### N.5 Test contract
+
+| AC IDs        | Test symbol                                                          | File                                            | Status |
+|---------------|----------------------------------------------------------------------|-------------------------------------------------|:------:|
+| T-01, T-02    | `Test_Rules_*` (per §6 test list)                                    | `internal/core/rules_test.go`                   |   🟡   |
+| T-04          | `Test_Rules_RaceClean`                                               | `internal/core/rules_race_test.go`              |   ⏳   |
+| T-05          | `BenchmarkRulesMatchAll_100Rules`                                    | `internal/core/rules_bench_test.go`             |   ⏳   |
+| X-01..X-05    | XSS / template-injection guards on rule expressions                  | `internal/core/rules_security_test.go`          |   ⏳   |
+
+---
+
 **End of `03-rules/01-backend.md`**
