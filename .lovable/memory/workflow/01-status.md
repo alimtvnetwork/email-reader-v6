@@ -1,6 +1,6 @@
 # Workflow status
 
-Last updated: 2026-04-26 (UTC) — Daily retention tick wired: `core.Maintenance` service runs `PruneOpenedUrlsBefore` on a goroutine, started by the UI runtime; pre-existing CF_A2 flake noted (passes 5/5 in isolation).
+Last updated: 2026-04-26 (UTC) — CF_A2 race fixed: process-wide `config.WithWriteLock` makes `AddAccount/RemoveAccount/Settings.persist` Load+Save atomic. Bonus fix: `Test_Doctor_*` / `TestDiagnose_NoAccounts` no longer leak across `-count` iterations because `withTempConfig` now delegates to `withIsolatedConfig` (the old chdir-only isolation was a no-op since `config.Path` resolves via `os.Executable`). Full `-race -count=3 ./...` is **16/16 green**.
 
 ## Current milestone
 🎯 **Spec-21-app implementation Phase 2** — turning the spec/21-app deltas into shipped code. Spec authoring round (35 tasks) **closed**; tasklist archived to `mem://archive/02-spec-21-app-tasklist`.
