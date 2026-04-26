@@ -190,7 +190,7 @@ func (s *Store) UpsertEmail(ctx context.Context, e *Email) (int64, bool, error) 
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(MessageId) DO NOTHING`,
 		e.Alias, e.MessageId, e.Uid, e.FromAddr, e.ToAddr, e.CcAddr,
-		e.Subject, e.BodyText, e.BodyHtml, e.ReceivedAt, e.FilePath,
+		e.Subject, e.BodyText, e.BodyHtml, formatRFC3339UTC(e.ReceivedAt), e.FilePath,
 	)
 	if err != nil {
 		return 0, false, errtrace.Wrap(err, "insert email")
