@@ -20,7 +20,6 @@
 package views
 
 import (
-	"errors"
 	"strings"
 	"testing"
 
