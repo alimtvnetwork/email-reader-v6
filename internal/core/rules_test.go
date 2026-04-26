@@ -8,13 +8,13 @@ import (
 
 func TestAddRule_RequiresFields(t *testing.T) {
 	withIsolatedConfig(t, func() {
-		if _, err := AddRule(RuleInput{}); err == nil {
+		if r := AddRule(RuleInput{}); !r.HasError() {
 			t.Fatal("expected error for empty input")
 		}
-		if _, err := AddRule(RuleInput{Name: "x"}); err == nil {
+		if r := AddRule(RuleInput{Name: "x"}); !r.HasError() {
 			t.Fatal("expected error for missing urlRegex")
 		}
-		if _, err := AddRule(RuleInput{UrlRegex: "https?://.+"}); err == nil {
+		if r := AddRule(RuleInput{UrlRegex: "https?://.+"}); !r.HasError() {
 			t.Fatal("expected error for missing name")
 		}
 	})
@@ -22,67 +22,70 @@ func TestAddRule_RequiresFields(t *testing.T) {
 
 func TestAddRule_RejectsInvalidRegex(t *testing.T) {
 	withIsolatedConfig(t, func() {
-		_, err := AddRule(RuleInput{
+		r := AddRule(RuleInput{
 			Name:     "bad",
 			UrlRegex: "https?://[",
 		})
-		if err == nil {
+		if !r.HasError() {
 			t.Fatal("expected invalid regex error")
 		}
 		// Sanity check: nothing persisted.
-		rs, _ := ListRules()
-		if len(rs) != 0 {
-			t.Fatalf("invalid rule should not persist, got %d rules", len(rs))
+		rs := ListRules()
+		if rs.HasError() {
+			t.Fatalf("ListRules: %v", rs.Error())
+		}
+		if len(rs.Value()) != 0 {
+			t.Fatalf("invalid rule should not persist, got %d rules", len(rs.Value()))
 		}
 	})
 }
 
 func TestAddRule_PersistsAndUpserts(t *testing.T) {
 	withIsolatedConfig(t, func() {
-		res, err := AddRule(RuleInput{
+		res := AddRule(RuleInput{
 			Name:     "open-all",
 			UrlRegex: `https?://\S+`,
 			Enabled:  true,
 		})
-		if err != nil {
-			t.Fatalf("AddRule: %v", err)
+		if res.HasError() {
+			t.Fatalf("AddRule: %v", res.Error())
 		}
-		if res.Replaced {
+		if res.Value().Replaced {
 			t.Fatal("first add should not be a replace")
 		}
 		// Upsert with new pattern + disabled.
-		res2, err := AddRule(RuleInput{
+		res2 := AddRule(RuleInput{
 			Name:     "open-all",
 			UrlRegex: `https://example\.com/\S+`,
 			Enabled:  false,
 		})
-		if err != nil {
-			t.Fatalf("AddRule upsert: %v", err)
+		if res2.HasError() {
+			t.Fatalf("AddRule upsert: %v", res2.Error())
 		}
-		if !res2.Replaced {
+		if !res2.Value().Replaced {
 			t.Fatal("second add should report Replaced=true")
 		}
-		got, err := GetRule("open-all")
-		if err != nil {
-			t.Fatalf("GetRule: %v", err)
+		got := GetRule("open-all")
+		if got.HasError() {
+			t.Fatalf("GetRule: %v", got.Error())
 		}
-		if got.UrlRegex != `https://example\.com/\S+` || got.Enabled {
-			t.Fatalf("upsert did not apply: %+v", got)
+		if got.Value().UrlRegex != `https://example\.com/\S+` || got.Value().Enabled {
+			t.Fatalf("upsert did not apply: %+v", got.Value())
 		}
 	})
 }
 
 func TestSetRuleEnabled_TogglesAndErrors(t *testing.T) {
 	withIsolatedConfig(t, func() {
-		if err := SetRuleEnabled("missing", true); err == nil {
+		if r := SetRuleEnabled("missing", true); !r.HasError() {
 			t.Fatal("expected error for unknown rule")
 		}
-		_, _ = AddRule(RuleInput{Name: "r1", UrlRegex: "x", Enabled: false})
-		if err := SetRuleEnabled("r1", true); err != nil {
-			t.Fatalf("enable: %v", err)
+		_ = AddRule(RuleInput{Name: "r1", UrlRegex: "x", Enabled: false})
+		if r := SetRuleEnabled("r1", true); r.HasError() {
+			t.Fatalf("enable: %v", r.Error())
 		}
-		got, _ := GetRule("r1")
-		if !got.Enabled {
+		got := GetRule("r1")
+		if got.HasError() || !got.Value().Enabled {
 			t.Fatal("rule should be enabled")
 		}
 	})
@@ -90,17 +93,21 @@ func TestSetRuleEnabled_TogglesAndErrors(t *testing.T) {
 
 func TestRemoveRule_DeletesAndErrors(t *testing.T) {
 	withIsolatedConfig(t, func() {
-		if err := RemoveRule("nope"); err == nil {
+		if r := RemoveRule("nope"); !r.HasError() {
 			t.Fatal("expected error for missing rule")
 		}
-		_, _ = AddRule(RuleInput{Name: "r1", UrlRegex: "x", Enabled: true})
-		_, _ = AddRule(RuleInput{Name: "r2", UrlRegex: "y", Enabled: true})
-		if err := RemoveRule("r1"); err != nil {
-			t.Fatalf("remove: %v", err)
+		_ = AddRule(RuleInput{Name: "r1", UrlRegex: "x", Enabled: true})
+		_ = AddRule(RuleInput{Name: "r2", UrlRegex: "y", Enabled: true})
+		if r := RemoveRule("r1"); r.HasError() {
+			t.Fatalf("remove: %v", r.Error())
 		}
-		rs, _ := ListRules()
-		if len(rs) != 1 || rs[0].Name != "r2" {
-			t.Fatalf("unexpected rules after remove: %+v", rs)
+		rs := ListRules()
+		if rs.HasError() {
+			t.Fatalf("list: %v", rs.Error())
+		}
+		v := rs.Value()
+		if len(v) != 1 || v[0].Name != "r2" {
+			t.Fatalf("unexpected rules after remove: %+v", v)
 		}
 	})
 }
