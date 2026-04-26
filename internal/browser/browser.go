@@ -50,26 +50,30 @@ func (l *Launcher) Reload(cfg config.Browser) {
 
 // Path returns the resolved browser executable path (cached until Reload).
 func (l *Launcher) Path() (string, error) {
-	l.ensureResolved()
-	return l.resolvedPath, l.resolveErr
+	return l.resolvedSnapshot()
 }
 
 // IncognitoArg returns the private-mode flag for the resolved browser.
 func (l *Launcher) IncognitoArg() string {
-	l.ensureResolved()
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if !l.resolved {
+		l.resolve()
+		l.resolved = true
+	}
 	return l.resolvedArg
 }
 
-// ensureResolved runs resolve() lazily under the lock. Replacement for the
-// previous sync.Once so Reload can re-arm the cache.
-func (l *Launcher) ensureResolved() {
+// resolvedSnapshot returns (path, err) under the lock so Reload cannot
+// race with the read of the cached fields.
+func (l *Launcher) resolvedSnapshot() (string, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if l.resolved {
-		return
+	if !l.resolved {
+		l.resolve()
+		l.resolved = true
 	}
-	l.resolve()
-	l.resolved = true
+	return l.resolvedPath, l.resolveErr
 }
 
 // Open spawns `<browser> <incognitoArg> --new-window <url>` and returns immediately.
