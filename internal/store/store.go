@@ -292,14 +292,16 @@ func scanEmailRows(rows *sql.Rows) ([]Email, error) {
 	for rows.Next() {
 		var e Email
 		var received sql.NullTime
+		var isRead int
 		if err := rows.Scan(&e.Id, &e.Alias, &e.MessageId, &e.Uid, &e.FromAddr,
 			&e.ToAddr, &e.CcAddr, &e.Subject, &e.BodyText, &e.BodyHtml,
-			&received, &e.FilePath); err != nil {
+			&received, &e.FilePath, &isRead); err != nil {
 			return nil, errtrace.Wrap(err, "scan email row")
 		}
 		if received.Valid {
 			e.ReceivedAt = received.Time
 		}
+		e.IsRead = isRead != 0
 		out = append(out, e)
 	}
 	if err := rows.Err(); err != nil {
