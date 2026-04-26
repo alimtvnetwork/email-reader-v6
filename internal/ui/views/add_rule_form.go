@@ -124,9 +124,6 @@ func newRuleSubmitButton(opts AddRuleFormOptions, e *ruleFormEntries, status *wi
 	return submit
 }
 
-// _ keeps errtrace imported even if Save signature changes.
-var _ = errtrace.Ok[int]
-
 // ruleFormInputFromEntries pulls the current entry values into the
 // validation input struct.
 func ruleFormInputFromEntries(e *ruleFormEntries) RuleFormInput {

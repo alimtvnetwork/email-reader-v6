@@ -11,11 +11,12 @@ import (
 
 	"github.com/lovable/email-read/internal/config"
 	"github.com/lovable/email-read/internal/core"
+	"github.com/lovable/email-read/internal/errtrace"
 )
 
 type RulesOptions struct {
-	List   func() ([]config.Rule, error)
-	Toggle func(name string, enabled bool) error
+	List   func() errtrace.Result[[]config.Rule]
+	Toggle func(name string, enabled bool) errtrace.Result[struct{}]
 }
 
 func BuildRules(opts RulesOptions) fyne.CanvasObject {
@@ -35,14 +36,15 @@ func BuildRules(opts RulesOptions) fyne.CanvasObject {
 
 	var reload func()
 	reload = func() {
-		rules, err := opts.List()
-		if err != nil {
+		res := opts.List()
+		if res.HasError() {
 			body.Objects = []fyne.CanvasObject{
-				widget.NewLabel("⚠ Failed to load rules: " + err.Error()),
+				widget.NewLabel("⚠ Failed to load rules: " + res.Error().Error()),
 			}
 			body.Refresh()
 			return
 		}
+		rules := res.Value()
 		if len(rules) == 0 {
 			body.Objects = []fyne.CanvasObject{
 				widget.NewLabel("No rules configured yet. Add one from Tools → Add rule."),
@@ -82,7 +84,7 @@ func BuildRules(opts RulesOptions) fyne.CanvasObject {
 	)
 }
 
-func ruleRow(r config.Rule, toggle func(string, bool) error, status *widget.Label, reload func()) fyne.CanvasObject {
+func ruleRow(r config.Rule, toggle func(string, bool) errtrace.Result[struct{}], status *widget.Label, reload func()) fyne.CanvasObject {
 	name := widget.NewLabel(r.Name)
 	urlLbl := widget.NewLabel(r.UrlRegex)
 	urlLbl.Wrapping = fyne.TextWrapBreak
@@ -91,8 +93,8 @@ func ruleRow(r config.Rule, toggle func(string, bool) error, status *widget.Labe
 	check := widget.NewCheck("", nil)
 	check.SetChecked(r.Enabled)
 	check.OnChanged = func(on bool) {
-		if err := toggle(r.Name, on); err != nil {
-			status.SetText("⚠ Toggle failed: " + err.Error())
+		if res := toggle(r.Name, on); res.HasError() {
+			status.SetText("⚠ Toggle failed: " + res.Error().Error())
 			check.OnChanged = nil
 			check.SetChecked(r.Enabled)
 			check.OnChanged = func(b bool) { _ = toggle(r.Name, b); reload() }
