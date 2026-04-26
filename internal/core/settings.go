@@ -349,6 +349,10 @@ func snapshotFromRaw(raw *rawConfigWithSettings) (SettingsSnapshot, error) {
 		AllowLocalhostUrls:    raw.ext.AllowLocalhostUrls,
 		AutoStartWatch:        ext.autoStart,
 		OpenUrlsRetentionDays: ext.retention,
+		WeeklyVacuumOn:        ext.weekday,
+		WeeklyVacuumHourLocal: ext.vacHour,
+		WalCheckpointHours:    ext.walHours,
+		PruneBatchSize:        ext.batchSize,
 		ConfigPath:            paths.cfg,
 		DataDir:               paths.data,
 		EmailArchiveDir:       paths.email,
@@ -385,6 +389,10 @@ type projectedExtension struct {
 	schemes   []string
 	autoStart bool
 	retention uint16
+	weekday   time.Weekday
+	vacHour   uint8
+	walHours  uint8
+	batchSize uint32
 }
 
 // projectExtension layers DefaultSettingsInput defaults over an extension
@@ -406,7 +414,26 @@ func projectExtension(ext settingsExtension) projectedExtension {
 		autoStart = defaults.AutoStartWatch
 		retention = defaults.OpenUrlsRetentionDays
 	}
-	return projectedExtension{theme: theme, schemes: schemes, autoStart: autoStart, retention: retention}
+	weekday, ok := ParseWeekday(ext.WeeklyVacuumOn)
+	if !ok {
+		weekday = defaults.WeeklyVacuumOn
+	}
+	vacHour := ext.WeeklyVacuumHourLocal
+	if ext.UpdatedAt == "" || vacHour > 23 {
+		vacHour = defaults.WeeklyVacuumHourLocal
+	}
+	walHours := ext.WalCheckpointHours
+	if ext.UpdatedAt == "" || walHours == 0 {
+		walHours = defaults.WalCheckpointHours
+	}
+	batchSize := ext.PruneBatchSize
+	if ext.UpdatedAt == "" || batchSize == 0 {
+		batchSize = defaults.PruneBatchSize
+	}
+	return projectedExtension{
+		theme: theme, schemes: schemes, autoStart: autoStart, retention: retention,
+		weekday: weekday, vacHour: vacHour, walHours: walHours, batchSize: batchSize,
+	}
 }
 
 // clampPollSeconds projects an int from the legacy schema into the uint16
