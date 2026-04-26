@@ -136,8 +136,11 @@ func TestNewEmailsServiceFromDeps_NoRefresher_RefreshFailsCleanly(t *testing.T) 
 		t.Fatal("Refresh without a Refresher should error (P4.4 contract)")
 	}
 	var coded *errtrace.Coded
-	if !errAs(rres.Error(), &coded) || coded.Code != errtrace.ErrCoreInvalidArgument {
-		t.Errorf("code = %v, want ErrCoreInvalidArgument", coded)
+	// Errtrace registry restructure: dedicated ER-EML-22003 replaces
+	// the historical ER-COR-21701 for the "no Refresher injected"
+	// branch. See codes.yaml ER-EML block header.
+	if !errAs(rres.Error(), &coded) || coded.Code != errtrace.ErrEmailsRefresherUnwired {
+		t.Errorf("code = %v, want ErrEmailsRefresherUnwired", coded)
 	}
 }
 
