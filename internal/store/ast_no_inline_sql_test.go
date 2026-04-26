@@ -143,23 +143,8 @@ func TestAST_NoInlineSQL_PendingShrinks(t *testing.T) {
 	}
 }
 
-// findModuleRoot walks parent dirs looking for go.mod.
-func findModuleRoot() (string, error) {
-	dir, err := filepath.Abs(".")
-	if err != nil {
-		return "", err
-	}
-	for {
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			return dir, nil
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return "", fs.ErrNotExist
-		}
-		dir = parent
-	}
-}
+// (repoRootForMaintenanceGuard provided by ast_maintenance_only_test.go)
+
 
 // unquoteLoose strips the surrounding " or ` from an *ast.BasicLit
 // value. We don't decode escape sequences — the only thing we care
