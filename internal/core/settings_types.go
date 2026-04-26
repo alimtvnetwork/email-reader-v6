@@ -20,6 +20,7 @@ type SettingsSnapshot struct {
 	OpenUrlAllowedSchemes []string // canonical lower-case, sorted, deduped
 	AllowLocalhostUrls    bool
 	AutoStartWatch        bool
+	OpenUrlsRetentionDays uint16 // 0 = disabled (never prune); else age cutoff in days
 	ConfigPath            string // read-only, absolute
 	DataDir               string // read-only, absolute
 	EmailArchiveDir       string // read-only, absolute
@@ -35,6 +36,7 @@ type SettingsInput struct {
 	OpenUrlAllowedSchemes []string
 	AllowLocalhostUrls    bool
 	AutoStartWatch        bool
+	OpenUrlsRetentionDays uint16
 }
 
 // BrowserOverride mirrors config.Browser but is owned by Settings so the UI
@@ -129,6 +131,9 @@ const (
 )
 
 // DefaultSettingsInput returns the documented defaults from §3.
+// OpenUrlsRetentionDays defaults to 90 per spec/23-app-database/04-retention-and-vacuum.md
+// (the conservative blocked-decision retention; we apply it uniformly here
+// because OpenedUrls v1 has no Decision column to split on yet).
 func DefaultSettingsInput() SettingsInput {
 	return SettingsInput{
 		PollSeconds:           3,
@@ -136,5 +141,6 @@ func DefaultSettingsInput() SettingsInput {
 		OpenUrlAllowedSchemes: []string{"https"},
 		AllowLocalhostUrls:    false,
 		AutoStartWatch:        true,
+		OpenUrlsRetentionDays: 90,
 	}
 }
