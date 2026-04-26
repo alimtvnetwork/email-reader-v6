@@ -202,8 +202,16 @@ func runLoop(ctx context.Context, opts Options, logger *log.Logger, tick *time.T
 			stats, err := pollOnce(ctx, opts, logger)
 			if err != nil {
 				logPollError(logger, opts, st, err)
+				if berr := opts.Store.BumpConsecutiveFailures(ctx, alias); berr != nil {
+					// Best-effort: log but keep polling. The
+					// counter will resync on the next outcome.
+					logger.Printf("%s  ! [%s] bump consecutive failures: %v", ts(), alias, berr)
+				}
 			} else if stats != nil {
 				handlePollOK(logger, opts, st, stats)
+				if rerr := opts.Store.ResetConsecutiveFailures(ctx, alias); rerr != nil {
+					logger.Printf("%s  ! [%s] reset consecutive failures: %v", ts(), alias, rerr)
+				}
 			}
 			tick.Reset(nextDelay(*poll, st, logger, alias))
 		}
