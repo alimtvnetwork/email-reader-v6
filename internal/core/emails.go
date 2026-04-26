@@ -209,6 +209,63 @@ func (s *EmailsService) Count(ctx context.Context, alias string) errtrace.Result
 	return errtrace.Ok(n)
 }
 
+// MarkReadMaxUids caps how many UIDs the caller may pass to MarkRead
+// in a single call. The store layer further chunks the slice into
+// batches of 999 (`SQLITE_MAX_VARIABLE_NUMBER`); this ceiling exists
+// at the service boundary so a buggy caller surfaces an error code
+// (`ErrCoreInvalidArgument`) rather than silently issuing thousands
+// of UPDATE statements. Spec
+// `spec/21-app/02-features/02-emails/01-backend.md` §2.3 sets the
+// limit at 1000.
+const MarkReadMaxUids = 1000
+
+// Unit is the spec-canonical empty-success value for MarkRead/Delete/
+// Undelete (per spec §2.3/2.4). Defined locally so callers don't need
+// to invent a sentinel; future package-wide use is fine.
+type Unit struct{}
+
+// MarkRead flips the IsRead flag for every (alias, uid) pair in
+// `uids`. Idempotent (re-issuing the same op leaves the store in the
+// same state). Empty `uids` is a fast-path no-op — no SQL is issued
+// and `(Unit{}, nil)` is returned without opening the store.
+//
+// Validates `len(uids) <= MarkReadMaxUids`; over-budget calls return
+// `ErrCoreInvalidArgument` with `uid_count` context (spec §2.3
+// "21221 EmailsMarkReadTooMany"; mapped onto the existing core
+// invalid-argument code until the dedicated 21221 entry is minted in
+// a later registry slice).
+//
+// On store error, wraps with `ErrDbInsertEmail` (UPDATE failures live
+// in the same write-path bucket as inserts in the existing registry)
+// + alias / uid_count context.
+func (s *EmailsService) MarkRead(ctx context.Context, alias string, uids []uint32, read bool) errtrace.Result[Unit] {
+	if len(uids) > MarkReadMaxUids {
+		return errtrace.Err[Unit](errtrace.NewCoded(
+			errtrace.ErrCoreInvalidArgument,
+			"core.EmailsService.MarkRead: too many uids").
+			WithContext("uid_count", len(uids)).
+			WithContext("max", MarkReadMaxUids))
+	}
+	if len(uids) == 0 {
+		return errtrace.Ok(Unit{})
+	}
+	st, closeFn, err := s.openStore()
+	if err != nil {
+		return errtrace.Err[Unit](
+			errtrace.WrapCode(err, errtrace.ErrDbOpen, "core.EmailsService.MarkRead"),
+		)
+	}
+	defer closeFn()
+	if _, err := st.SetEmailRead(ctx, alias, uids, read); err != nil {
+		return errtrace.Err[Unit](
+			errtrace.WrapCode(err, errtrace.ErrDbInsertEmail, "core.EmailsService.MarkRead").
+				WithContext("alias", alias).
+				WithContext("uid_count", len(uids)),
+		)
+	}
+	return errtrace.Ok(Unit{})
+}
+
 func toSummary(e store.Email) EmailSummary {
 	s := EmailSummary{
 		Id:       e.Id,
