@@ -1,8 +1,9 @@
+//go:build !nofyne
+
 // rules_test.go — Phase 5.6 coverage for the Rename + Reorder UI
 // affordances added on top of `BuildRules`. Stays under `!nofyne` so
 // it can construct real Fyne widgets and inspect the resulting
-// container; uses a `test.NewApp()` to drive the dialog flows that
-// would otherwise need a parent window.
+// container.
 //
 // Coverage matrix:
 //   - moveRule: composes the correct permutation and forwards it to
@@ -14,8 +15,6 @@
 //   - BuildRules: when Service is set, opts.Rename / opts.Reorder
 //     auto-default to the typed methods (compile-only — exercises
 //     the new fallback wiring lines).
-
-//go:build !nofyne
 
 package views
 
