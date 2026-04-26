@@ -1,9 +1,9 @@
 # Workflow status
 
-Last updated: 2026-04-26 (UTC) — **Slice #44 landed: Version bump → 0.28.0.** **Files edited:** `internal/ui/app.go` — `AppVersion = "0.28.0"`. `cmd/email-read/main.go` — `Version = "0.28.0"`; release note rewritten to cover Slices #40–#43 (Edit Rule form, app boot smoke test, Density preference persistence, Dashboard auto-refresh on `EventUrlOpened`). No tests pin the version string (grep confirmed only the two const sites), so the bump is a pure two-file change. **Verified:** `go build -tags nofyne ./...` clean; all 16 packages green under `go test -tags nofyne ./...`.
+Last updated: 2026-04-26 (UTC) — **Slice #45 landed: AC-DB-54 `Test_BooleanPositive`.** New `internal/store/boolean_positive_test.go` walks `sqlite_master` → `PRAGMA table_info(<t>)` for every user table and rejects any `Is*`/`Has*` column whose default value is `1` (which would invert the positive-name convention so `0` means "yes"). Helpers `userTables`, `tableInfo`, `quoteIdent`, and `isBooleanPrefixed` (PascalCase-aware: matches `IsDeduped` but not `Issue`/`Hash`) ride along. Schema-driven — no hard-coded column list, so future ADD COLUMN migrations get checked automatically. Today's `IsDeduped`/`IsIncognito` both default to `0` → green. **Verified:** `go vet -tags nofyne ./...` clean; `go test -tags nofyne ./internal/store/` green.
 
 ## Previous slice (kept for context)
-Slice #43 landed: Dashboard tile auto-refresh on `EventUrlOpened`. Extracted `dashboardRefreshKind` helper covering `{EventNewMail, EventUrlOpened}`; the existing 750ms debounce window is now *shared* across both kinds (NewMail + UrlOpened 100ms apart won't double-trigger COUNT(*)). Tests grew 7→15 cases plus new `TestDashboardRefreshKind` walking all 10 EventKinds. 16 packages green, vet + race clean.
+Slice #44: Version bump → 0.28.0 (`internal/ui/app.go` + `cmd/email-read/main.go`). Release note re-written to cover Slices #40–#43.
 
 ## Current milestone
 🎯 **Spec-21-app implementation Phase 2** — turning the spec/21-app deltas into shipped code. Spec authoring round (35 tasks) **closed**; tasklist archived to `mem://archive/02-spec-21-app-tasklist`.
@@ -49,6 +49,7 @@ Slice #43 landed: Dashboard tile auto-refresh on `EventUrlOpened`. Extracted `da
 | 35 | **AC-DB-50 AST guard** — `Test_AST_DriverImportLimit` walks repo with `parser.ImportsOnly`, rejects any production `.go` outside `internal/store/` that imports a known SQL driver. `driverImportPaths` covers modernc/sqlite, mattn/go-sqlite3, lib/pq, jackc/pgx/v5(+stdlib), go-sql-driver/mysql, microsoft/go-mssqldb, and bare `database/sql/driver`. Reuses `repoRootForMaintenanceGuard` + `skipUninterestingDir` from #34. | `internal/store/ast_driver_import_limit_test.go` |
 | 36 | **AC-DB-51 AST guard** — `Test_AST_NoSqlTypeLeak` walks `internal/store/`, parses every production `.go`, and for each top-level `*ast.FuncDecl` whose name + receiver are both exported, walks the return list with `ast.Inspect` to find any `*ast.SelectorExpr` `sql.{DB,Tx,Rows}` at any depth. **Architectural gap noted out of scope:** `Store.DB *sql.DB` is exported and read by `internal/exporter` + 2 `internal/core/tools_*.go` files; closing that leak is AC-DB-52's territory. | `internal/store/ast_no_sql_type_leak_test.go` |
 | 37 | **AC-DB-53 RFC 3339 UTC datetime storage + test** — new `internal/store/datetime.go` exports `formatRFC3339UTC(t)` (returns `2006-01-02T15:04:05.000Z` or `""` for zero) and `sqliteRFC3339NowExpr` (`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`). `migrate()` swaps three `DEFAULT CURRENT_TIMESTAMP` (Emails.CreatedAt / WatchState.UpdatedAt / OpenedUrls.OpenedAt) for the strftime expr. `UpsertEmail` binds `formatRFC3339UTC(e.ReceivedAt)`; `UpsertWatchState` extracted to a named const + swaps inline `CURRENT_TIMESTAMP` (×2). Reads unchanged — `sql.NullTime` parses both formats (probe-verified). New `datetime_test.go` regex-matches every datetime column via `CAST(... AS TEXT)`. | `internal/store/{datetime,datetime_test,store}.go` |
+| 38 | **AC-DB-54 `Test_BooleanPositive`** — schema-driven test: walks `sqlite_master` → `PRAGMA table_info(<t>)` for every user table; rejects any `Is*`/`Has*` column whose default is `1`. Helpers: `userTables`, `tableInfo`, `quoteIdent`, `isBooleanPrefixed` (PascalCase-aware: `IsDeduped` ✓, `Issue` ✗). `IsDeduped`/`IsIncognito` both default to `0` → green. | `internal/store/boolean_positive_test.go` |
 
 Verification: 16 packages green under `nix run nixpkgs#go -- {vet,test} -tags nofyne -race -count=2 ./...`; `go build -tags nofyne ./...` clean; new file `datetime.go` 0 fn-length violations (96 in `store.go` are pre-existing, unchanged by this slice).
 
@@ -78,7 +79,7 @@ Behaviour-equivalents may already exist in `internal/store/store_test.go` / `int
 - AC-DB-37 `Test_AST_DdlOnlyInMigrate` *(blocked on migrate package; meanwhile no DDL exists outside the bootstrap path)*
 - AC-DB-40…46 maintenance-behaviour tests *(spec-named — present behaviour is locked under different names today)*
 - AC-DB-52 `Test_AST_CoreUsesStoreOnly` *(would surface today's `Store.DB` exported-field leak; pair with a typed-method shim slice first)*
-- AC-DB-54 `Test_BooleanPositive`
+- ~~AC-DB-54 `Test_BooleanPositive`~~ ✅ landed in Slice #45
 - AC-DB-55 `Test_LogScan_NoOriginalUrlLeak`
 
 ### B. Long-running cross-cutting items
@@ -91,10 +92,12 @@ Behaviour-equivalents may already exist in `internal/store/store_test.go` / `int
 ## Next logical step for the next AI session
 Top sandbox-runnable candidates (no schema work, no external infra, ranked by isolation):
 
-(a) **AC-DB-54 `Test_BooleanPositive`** — Iterate `PRAGMA table_info` over every table; reject any column whose name starts with `Is`/`Has` and whose default is `1` (i.e. positive condition encoded as "0 means yes"). Pure store-package test, smallest scope.
+(a) **AC-DB-55 `Test_LogScan_NoOriginalUrlLeak`** — install a buffering `slog.Handler` for the test, exercise a representative `Tools.OpenUrl` call (or the redaction helper directly), then regex-assert the pre-redaction `OriginalUrl` value never appears at INFO+ level. Pure test slice, no schema work.
 
-(b) **AC-DB-55 `Test_LogScan_NoOriginalUrlLeak`** — capture all `slog`/`log` output during a representative `Tools.OpenUrl` call; regex-assert the `OriginalUrl` value (pre-redaction) never appears at INFO+ level. Needs a custom slog handler harness.
+(b) **`Store.DB *sql.DB` typed-shim refactor** — close the leak surfaced by Slice #36's note. Add typed `Store.*` methods covering exporter + the two `internal/core/tools_*.go` callers; demote `DB` to lowercase. Unblocks AC-DB-52.
 
-(c) **AC-DB-52 `Test_AST_CoreUsesStoreOnly`** — AST scan of `internal/core/*` import lists asserting no direct `database/sql` or driver imports. Same idiom as #35 (`parser.ImportsOnly`); one file. **However** this would surface today's `Store.DB *sql.DB` exposed-field leak (the gap noted in #36) without fixing it — pair with a typed-method shim slice (e.g., `Store.QueryEmailExportRows(ctx, query, args…)`) so the guard ships green.
+(c) **AC-DB-52 `Test_AST_CoreUsesStoreOnly`** — AST scan of `internal/core/*` import lists asserting no direct `database/sql` or driver imports. Same idiom as Slice #35 (`parser.ImportsOnly`). Will go green only after (b).
 
-Recommended order for the next `next` slice: **(a) AC-DB-54** — smallest behavioural slice, no refactoring required. Items #1-#5 in section B still need user-side, infra, or upstream-schema work.
+Audit-roadmap items (higher-impact but each ≥ multi-slice): Symbol-Map sweep across `01-backend.md` files, schema reconciliation (singular vs plural / missing `WatchEvent`), commit `linters/*.sh` scripts, A11y rewrite (ARIA → Fyne primitives), `errtrace/codes_gen.go` codegen, `goleak` + `*_bench_test.go` per feature, `EventHeartbeat` → `EventPollHeartbeat` rename + export `BackoffLadder`.
+
+Recommended order for the next `next` slice: **(a) AC-DB-55** — smallest behavioural slice, no refactoring required.
