@@ -78,8 +78,12 @@ func Diagnose(alias string, emit func(DiagnoseEvent)) error {
 		return err
 	}
 
-	foundElsewhere := scanFolders(mc, folders, stats, emit)
+	return runFolderScanAndSummarize(mc, folders, stats, emit)
+}
 
+// runFolderScanAndSummarize scans all folders and emits the summary event.
+func runFolderScanAndSummarize(mc *mailclient.Client, folders []mailclient.MailboxName, stats mailclient.MailboxStats, emit func(DiagnoseEvent)) error {
+	foundElsewhere := scanFolders(mc, folders, stats, emit)
 	emit(DiagnoseEvent{Kind: DiagnoseEventSummary, Message: summarize(stats, foundElsewhere)})
 	return nil
 }
