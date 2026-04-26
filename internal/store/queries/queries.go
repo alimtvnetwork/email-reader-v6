@@ -144,3 +144,63 @@ func whereForEmailExport(in EmailExportInput) (string, []any) {
 	}
 	return strings.Join(clauses, " AND "), args
 }
+
+// ---------------- WatchState ----------------
+
+// WatchStateGet selects the last-seen state row for a single alias.
+const WatchStateGet = `SELECT Alias, LastUid, LastSubject, LastReceivedAt, UpdatedAt
+       FROM WatchState WHERE Alias = ?`
+
+// WatchStateUpsert composes the INSERT…ON CONFLICT for the WatchState
+// row owned by one alias. Both the new-row UpdatedAt and the conflict
+// branch's UpdatedAt come from the same SQLite RFC3339 "now" expression
+// — caller passes that expression in (declared in store/datetime.go) so
+// the queries package stays free of dialect drift.
+func WatchStateUpsert(nowExpr string) string {
+	return `INSERT INTO WatchState (Alias, LastUid, LastSubject, LastReceivedAt, UpdatedAt)
+       VALUES (?, ?, ?, ?, ` + nowExpr + `)
+       ON CONFLICT(Alias) DO UPDATE SET
+           LastUid        = excluded.LastUid,
+           LastSubject    = excluded.LastSubject,
+           LastReceivedAt = excluded.LastReceivedAt,
+           UpdatedAt      = ` + nowExpr
+}
+
+// ---------------- OpenedUrls (reads) ----------------
+
+// openedUrlAuditColumns is the explicit Delta-#1 column list.
+// Order MUST match core.scanOpenedUrlRows.
+const openedUrlAuditColumns = `Id, EmailId, Alias, RuleName, Origin, Url,
+                                 OriginalUrl, IsDeduped, IsIncognito, TraceId, OpenedAt`
+
+// HasOpenedUrl checks whether (EmailId, Url) is already recorded.
+const HasOpenedUrl = `SELECT COUNT(1) FROM OpenedUrls WHERE EmailId = ? AND Url = ?`
+
+// OpenedUrlsListInput captures the filter knobs of RecentOpenedUrls.
+// Limit must be > 0; Before is required (zero ⇒ caller passes time.Now()).
+type OpenedUrlsListInput struct {
+	Before time.Time
+	Alias  string
+	Origin string
+	Limit  int
+}
+
+// OpenedUrlsList composes the Delta-#1 audit-row reader SQL + bound args.
+func OpenedUrlsList(in OpenedUrlsListInput) (string, []any) {
+	var sb strings.Builder
+	sb.WriteString(`SELECT `)
+	sb.WriteString(openedUrlAuditColumns)
+	sb.WriteString(` FROM OpenedUrls WHERE OpenedAt < ?`)
+	args := []any{in.Before}
+	if in.Alias != "" {
+		sb.WriteString(" AND Alias = ?")
+		args = append(args, in.Alias)
+	}
+	if in.Origin != "" {
+		sb.WriteString(" AND Origin = ?")
+		args = append(args, in.Origin)
+	}
+	sb.WriteString(" ORDER BY OpenedAt DESC, Id DESC LIMIT ?")
+	args = append(args, in.Limit)
+	return sb.String(), args
+}
