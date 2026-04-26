@@ -74,6 +74,7 @@ func buildSettingsForm(svc *core.Settings, snap core.SettingsSnapshot) fyne.Canv
 			{Text: "Poll interval (seconds)", Widget: w.pollEntry, HintText: "1–60. Applied to running watcher live."},
 			{Text: "Chrome / Chromium path", Widget: w.chromeEntry, HintText: "Leave blank to auto-detect."},
 			{Text: "Density", Widget: w.densitySelect, HintText: "Compact tightens paddings (process-local)."},
+			{Text: "Opened-URLs retention (days)", Widget: w.retentionEntry, HintText: "0–3650. 0 = never prune."},
 		},
 	}
 	actions := newSettingsActions(svc, w, status)
@@ -89,14 +90,15 @@ func buildSettingsForm(svc *core.Settings, snap core.SettingsSnapshot) fyne.Canv
 // settingsWidgets bundles the editable inputs so action handlers can read
 // them without a long parameter list.
 type settingsWidgets struct {
-	themeSelect   *widget.Select
-	pollEntry     *widget.Entry
-	chromeEntry   *widget.Entry
-	densitySelect *widget.Select
-	initial       core.SettingsSnapshot
+	themeSelect    *widget.Select
+	pollEntry      *widget.Entry
+	chromeEntry    *widget.Entry
+	densitySelect  *widget.Select
+	retentionEntry *widget.Entry
+	initial        core.SettingsSnapshot
 }
 
-// newSettingsWidgets constructs the four input widgets pre-populated from
+// newSettingsWidgets constructs the input widgets pre-populated from
 // the loaded snapshot.
 func newSettingsWidgets(snap core.SettingsSnapshot) *settingsWidgets {
 	w := &settingsWidgets{initial: snap}
@@ -114,6 +116,9 @@ func newSettingsWidgets(snap core.SettingsSnapshot) *settingsWidgets {
 		theme.SetDensity(theme.Density(ParseDensityChoice(v)))
 	})
 	w.densitySelect.SetSelected(DensityLabelFor(int(theme.ActiveDensity())))
+
+	w.retentionEntry = widget.NewEntry()
+	w.retentionEntry.SetText(strconv.Itoa(int(snap.OpenUrlsRetentionDays)))
 	return w
 }
 
@@ -163,15 +168,20 @@ func newSettingsPaths(snap core.SettingsSnapshot) fyne.CanvasObject {
 }
 
 // readSettingsInput validates + projects widget state into a SettingsInput.
-// Returns a friendly error for the status line when poll seconds are out
-// of range or non-numeric. Delegates pure logic to ParsePollSeconds /
-// ProjectSettingsInput so the headless test suite can exercise both.
+// Returns a friendly error for the status line when poll seconds or
+// retention days are out of range or non-numeric. Delegates pure logic to
+// ParsePollSeconds / ParseRetentionDays / ProjectSettingsInput so the
+// headless test suite can exercise both.
 func readSettingsInput(w *settingsWidgets) (core.SettingsInput, error) {
 	poll, err := ParsePollSeconds(w.pollEntry.Text)
 	if err != nil {
 		return core.SettingsInput{}, err
 	}
-	return ProjectSettingsInput(w.themeSelect.Selected, poll, w.chromeEntry.Text, w.initial), nil
+	retention, err := ParseRetentionDays(w.retentionEntry.Text)
+	if err != nil {
+		return core.SettingsInput{}, err
+	}
+	return ProjectSettingsInput(w.themeSelect.Selected, poll, w.chromeEntry.Text, retention, w.initial), nil
 }
 
 // repopulateWidgets refreshes the form after a Reset so the user sees the
@@ -181,4 +191,5 @@ func repopulateWidgets(w *settingsWidgets, snap core.SettingsSnapshot) {
 	w.themeSelect.SetSelected(snap.Theme.String())
 	w.pollEntry.SetText(strconv.Itoa(int(snap.PollSeconds)))
 	w.chromeEntry.SetText(snap.BrowserOverride.ChromePath)
+	w.retentionEntry.SetText(strconv.Itoa(int(snap.OpenUrlsRetentionDays)))
 }

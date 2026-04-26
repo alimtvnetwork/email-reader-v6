@@ -32,6 +32,17 @@ func ParsePollSeconds(raw string) (uint16, error) {
 	return uint16(n), nil
 }
 
+// ParseRetentionDays validates the user's OpenedUrls retention entry.
+// Returns the uint16 value (0 = never prune) or a friendly error.
+// Bounds match core.validateRetentionDays: [0, 3650].
+func ParseRetentionDays(raw string) (uint16, error) {
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 0 || n > 3650 {
+		return 0, fmt.Errorf("retention must be 0–3650 days (0 = never prune)")
+	}
+	return uint16(n), nil
+}
+
 // DensityLabelFor maps an internal density code (theme.Density's int form)
 // to the Select label. We accept an int rather than the theme.Density type
 // to keep this file fyne-free.
@@ -54,7 +65,18 @@ func ParseDensityChoice(label string) int {
 // ProjectSettingsInput merges user-edited fields with the invariant slice
 // of the previous snapshot to produce a SettingsInput suitable for Save.
 // Pure: no IO, no globals, no widget references.
-func ProjectSettingsInput(themeLabel string, pollSecs uint16, chromePath string, prev core.SettingsSnapshot) core.SettingsInput {
+//
+// retentionDays is the user-edited OpenedUrls retention value (0 disables
+// pruning). Other fields not exposed in the form (IncognitoArg,
+// OpenUrlAllowedSchemes, AllowLocalhostUrls, AutoStartWatch) are carried
+// forward from prev so a Save on this view never silently mutates them.
+func ProjectSettingsInput(
+	themeLabel string,
+	pollSecs uint16,
+	chromePath string,
+	retentionDays uint16,
+	prev core.SettingsSnapshot,
+) core.SettingsInput {
 	mode, _ := core.ParseThemeMode(themeLabel)
 	return core.SettingsInput{
 		PollSeconds: pollSecs,
@@ -66,5 +88,6 @@ func ProjectSettingsInput(themeLabel string, pollSecs uint16, chromePath string,
 		OpenUrlAllowedSchemes: prev.OpenUrlAllowedSchemes,
 		AllowLocalhostUrls:    prev.AllowLocalhostUrls,
 		AutoStartWatch:        prev.AutoStartWatch,
+		OpenUrlsRetentionDays: retentionDays,
 	}
 }

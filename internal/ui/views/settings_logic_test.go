@@ -52,7 +52,7 @@ func Test_ProjectSettingsInput_PreservesInvariants(t *testing.T) {
 		AllowLocalhostUrls:    true,
 		AutoStartWatch:        false,
 	}
-	in := ProjectSettingsInput("Light", 7, "/opt/chrome", prev)
+	in := ProjectSettingsInput("Light", 7, "/opt/chrome", 30, prev)
 	if in.Theme != core.ThemeLight {
 		t.Errorf("Theme=%v want Light", in.Theme)
 	}
@@ -71,11 +71,38 @@ func Test_ProjectSettingsInput_PreservesInvariants(t *testing.T) {
 	if !in.AllowLocalhostUrls || in.AutoStartWatch {
 		t.Errorf("bools lost: %+v", in)
 	}
+	if in.OpenUrlsRetentionDays != 30 {
+		t.Errorf("OpenUrlsRetentionDays=%d want 30", in.OpenUrlsRetentionDays)
+	}
 }
 
 func Test_ProjectSettingsInput_UnknownThemeFallsBackDark(t *testing.T) {
-	in := ProjectSettingsInput("nonsense", 3, "", core.SettingsSnapshot{})
+	in := ProjectSettingsInput("nonsense", 3, "", 90, core.SettingsSnapshot{})
 	if in.Theme != core.ThemeDark {
 		t.Errorf("unknown theme should fall back to Dark, got %v", in.Theme)
+	}
+}
+
+func Test_ParseRetentionDays_Bounds(t *testing.T) {
+	good := map[string]uint16{"0": 0, "1": 1, "30": 30, "90": 90, "3650": 3650}
+	for in, want := range good {
+		got, err := ParseRetentionDays(in)
+		if err != nil || got != want {
+			t.Errorf("ParseRetentionDays(%q)=%d,%v want %d,nil", in, got, err, want)
+		}
+	}
+	bad := []string{"-1", "3651", "9999", "", "abc", "3.5"}
+	for _, in := range bad {
+		if _, err := ParseRetentionDays(in); err == nil {
+			t.Errorf("ParseRetentionDays(%q) expected error", in)
+		}
+	}
+}
+
+func Test_ProjectSettingsInput_RetentionZeroDisablesPruning(t *testing.T) {
+	// Round-trips the spec semantic that 0 = never prune.
+	in := ProjectSettingsInput("Dark", 3, "", 0, core.SettingsSnapshot{})
+	if in.OpenUrlsRetentionDays != 0 {
+		t.Errorf("0 should round-trip as 0 (disabled), got %d", in.OpenUrlsRetentionDays)
 	}
 }
