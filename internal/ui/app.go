@@ -25,7 +25,7 @@ import (
 
 // AppVersion is shown in the window title. Bumped per release in lockstep
 // with cmd/email-read/main.go.
-const AppVersion = "0.27.0"
+const AppVersion = "0.28.0"
 
 // Run creates the Fyne app, builds the main window, and blocks until close.
 //
