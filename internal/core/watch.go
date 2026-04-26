@@ -24,8 +24,8 @@ import (
 
 // WatchEventKind discriminates lifecycle + runtime events emitted on
 // the Watch bus. Mirrors the spec §4 enum (Start / Stop / Error /
-// Heartbeat); the in-flight watcher events live on `watcher.Bus` and
-// will be bridged into this stream by the follow-up slice.
+// Heartbeat); low-level watcher.Bus signals are folded onto this
+// stream by core.BridgeWatcherBus (see watch_bridge.go).
 type WatchEventKind uint8
 
 const (
