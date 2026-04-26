@@ -205,9 +205,9 @@ func TestRegister_RejectsEmptyName(t *testing.T) {
 
 func TestAll_ReturnsSortedCopy(t *testing.T) {
 	resetRegistry(t)
-	migrate.Register(migrate.Migration{Version: 5, Name: "e", Up: ``})
-	migrate.Register(migrate.Migration{Version: 2, Name: "b", Up: ``})
-	migrate.Register(migrate.Migration{Version: 9, Name: "i", Up: ``})
+	migrate.Register(migrate.Migration{Version: 5, Name: "e", Up: `SELECT 1`})
+	migrate.Register(migrate.Migration{Version: 2, Name: "b", Up: `SELECT 1`})
+	migrate.Register(migrate.Migration{Version: 9, Name: "i", Up: `SELECT 1`})
 
 	got := migrate.All()
 	want := []int{2, 5, 9}
