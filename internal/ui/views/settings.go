@@ -15,7 +15,6 @@ package views
 
 import (
 	"context"
-	"fmt"
 	"strconv"
 	"time"
 
