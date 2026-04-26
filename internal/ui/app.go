@@ -236,7 +236,10 @@ func viewFor(item NavItem, state *AppState, gotoNav func(NavKind), onAccountsCha
 		}
 		return views.BuildDashboard(dashOpts)
 	case NavEmails:
-		return views.BuildEmails(views.EmailsOptions{Alias: state.Alias()})
+		return views.BuildEmails(views.EmailsOptions{
+			Alias:   state.Alias(),
+			Service: buildEmailsService(),
+		})
 	case NavRules:
 		return views.BuildRules(views.RulesOptions{})
 	case NavAccounts:
