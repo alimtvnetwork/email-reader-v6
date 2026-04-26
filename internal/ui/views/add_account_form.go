@@ -125,12 +125,15 @@ func newAutodiscoverButton(e *accountFormEntries, status *widget.Label) *widget.
 	})
 }
 
-// buildAccountForm composes the widget.Form rows from the seven entries.
-func buildAccountForm(e *accountFormEntries, autodiscover *widget.Button) *widget.Form {
+// buildAccountForm composes the widget.Form rows from the entries. The
+// password row gets a trailing "Show/Hide" button so users can verify
+// what they typed without committing it to clipboard.
+func buildAccountForm(e *accountFormEntries, autodiscover, revealPw *widget.Button) *widget.Form {
 	return widget.NewForm(
 		widget.NewFormItem("Alias", e.alias),
+		widget.NewFormItem("Display name", e.displayName),
 		widget.NewFormItem("Email", e.email),
-		widget.NewFormItem("Password", e.password),
+		widget.NewFormItem("Password", container.NewBorder(nil, nil, nil, revealPw, e.password)),
 		widget.NewFormItem("IMAP host", container.NewBorder(nil, nil, nil, autodiscover, e.host)),
 		widget.NewFormItem("Port", e.port),
 		widget.NewFormItem("TLS", e.useTLS),
@@ -142,6 +145,7 @@ func buildAccountForm(e *accountFormEntries, autodiscover *widget.Button) *widge
 func resetAccountEntries(e *accountFormEntries) {
 	e.alias.SetText("")
 	e.email.SetText("")
+	e.displayName.SetText("")
 	e.password.SetText("")
 	e.host.SetText("")
 	e.port.SetText("")
@@ -177,13 +181,14 @@ func newAccountSubmitButton(opts AddAccountFormOptions, e *accountFormEntries, s
 // validation input struct.
 func accountFormInputFromEntries(e *accountFormEntries) AccountFormInput {
 	return AccountFormInput{
-		Alias:    e.alias.Text,
-		Email:    e.email.Text,
-		Password: e.password.Text,
-		Host:     e.host.Text,
-		Port:     e.port.Text,
-		UseTLS:   e.useTLS.Checked,
-		Mailbox:  e.mailbox.Text,
+		Alias:       e.alias.Text,
+		Email:       e.email.Text,
+		DisplayName: e.displayName.Text,
+		Password:    e.password.Text,
+		Host:        e.host.Text,
+		Port:        e.port.Text,
+		UseTLS:      e.useTLS.Checked,
+		Mailbox:     e.mailbox.Text,
 	}
 }
 
@@ -193,6 +198,7 @@ func accountInputFromValid(v AccountFormResult) core.AccountInput {
 	return core.AccountInput{
 		Alias:          v.Alias,
 		Email:          v.Email,
+		DisplayName:    v.DisplayName,
 		PlainPassword:  v.Password,
 		ImapHost:       v.Host,
 		ImapPort:       v.Port,
