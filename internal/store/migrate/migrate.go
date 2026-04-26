@@ -23,9 +23,11 @@
 //     transactional but `ALTER TABLE ADD COLUMN` interacts poorly with
 //     long-held writer locks (see vacuum.go discussion). We re-evaluate
 //     in P1.13 when the first non-DDL migration lands.
-//   - **Error code:** every failure is wrapped with
-//     `errtrace.ErrDbMigrate` (existing code in
-//     `internal/errtrace/codes.go:26`).
+//   - **Error wrapping:** every failure is wrapped with
+//     `errtrace.Wrap` / `Wrapf`, matching the existing store-package
+//     convention (`store.go:62-70`). The dedicated `ErrDbMigrate` code
+//     in `internal/errtrace/codes.go:26` is reserved for the typed
+//     `WrapCode` migration introduced in slice P1.4.
 //
 // Spec: mem://workflow/phase1-plan.md (Block C, slice P1.10).
 package migrate
@@ -33,6 +35,7 @@ package migrate
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"sort"
 	"sync"
@@ -140,10 +143,10 @@ const schemaVersionInsert = `INSERT OR IGNORE INTO _SchemaVersion (Version, Name
 // IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`, etc.).
 func Apply(ctx context.Context, db *sql.DB) error {
 	if db == nil {
-		return errtrace.Wrap(errtrace.ErrDbMigrate, "Apply: nil db")
+		return errtrace.Wrap(errors.New("nil db"), "migrate.Apply")
 	}
 	if _, err := db.ExecContext(ctx, schemaVersionDDL); err != nil {
-		return errtrace.Wrapf(errtrace.ErrDbMigrate, "create _SchemaVersion: %v", err)
+		return errtrace.Wrap(err, "create _SchemaVersion")
 	}
 
 	applied, err := loadAppliedVersions(ctx, db)
@@ -156,12 +159,10 @@ func Apply(ctx context.Context, db *sql.DB) error {
 			continue
 		}
 		if _, err := db.ExecContext(ctx, m.Up); err != nil {
-			return errtrace.Wrapf(errtrace.ErrDbMigrate,
-				"apply migration %04d (%s): %v", m.Version, m.Name, err)
+			return errtrace.Wrapf(err, "apply migration %04d (%s)", m.Version, m.Name)
 		}
 		if _, err := db.ExecContext(ctx, schemaVersionInsert, m.Version, m.Name); err != nil {
-			return errtrace.Wrapf(errtrace.ErrDbMigrate,
-				"record migration %04d (%s): %v", m.Version, m.Name, err)
+			return errtrace.Wrapf(err, "record migration %04d (%s)", m.Version, m.Name)
 		}
 	}
 	return nil
@@ -173,7 +174,7 @@ func Apply(ctx context.Context, db *sql.DB) error {
 func loadAppliedVersions(ctx context.Context, db *sql.DB) (map[int]struct{}, error) {
 	rows, err := db.QueryContext(ctx, schemaVersionSelectAll)
 	if err != nil {
-		return nil, errtrace.Wrapf(errtrace.ErrDbMigrate, "load _SchemaVersion: %v", err)
+		return nil, errtrace.Wrap(err, "load _SchemaVersion")
 	}
 	defer rows.Close()
 
@@ -181,12 +182,15 @@ func loadAppliedVersions(ctx context.Context, db *sql.DB) (map[int]struct{}, err
 	for rows.Next() {
 		var v int
 		if err := rows.Scan(&v); err != nil {
-			return nil, errtrace.Wrapf(errtrace.ErrDbMigrate, "scan _SchemaVersion row: %v", err)
+			return nil, errtrace.Wrap(err, "scan _SchemaVersion row")
 		}
 		out[v] = struct{}{}
 	}
 	if err := rows.Err(); err != nil {
-		return nil, errtrace.Wrapf(errtrace.ErrDbMigrate, "iterate _SchemaVersion: %v", err)
+		return nil, errtrace.Wrap(err, "iterate _SchemaVersion")
 	}
 	return out, nil
 }
+
+// fmt is imported for Register's panic messages above.
+var _ = fmt.Sprintf
