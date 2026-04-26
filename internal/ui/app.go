@@ -324,3 +324,21 @@ func buildEmailsService() *core.EmailsService {
 	}
 	return res.Value()
 }
+
+// buildRulesService constructs a typed *core.RulesService for the
+// Rules view + Tools tab Add Rule form (Phase 2.7 wiring). Mirrors
+// `buildDashboardService` / `buildEmailsService`: stateless service
+// so per-`viewFor` construction is cheap.
+//
+// Returns nil on construction failure (impossible in practice — all
+// three deps are non-nil — but honored because the constructor
+// returns a Result envelope). The rules view's degraded path takes
+// over when Service is nil.
+func buildRulesService() *core.RulesService {
+	res := core.NewDefaultRulesService()
+	if res.HasError() {
+		log.Printf("rules: NewDefaultRulesService failed: %v", res.Error())
+		return nil
+	}
+	return res.Value()
+}
