@@ -109,6 +109,7 @@ func NewDefaultRulesService() errtrace.Result[*RulesService] {
 	return NewRulesService(config.Load, config.Save, config.Path)
 }
 
+// Add validates input, compiles regex patterns to catch syntax errors
 // before persisting, and writes the rule. Upsert semantics: a rule
 // with the same name is replaced.
 func (s *RulesService) Add(in RuleInput) errtrace.Result[*AddRuleResult] {
