@@ -165,17 +165,9 @@ type OpenedUrlRow struct {
 	OpenedAt time.Time
 }
 
-// dbReader is the slim seam Tools.RecentOpenedUrls needs from store.
-type dbReader interface {
-	QueryContext(ctx context.Context, q string, args ...any) (rowsIter, error)
-}
-
-type rowsIter interface {
-	Next() bool
-	Scan(dest ...any) error
-	Close() error
-	Err() error
-}
+// (Reader/iterator interfaces inlined into queryOpenedUrls; using
+// *store.Store.DB directly keeps this file dependency-free of *sql.Rows
+// abstractions while still being testable via scanOpenedUrlRows.)
 
 // RecentOpenedUrls returns the most-recent audit rows. v1 reads the live
 // 4-column schema; Alias/Origin filters are inert until Delta #1 lands.
