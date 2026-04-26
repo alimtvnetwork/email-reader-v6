@@ -5,11 +5,12 @@
 // contract, runs anywhere `go test` runs, and fails fast on any drift.
 //
 // Implemented guards (T3 deferred until internal/ui/anim/ ships):
-//   AST-T1  Only internal/ui/theme/ constructs color.NRGBA / color.RGBA
-//           composite literals.
-//   AST-T2  Only internal/ui/theme/ imports "fyne.io/fyne/v2/theme".
-//   AST-T4  No file under internal/ui/views/ imports "image/color".
-//   AST-T5  Every ColorName in tokens.go has an entry in BOTH palettes.
+//
+//	AST-T1  Only internal/ui/theme/ constructs color.NRGBA / color.RGBA
+//	        composite literals.
+//	AST-T2  Only internal/ui/theme/ imports "fyne.io/fyne/v2/theme".
+//	AST-T4  No file under internal/ui/views/ imports "image/color".
+//	AST-T5  Every ColorName in tokens.go has an entry in BOTH palettes.
 //
 // Test runs under `-tags nofyne` (uses go/parser, no Fyne deps).
 package theme
