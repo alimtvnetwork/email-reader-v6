@@ -156,15 +156,15 @@ func TestExportCsv_FilteredStreaming(t *testing.T) {
 	insert("beta", "<m3@x>", 3, t0.Add(time.Hour))    // wrong alias
 
 	out := filepath.Join(dir, "filtered.csv")
-	tools := &Tools{}
 	progress := make(chan ExportProgress, 16)
-	res := tools.ExportCsv(ctx, ExportSpec{
+	res := runExportCsvFiltered(ctx, st, ExportSpec{
 		OutPath: out, Overwrite: true,
 		Alias: "alpha",
 		Since: t0.Add(-time.Hour), Until: t0.Add(24 * time.Hour),
 	}, progress)
+	close(progress)
 	if err := res.Error(); err != nil {
-		t.Fatalf("ExportCsv: %v", err)
+		t.Fatalf("runExportCsvFiltered: %v", err)
 	}
 	rep := res.Value()
 	if rep.RowCount != 1 {
