@@ -28,9 +28,10 @@ Last updated: 2026-04-26 (UTC) — CF coverage extension: 6 informational CF tes
 | 17 | CF acceptance tests batch #1 — 6/11 (T2/T3×2/R1/W1/A1/A2) | `internal/core/cf_acceptance_*.go` |
 | 18 | CF acceptance tests batch #2 — final 5/11 (T1/T4/W3/D1/R2). All 11 spec-mandated CFs now locked. | `internal/browser/cf_t4_test.go`, `internal/ui/cf_runtime_test.go`, `internal/core/cf_d1_dashboard_test.go`, `internal/ui/views/cf_r2_ast_guard_test.go` |
 | 19 | Dashboard auto-refresh on EventNewMail — debounced (750 ms) | `internal/ui/views/dashboard_counters.go`, `internal/ui/views/dashboard.go` |
-| 20 | **Race-build sanity sweep (this slice)** — `go test -race -tags nofyne -count=1 ./...` PASSED across all 16 packages first try; then `-count=10` over bridge-heavy tests (Bus / Bridge / PollChans / Subscribe / Forward / Dashboard) also clean. No fixes required — every concurrency primitive landed since slice #5 is race-correct. Codified `-race` as the recommended verification step in `mem://go-verification-path` for any future goroutine / channel / shared-state change. | `mem://go-verification-path` |
+| 20 | Race-build sanity sweep — 16 packages clean under `-race` (single + 10× stress). | `mem://go-verification-path` |
+| 21 | **CF coverage extension (this slice)** — 6 new informational-CF tests across two files. **CF-S-MONO** (UpdatedAt advances with clock + is stable at fixed clock — 2 tests) and **CF-S-EVENT-MONO** (`SettingsEvent.Snapshot.UpdatedAt` matches the next `Get()` value — 1 test) lock the freshness ordering Tools / Watch consumers depend on. **CF-AT1/AT2/AT3** drive the public `AddAccount` / `RemoveAccount` API end-to-end through the `AccountEvent` bus into a subscribed `Tools.WatchAccountEvents` and assert: Remove → eviction ≤1s; Re-save (AccountUpdated) → eviction ≤1s; AccountAdded for a NEW alias → no eviction of unrelated cached entries. The two infrastructure-aspirational CFs (OpenedUrls retention vacuum, Watch backoff jitter) deferred — neither has a code seam yet, so no meaningful test exists. | `internal/core/cf_acceptance_settings_extra_test.go`, `internal/core/cf_acceptance_tools_invalidate_test.go` |
 
-Verification: 16 packages green under `nix run nixpkgs#go -- {vet,test,test -race} -tags nofyne ./...`; fn-length linter still **0/0** across 82 files.
+Verification: 16 packages green under `nix run nixpkgs#go -- {vet,test,test -race} -tags nofyne ./...`; fn-length linter still **0/0** across 84 files.
 
 ## Remaining tracked work
 
@@ -38,9 +39,10 @@ See `spec/21-app/99-consistency-report.md` §6 for the canonical delta list. Ope
 
 1. **App boot smoke test** (user-side) — launch desktop binary; validate Settings render/live-switch, density toggle, Watch Start/Stop, Dashboard tiles incrementing, Recent opens against a populated DB. (Requires manual user run.)
 2. **Persist Density preference** (deferred per design-system §8) — when persistence lands, swap `Settings` view's local-only density handler for a `SettingsInput` field write.
-3. **CF coverage extension** — regression tests for the four "informational" CFs documented in 99-consistency-report.md but not in the original 11-row matrix: Settings UpdatedAt monotonicity, OpenedUrls retention vacuum, Tools cache invalidation post-AccountEvent, Watch backoff jitter.
-4. **Static "Accounts" / "Rules enabled" tile auto-refresh** — currently only "Emails stored" benefits from the auto-refresh hook. Account-add and rule-toggle don't publish on the watcher Bus; if desired, hook into `core.AccountEvent` (already exists) and a future `core.RuleEvent`.
-5. **CI integration of `-race`** — the local sandbox now runs `-race` cleanly; consider gating PR merges on it once a CI runner with the race-detector lands.
+3. **OpenedUrls retention / vacuum** — neither a config knob nor a sweeper exists. Spec calls for retention but no `internal/store/vacuum.go` yet. Implementation + CF-S-RET test would land together.
+4. **Watch backoff jitter** — the existing watcher loop has fixed cadence (`PollSeconds`); spec mentions exponential backoff with jitter on consecutive `EventPollError`. No code seam yet; implementation + CF-W-BACKOFF test would land together.
+5. **Static "Accounts" / "Rules enabled" tile auto-refresh** — would require hooking the dashboard refresh into `core.AccountEvent` and a future `core.RuleEvent`.
+6. **CI integration of `-race`** — the local sandbox runs `-race` cleanly; gate PR merges on it once a CI runner with the race-detector lands.
 
 ## Next logical step for the next AI session
-**#3 — CF coverage extension** is the next gradable spec contract to lock down. Start with **Settings UpdatedAt monotonicity** (smallest scope: single property, no UI dependency) and **Tools cache invalidation post-AccountEvent** (highest catch potential: re-uses the existing `internal/core/account_events.go` seam). Defer #4 until users ask for it; defer #1/#2/#5 (require user / out-of-sandbox infra).
+With all 11 mandatory CFs + 6 informational CFs locked and the entire suite race-clean, the highest-value remaining sandbox-runnable work is **#3 — OpenedUrls retention** (small new feature: config field `OpenUrlsRetentionDays`, a single `store.PruneOpenedUrlsBefore(t time.Time)` SQL DELETE, a Watch-loop tick that calls it daily, and a `CF-S-RET` test). After that, **#4 — Watch backoff jitter** is the next greenfield slice. Items #1/#2/#5/#6 require user-side or out-of-sandbox infra — defer.
