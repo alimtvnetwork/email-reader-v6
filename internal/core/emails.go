@@ -73,6 +73,10 @@ type emailsStore interface {
 	ListEmails(ctx context.Context, q store.EmailQuery) ([]store.Email, error)
 	GetEmailByUid(ctx context.Context, alias string, uid uint32) (*store.Email, error)
 	CountEmails(ctx context.Context, alias string) (int, error)
+	// SetEmailRead is the Phase 4 (P4.2) extension. Returns total
+	// RowsAffected across all internal batches; (0, nil) for empty
+	// `uids` (the spec's "no SQL" branch).
+	SetEmailRead(ctx context.Context, alias string, uids []uint32, read bool) (int64, error)
 }
 
 // storeOpener returns an open emailsStore plus a `close` callback the
