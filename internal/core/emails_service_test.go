@@ -76,6 +76,10 @@ func (f *fakeEmailsStore) SetEmailRead(_ context.Context, alias string, uids []u
 	f.lastSetReadValue = read
 	return f.setReadRows, f.setReadErr
 }
+func (f *fakeEmailsStore) CountUnreadEmails(_ context.Context, alias string) (int, error) {
+	f.lastUnreadAls = alias
+	return f.unread, f.unreadErr
+}
 
 // makeOpener returns a storeOpener that hands out the given fake and
 // counts how many times the close callback fires. Useful for the
