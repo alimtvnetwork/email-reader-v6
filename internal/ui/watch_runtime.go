@@ -180,9 +180,14 @@ func maintenanceOptionsFor(ctx context.Context, rt *WatchRuntime) core.Maintenan
 		}
 		return store.ShouldVacuum(fl, pages), nil
 	}
+	pruner := func(ctx context.Context, cutoff time.Time) (int64, error) {
+		batch := pruneBatchFromSettings(ctx, rt.Settings)
+		n, _, err := rt.Store.PruneOpenedUrlsBeforeBatched(ctx, cutoff, batch)
+		return n, err
+	}
 	snap := snapshotForMaintenance(ctx, rt.Settings)
 	return core.MaintenanceOptions{
-		Pruner:             rt.Store.PruneOpenedUrlsBefore,
+		Pruner:             pruner,
 		Analyzer:           rt.Store.Analyze,
 		Vacuumer:           rt.Store.Vacuum,
 		VacuumGate:         vacuumGate,
@@ -196,6 +201,21 @@ func maintenanceOptionsFor(ctx context.Context, rt *WatchRuntime) core.Maintenan
 		OnVacuum:           logVacuumRun,
 		OnWalCheckpoint:    logWalCheckpoint,
 	}
+}
+
+// pruneBatchFromSettings reads the live PruneBatchSize knob. Errors fall
+// back to store.DefaultPruneBatchSize so a transient Settings hiccup
+// cannot wedge the sweeper.
+func pruneBatchFromSettings(ctx context.Context, s *core.Settings) int {
+	r := s.Get(ctx)
+	if r.HasError() {
+		return store.DefaultPruneBatchSize
+	}
+	v := int(r.Value().PruneBatchSize)
+	if v <= 0 {
+		return store.DefaultPruneBatchSize
+	}
+	return v
 }
 
 // snapshotForMaintenance returns the live Settings snapshot. Errors fall
