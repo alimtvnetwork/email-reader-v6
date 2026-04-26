@@ -85,7 +85,11 @@ Examples:
     --from-regex 'noreply@lovable\.dev' \
     --url-regex 'https://lovable\.dev/auth/action[^\s]+'`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			r := core.AddRule(core.RuleInput{
+			svc, err := rulesService()
+			if err != nil {
+				return err
+			}
+			r := svc.Add(core.RuleInput{
 				Name:         name,
 				UrlRegex:     urlRegex,
 				FromRegex:    fromRegex,
