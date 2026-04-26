@@ -191,22 +191,39 @@ func (m *Maintenance) Stop(timeout time.Duration) {
 	}
 }
 
-// run is the goroutine body. Wakes every TickInterval and asks
-// ShouldRunRetentionTick whether to sweep. lastRun is goroutine-local.
+// run is the goroutine body. Wakes every TickInterval and dispatches
+// to maybeSweep / maybeWalCheckpoint / maybeVacuum. Each `last*` is
+// goroutine-local so no mutex is needed.
 func (m *Maintenance) run(ctx context.Context, done chan struct{}) {
 	defer close(done)
 	ticker := time.NewTicker(m.opts.TickInterval)
 	defer ticker.Stop()
-	var lastRun time.Time
-	var cumDeletes int64
+	var st maintTickState
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			lastRun, cumDeletes = m.maybeSweep(ctx, lastRun, cumDeletes)
+			st = m.runTick(ctx, st)
 		}
 	}
+}
+
+// maintTickState bundles the per-loop timestamps + cumulative tally that
+// flow through every tick. Bundling lets runTick stay under the 15-stmt
+// linter cap while threading state through three sub-jobs.
+type maintTickState struct {
+	lastSweep, lastWal, lastVacuum time.Time
+	cumDeletes                     int64
+}
+
+// runTick fans the tick out to all three jobs. Each helper returns its
+// updated timestamp; cumDeletes is owned by maybeSweep.
+func (m *Maintenance) runTick(ctx context.Context, st maintTickState) maintTickState {
+	st.lastSweep, st.cumDeletes = m.maybeSweep(ctx, st.lastSweep, st.cumDeletes)
+	st.lastWal = m.maybeWalCheckpoint(ctx, st.lastWal)
+	st.lastVacuum = m.maybeVacuum(ctx, st.lastVacuum)
+	return st
 }
 
 // maybeSweep performs one tick's worth of work: evaluates the helper,
