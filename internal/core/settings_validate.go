@@ -37,6 +37,12 @@ func normalizeInput(in SettingsInput) SettingsInput {
 	in.BrowserOverride.IncognitoArg = strings.TrimSpace(in.BrowserOverride.IncognitoArg)
 	in.OpenUrlAllowedSchemes = canonSchemes(in.OpenUrlAllowedSchemes)
 	defaults := DefaultSettingsInput()
+	if in.Density == 0 {
+		// Density was added after callers already constructed partial
+		// SettingsInput literals; treat the zero value as "use the
+		// default" rather than failing validation.
+		in.Density = defaults.Density
+	}
 	if in.WalCheckpointHours == 0 {
 		in.WalCheckpointHours = defaults.WalCheckpointHours
 	}
@@ -72,6 +78,9 @@ func validateInput(in SettingsInput) error {
 		return err
 	}
 	if err := validateTheme(in.Theme); err != nil {
+		return err
+	}
+	if err := validateDensity(in.Density); err != nil {
 		return err
 	}
 	if err := validateSchemes(in.OpenUrlAllowedSchemes); err != nil {
@@ -152,6 +161,15 @@ func validateTheme(t ThemeMode) error {
 	}
 	return errtrace.NewCoded(errtrace.ErrSettingsTheme, "unknown theme mode").
 		WithContext("value", uint8(t))
+}
+
+func validateDensity(d Density) error {
+	switch d {
+	case DensityComfortable, DensityCompact:
+		return nil
+	}
+	return errtrace.NewCoded(errtrace.ErrSettingsDensity, "unknown density mode").
+		WithContext("value", uint8(d))
 }
 
 func validateSchemes(schemes []string) error {

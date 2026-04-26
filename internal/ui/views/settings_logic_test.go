@@ -25,23 +25,46 @@ func Test_ParsePollSeconds_Bounds(t *testing.T) {
 }
 
 func Test_DensityChoice_Roundtrip(t *testing.T) {
-	if DensityLabelFor(0) != "Comfortable" {
-		t.Errorf("0 should be Comfortable, got %q", DensityLabelFor(0))
+	// New semantic (Slice #42): DensityLabelFor / ParseDensityChoice operate
+	// on core.Density's int form (Comfortable=1, Compact=2). The legacy
+	// zero value still maps to Comfortable so callers built before the
+	// migration don't render "Compact" by surprise.
+	if DensityLabelFor(int(core.DensityComfortable)) != "Comfortable" {
+		t.Errorf("DensityComfortable should map to Comfortable")
 	}
-	if DensityLabelFor(1) != "Compact" {
-		t.Errorf("1 should be Compact, got %q", DensityLabelFor(1))
+	if DensityLabelFor(int(core.DensityCompact)) != "Compact" {
+		t.Errorf("DensityCompact should map to Compact")
+	}
+	if DensityLabelFor(0) != "Comfortable" {
+		t.Errorf("legacy zero value should default to Comfortable")
 	}
 	if DensityLabelFor(99) != "Comfortable" {
 		t.Errorf("unknown density should default Comfortable")
 	}
-	if ParseDensityChoice("Compact") != 1 {
-		t.Errorf("Compact should parse to 1")
+	if ParseDensityChoice("Compact") != int(core.DensityCompact) {
+		t.Errorf("Compact should parse to DensityCompact")
 	}
-	if ParseDensityChoice("Comfortable") != 0 {
-		t.Errorf("Comfortable should parse to 0")
+	if ParseDensityChoice("Comfortable") != int(core.DensityComfortable) {
+		t.Errorf("Comfortable should parse to DensityComfortable")
 	}
-	if ParseDensityChoice("anything-else") != 0 {
-		t.Errorf("unknown label should default to 0")
+	if ParseDensityChoice("anything-else") != int(core.DensityComfortable) {
+		t.Errorf("unknown label should default to Comfortable")
+	}
+}
+
+// Test_CoreDensityToThemeDensity locks the bridge between core.Density
+// (Comfortable=1, Compact=2) and theme.Density (Comfortable=0, Compact=1).
+// The bridge is the only place this offset matters; getting it wrong here
+// would silently flip the user's saved preference on every cold boot.
+func Test_CoreDensityToThemeDensity(t *testing.T) {
+	if got := CoreDensityToThemeDensity(int(core.DensityComfortable)); got != 0 {
+		t.Errorf("Comfortable should map to theme 0, got %d", got)
+	}
+	if got := CoreDensityToThemeDensity(int(core.DensityCompact)); got != 1 {
+		t.Errorf("Compact should map to theme 1, got %d", got)
+	}
+	if got := CoreDensityToThemeDensity(0); got != 0 {
+		t.Errorf("legacy zero should map to theme 0 (Comfortable), got %d", got)
 	}
 }
 
@@ -53,7 +76,7 @@ func Test_ProjectSettingsInput_PreservesInvariants(t *testing.T) {
 		AutoStartWatch:        false,
 	}
 	maint := MaintenanceFields{WeekdayLabel: "Sunday", HourLocal: 3, WalHours: 6, PruneBatchSize: 5000}
-	in := ProjectSettingsInput("Light", 7, "/opt/chrome", 30, maint, prev)
+	in := ProjectSettingsInput("Light", 7, "/opt/chrome", 30, maint, prev, "Compact")
 	if in.Theme != core.ThemeLight {
 		t.Errorf("Theme=%v want Light", in.Theme)
 	}
@@ -79,7 +102,7 @@ func Test_ProjectSettingsInput_PreservesInvariants(t *testing.T) {
 
 func Test_ProjectSettingsInput_UnknownThemeFallsBackDark(t *testing.T) {
 	maint := MaintenanceFields{WeekdayLabel: "Sunday", HourLocal: 3, WalHours: 6, PruneBatchSize: 5000}
-	in := ProjectSettingsInput("nonsense", 3, "", 90, maint, core.SettingsSnapshot{})
+	in := ProjectSettingsInput("nonsense", 3, "", 90, maint, core.SettingsSnapshot{}, "Comfortable")
 	if in.Theme != core.ThemeDark {
 		t.Errorf("unknown theme should fall back to Dark, got %v", in.Theme)
 	}
@@ -104,7 +127,7 @@ func Test_ParseRetentionDays_Bounds(t *testing.T) {
 func Test_ProjectSettingsInput_RetentionZeroDisablesPruning(t *testing.T) {
 	// Round-trips the spec semantic that 0 = never prune.
 	maint := MaintenanceFields{WeekdayLabel: "Sunday", HourLocal: 3, WalHours: 6, PruneBatchSize: 5000}
-	in := ProjectSettingsInput("Dark", 3, "", 0, maint, core.SettingsSnapshot{})
+	in := ProjectSettingsInput("Dark", 3, "", 0, maint, core.SettingsSnapshot{}, "Comfortable")
 	if in.OpenUrlsRetentionDays != 0 {
 		t.Errorf("0 should round-trip as 0 (disabled), got %d", in.OpenUrlsRetentionDays)
 	}
@@ -166,7 +189,7 @@ func Test_ParseWeekdayLabel_RoundTrip(t *testing.T) {
 
 func Test_ProjectSettingsInput_MaintenanceFields(t *testing.T) {
 	maint := MaintenanceFields{WeekdayLabel: "Wednesday", HourLocal: 4, WalHours: 12, PruneBatchSize: 2000}
-	in := ProjectSettingsInput("Dark", 3, "", 90, maint, core.SettingsSnapshot{})
+	in := ProjectSettingsInput("Dark", 3, "", 90, maint, core.SettingsSnapshot{}, "Comfortable")
 	if in.WeeklyVacuumOn != 3 { // time.Wednesday
 		t.Errorf("WeeklyVacuumOn=%d want 3 (Wednesday)", in.WeeklyVacuumOn)
 	}

@@ -37,6 +37,7 @@ import (
 // older config files (which lack the key) still parse cleanly.
 type settingsExtension struct {
 	Theme                 string   `json:"theme"`
+	Density               string   `json:"density"`
 	OpenUrlAllowedSchemes []string `json:"openUrlAllowedSchemes"`
 	AllowLocalhostUrls    bool     `json:"allowLocalhostUrls"`
 	AutoStartWatch        bool     `json:"autoStartWatch"`
@@ -318,6 +319,7 @@ func applyInputToRaw(raw *rawConfigWithSettings, in SettingsInput, now time.Time
 	raw.cfg.Browser.ChromePath = in.BrowserOverride.ChromePath
 	raw.cfg.Browser.IncognitoArg = in.BrowserOverride.IncognitoArg
 	raw.ext.Theme = in.Theme.String()
+	raw.ext.Density = in.Density.String()
 	raw.ext.OpenUrlAllowedSchemes = append([]string(nil), in.OpenUrlAllowedSchemes...)
 	raw.ext.AllowLocalhostUrls = in.AllowLocalhostUrls
 	raw.ext.AutoStartWatch = in.AutoStartWatch
@@ -345,6 +347,7 @@ func snapshotFromRaw(raw *rawConfigWithSettings) (SettingsSnapshot, error) {
 			IncognitoArg: raw.cfg.Browser.IncognitoArg,
 		},
 		Theme:                 ext.theme,
+		Density:               ext.density,
 		OpenUrlAllowedSchemes: ext.schemes,
 		AllowLocalhostUrls:    raw.ext.AllowLocalhostUrls,
 		AutoStartWatch:        ext.autoStart,
@@ -386,6 +389,7 @@ func resolveSnapshotPaths() (snapshotPaths, error) {
 
 type projectedExtension struct {
 	theme     ThemeMode
+	density   Density
 	schemes   []string
 	autoStart bool
 	retention uint16
@@ -403,6 +407,10 @@ func projectExtension(ext settingsExtension) projectedExtension {
 	theme, _ := ParseThemeMode(ext.Theme)
 	if ext.Theme == "" {
 		theme = defaults.Theme
+	}
+	density, _ := ParseDensity(ext.Density)
+	if ext.Density == "" {
+		density = defaults.Density
 	}
 	schemes := canonSchemes(ext.OpenUrlAllowedSchemes)
 	if len(schemes) == 0 {
@@ -431,7 +439,7 @@ func projectExtension(ext settingsExtension) projectedExtension {
 		batchSize = defaults.PruneBatchSize
 	}
 	return projectedExtension{
-		theme: theme, schemes: schemes, autoStart: autoStart, retention: retention,
+		theme: theme, density: density, schemes: schemes, autoStart: autoStart, retention: retention,
 		weekday: weekday, vacHour: vacHour, walHours: walHours, batchSize: batchSize,
 	}
 }

@@ -30,15 +30,17 @@ const AppVersion = "0.27.0"
 // Run creates the Fyne app, builds the main window, and blocks until close.
 //
 // Bootstrap order matches spec/24-…/02-theme-implementation.md §5:
-//  1. Construct app  →  2. Apply theme  →  3. Build content  →  4. Show.
+//  1. Construct app  →  2. Apply theme + density  →  3. Build content  →  4. Show.
 //
-// Theme.Apply is called BEFORE BuildShell so the very first paint already
-// uses our palette (no white-flash on dark mode).
+// Theme.Apply + density restore are called BEFORE BuildShell so the very
+// first paint already uses our palette + spacing (no white-flash on dark
+// mode and no comfortable→compact pop on the second frame).
 func Run() {
 	a := app.NewWithID("dev.lovable.email-read")
 	if r := theme.ApplyToFyne(loadInitialThemeMode()); r.HasError() {
 		log.Printf("ui: theme apply: %v (continuing with ThemeDark)", r.Error())
 	}
+	theme.SetDensity(loadInitialDensity())
 	ctx, cancelLive := context.WithCancel(context.Background())
 	defer cancelLive()
 	startThemeLiveConsumer(ctx)
@@ -72,21 +74,28 @@ func startThemeLiveConsumer(ctx context.Context) {
 	go forwardThemeEvents(events)
 }
 
-// forwardThemeEvents drains Settings events and re-applies the theme on
-// every change. Channel close (via ctx cancel) terminates the goroutine.
-// A no-op when the mode is unchanged — ApplyToFyne is cheap but SetTheme
-// triggers a full repaint, so we skip when not needed.
+// forwardThemeEvents drains Settings events and re-applies the theme +
+// density on every change. Channel close (via ctx cancel) terminates the
+// goroutine. A no-op when the mode is unchanged — ApplyToFyne is cheap
+// but SetTheme triggers a full repaint, so we skip when not needed.
+// Density is updated unconditionally because theme.SetDensity is a single
+// guarded int write and Size() consumers re-read on every call.
 func forwardThemeEvents(events <-chan core.SettingsEvent) {
 	const unset core.ThemeMode = 0 // sentinel: 0 is not a valid ThemeMode
 	last := unset
+	lastDensity := core.Density(0) // sentinel: 0 is not a valid core.Density
 	for ev := range events {
 		mode := ev.Snapshot.Theme
-		if mode == last {
-			continue
+		if mode != last {
+			last = mode
+			if r := theme.ApplyToFyne(mode); r.HasError() {
+				log.Printf("ui: theme live apply: %v", r.Error())
+			}
 		}
-		last = mode
-		if r := theme.ApplyToFyne(mode); r.HasError() {
-			log.Printf("ui: theme live apply: %v", r.Error())
+		density := ev.Snapshot.Density
+		if density != lastDensity {
+			lastDensity = density
+			theme.SetDensity(coreDensityToTheme(density))
 		}
 	}
 }
@@ -104,6 +113,32 @@ func loadInitialThemeMode() core.ThemeMode {
 		return core.ThemeDark
 	}
 	return snap.Value().Theme
+}
+
+// loadInitialDensity reads the persisted Settings.Density. Mirrors
+// loadInitialThemeMode; falls back to DensityComfortable on any error.
+func loadInitialDensity() theme.Density {
+	s := core.NewSettings(time.Now)
+	if s.HasError() {
+		return theme.DensityComfortable
+	}
+	snap := s.Value().Get(context.Background())
+	if snap.HasError() {
+		return theme.DensityComfortable
+	}
+	return coreDensityToTheme(snap.Value().Density)
+}
+
+// coreDensityToTheme translates the core.Density enum (Comfortable=1,
+// Compact=2 — non-zero so the zero value can mean "use default" in
+// normalize) into the theme.Density enum (Comfortable=0, Compact=1).
+// Unknown values fall back to Comfortable so a corrupt config never
+// produces an invisible UI.
+func coreDensityToTheme(d core.Density) theme.Density {
+	if d == core.DensityCompact {
+		return theme.DensityCompact
+	}
+	return theme.DensityComfortable
 }
 
 // LoadAliases pulls the configured account aliases from core. Failures are
