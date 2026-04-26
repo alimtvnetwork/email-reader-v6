@@ -43,10 +43,15 @@ type ListEmailsOptions struct {
 
 // ListEmails returns email summaries from the store. Opens and closes the
 // store on each call — fine for UI list refreshes which are infrequent.
-func ListEmails(ctx context.Context, opts ListEmailsOptions) ([]EmailSummary, error) {
+//
+// Returns errtrace.Result[[]EmailSummary] per Delta #2. Uses ErrDbOpen for
+// open failures and ErrDbQueryEmail for query failures.
+func ListEmails(ctx context.Context, opts ListEmailsOptions) errtrace.Result[[]EmailSummary] {
 	st, err := store.Open()
 	if err != nil {
-		return nil, errtrace.Wrap(err, "open store")
+		return errtrace.Err[[]EmailSummary](
+			errtrace.WrapCode(err, errtrace.ErrDbOpen, "core.ListEmails"),
+		)
 	}
 	defer st.Close()
 	rows, err := st.ListEmails(ctx, store.EmailQuery{
@@ -56,26 +61,35 @@ func ListEmails(ctx context.Context, opts ListEmailsOptions) ([]EmailSummary, er
 		Offset: opts.Offset,
 	})
 	if err != nil {
-		return nil, err
+		return errtrace.Err[[]EmailSummary](
+			errtrace.WrapCode(err, errtrace.ErrDbQueryEmail, "core.ListEmails").
+				WithContext("alias", opts.Alias),
+		)
 	}
 	out := make([]EmailSummary, 0, len(rows))
 	for _, e := range rows {
 		out = append(out, toSummary(e))
 	}
-	return out, nil
+	return errtrace.Ok(out)
 }
 
 // GetEmail returns the full detail for one stored email identified by
 // (alias, uid). Returns an error if no such row exists.
-func GetEmail(ctx context.Context, alias string, uid uint32) (*EmailDetail, error) {
+func GetEmail(ctx context.Context, alias string, uid uint32) errtrace.Result[*EmailDetail] {
 	st, err := store.Open()
 	if err != nil {
-		return nil, errtrace.Wrap(err, "open store")
+		return errtrace.Err[*EmailDetail](
+			errtrace.WrapCode(err, errtrace.ErrDbOpen, "core.GetEmail"),
+		)
 	}
 	defer st.Close()
 	e, err := st.GetEmailByUid(ctx, alias, uid)
 	if err != nil {
-		return nil, err
+		return errtrace.Err[*EmailDetail](
+			errtrace.WrapCode(err, errtrace.ErrDbQueryEmail, "core.GetEmail").
+				WithContext("alias", alias).
+				WithContext("uid", uid),
+		)
 	}
 	d := EmailDetail{
 		EmailSummary: toSummary(*e),
@@ -84,18 +98,27 @@ func GetEmail(ctx context.Context, alias string, uid uint32) (*EmailDetail, erro
 		BodyText:     e.BodyText,
 		BodyHtml:     e.BodyHtml,
 	}
-	return &d, nil
+	return errtrace.Ok(&d)
 }
 
 // CountEmails returns how many emails are stored for the given alias
 // (empty alias = total across all accounts).
-func CountEmails(ctx context.Context, alias string) (int, error) {
+func CountEmails(ctx context.Context, alias string) errtrace.Result[int] {
 	st, err := store.Open()
 	if err != nil {
-		return 0, errtrace.Wrap(err, "open store")
+		return errtrace.Err[int](
+			errtrace.WrapCode(err, errtrace.ErrDbOpen, "core.CountEmails"),
+		)
 	}
 	defer st.Close()
-	return st.CountEmails(ctx, alias)
+	n, err := st.CountEmails(ctx, alias)
+	if err != nil {
+		return errtrace.Err[int](
+			errtrace.WrapCode(err, errtrace.ErrDbQueryEmail, "core.CountEmails").
+				WithContext("alias", alias),
+		)
+	}
+	return errtrace.Ok(n)
 }
 
 func toSummary(e store.Email) EmailSummary {

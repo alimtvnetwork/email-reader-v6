@@ -13,12 +13,13 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/lovable/email-read/internal/core"
+	"github.com/lovable/email-read/internal/errtrace"
 )
 
 type EmailsOptions struct {
 	Alias      string
-	List       func(ctx context.Context, opts core.ListEmailsOptions) ([]core.EmailSummary, error)
-	Get        func(ctx context.Context, alias string, uid uint32) (*core.EmailDetail, error)
+	List       func(ctx context.Context, opts core.ListEmailsOptions) errtrace.Result[[]core.EmailSummary]
+	Get        func(ctx context.Context, alias string, uid uint32) errtrace.Result[*core.EmailDetail]
 	OpenURL    func(rawurl string) error
 	MaxResults int
 }
@@ -62,7 +63,11 @@ func applyEmailsDefaults(opts EmailsOptions) EmailsOptions {
 func loadEmailRows(opts EmailsOptions) ([]core.EmailSummary, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	return opts.List(ctx, core.ListEmailsOptions{Alias: opts.Alias, Limit: opts.MaxResults})
+	res := opts.List(ctx, core.ListEmailsOptions{Alias: opts.Alias, Limit: opts.MaxResults})
+	if res.HasError() {
+		return nil, res.Error()
+	}
+	return res.Value(), nil
 }
 
 // emailsEmptyAlias renders the "pick an account" hint.
@@ -135,15 +140,15 @@ func makeEmailSelectHandler(opts EmailsOptions, rows []core.EmailSummary, detail
 		r := rows[i]
 		dctx, dcancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer dcancel()
-		detail, err := opts.Get(dctx, r.Alias, r.Uid)
-		if err != nil {
+		res := opts.Get(dctx, r.Alias, r.Uid)
+		if res.HasError() {
 			detailBox.Objects = []fyne.CanvasObject{
-				widget.NewLabel("⚠ Failed to load email: " + err.Error()),
+				widget.NewLabel("⚠ Failed to load email: " + res.Error().Error()),
 			}
 			detailBox.Refresh()
 			return
 		}
-		detailBox.Objects = renderDetail(detail, opts.OpenURL, status)
+		detailBox.Objects = renderDetail(res.Value(), opts.OpenURL, status)
 		detailBox.Refresh()
 		detailScroll.ScrollToTop()
 	}
