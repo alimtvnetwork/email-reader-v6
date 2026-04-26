@@ -115,3 +115,25 @@ var fyneColorRoute = map[fyne.ThemeColorName]ColorName{
 	// least theme-aware (better than Fyne's hard-coded blue).
 	fynetheme.ColorNameSelection: ColorPrimary,
 }
+
+// fyneSizeRoute is the §3/§4 routing table: each Fyne built-in size
+// name maps to one of our typography or spacing tokens. Unmapped names
+// fall through to fynetheme.DefaultTheme().Size(...).
+//
+// Mapping rationale (per 01-tokens.md §3.1):
+//   - SizeNameText            → body text (14 px Comfortable)
+//   - SizeNameHeadingText     → page-title scale
+//   - SizeNameSubHeadingText  → section-title scale
+//   - SizeNameCaptionText     → caption / helper text
+//   - SizeNamePadding         → default form gap (Spacing2 = 8 px)
+//   - SizeNameInnerPadding    → inner control padding (Spacing3 = 12 px)
+//   - SizeNameInlineIcon      → caption-text scale (matches Fyne ratio)
+var fyneSizeRoute = map[fyne.ThemeSizeName]SizeName{
+	fynetheme.SizeNameText:           SizeTextBody,
+	fynetheme.SizeNameHeadingText:    SizeTextPageTitle,
+	fynetheme.SizeNameSubHeadingText: SizeTextSectionTitle,
+	fynetheme.SizeNameCaptionText:    SizeTextCaption,
+	fynetheme.SizeNamePadding:        SizeSpacing2,
+	fynetheme.SizeNameInnerPadding:   SizeSpacing3,
+	fynetheme.SizeNameInlineIcon:     SizeTextCaption,
+}
