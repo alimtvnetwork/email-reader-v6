@@ -63,10 +63,10 @@ type ReadEvent struct {
 // loadEmailDetail validates the alias against config, opens the store, and
 // fetches the saved email + summary. Caller owns the returned *store.Store
 // and must Close() it.
-func loadEmailDetail(ctx context.Context, alias string, uid uint32) (config.Config, *store.Store, *store.Email, EmailDetail, error) {
+func loadEmailDetail(ctx context.Context, alias string, uid uint32) (*config.Config, *store.Store, *store.Email, EmailDetail, error) {
 	cfg, err := config.Load()
 	if err != nil {
-		return cfg, nil, nil, EmailDetail{}, errtrace.Wrap(err, "load config")
+		return nil, nil, nil, EmailDetail{}, errtrace.Wrap(err, "load config")
 	}
 	if cfg.FindAccount(alias) == nil {
 		return cfg, nil, nil, EmailDetail{}, errtrace.New(fmt.Sprintf("no account with alias %q", alias))
@@ -99,7 +99,7 @@ func ensureSeededRule(cfg *config.Config, emit func(ReadEvent)) {
 		UrlRegex: `https?://[^\s<>"'\)\]]+`,
 	}
 	cfg.Rules = append(cfg.Rules, seeded)
-	if err := config.Save(*cfg); err != nil {
+	if err := config.Save(cfg); err != nil {
 		emit(ReadEvent{Kind: ReadEventSeededRule, RuleName: seeded.Name,
 			Note: "warning: could not save: " + err.Error()})
 		return
