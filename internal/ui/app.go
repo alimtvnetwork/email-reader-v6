@@ -18,7 +18,6 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 
-	"github.com/lovable/email-read/internal/config"
 	"github.com/lovable/email-read/internal/core"
 	"github.com/lovable/email-read/internal/ui/theme"
 	"github.com/lovable/email-read/internal/ui/views"
