@@ -275,11 +275,12 @@ func (s *Store) SetEmailDeletedAt(ctx context.Context, alias string, uids []uint
 // rename gymnastics. Zero-value timestamps signify "no events yet
 // of this kind" — same convention as the core-side row.
 type StoreAccountHealthRow struct {
-	Alias        string
-	LastPollAt   time.Time // zero = never polled (or only Stop/Error events)
-	LastErrorAt  time.Time // zero = never errored
-	EmailsStored int
-	UnreadCount  int
+	Alias               string
+	LastPollAt          time.Time // zero = never polled (or only Stop/Error events)
+	LastErrorAt         time.Time // zero = never errored
+	EmailsStored        int
+	UnreadCount         int
+	ConsecutiveFailures int // m0014 counter; bumped per poll error, zeroed per poll OK
 }
 
 // QueryAccountHealth returns one StoreAccountHealthRow per known alias
