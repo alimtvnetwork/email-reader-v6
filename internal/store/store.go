@@ -36,6 +36,12 @@ type Email struct {
 	BodyHtml   string
 	ReceivedAt time.Time
 	FilePath   string
+	// IsRead reflects the M0010 `Emails.IsRead` column (1 once the
+	// user has opened/viewed the email; 0 otherwise). Surfaced on
+	// the Go struct so service-layer filters (e.g. EmailQuery.OnlyUnread
+	// in core/emails_query.go) can do `if e.IsRead { continue }` without
+	// a second round-trip. Default false matches the DB DEFAULT 0.
+	IsRead bool
 }
 
 // WatchState mirrors a row in the WatchState table.
@@ -235,16 +241,18 @@ func (s *Store) HasOpenedUrl(ctx context.Context, emailId int64, url string) (bo
 func (s *Store) GetEmailByUid(ctx context.Context, alias string, uid uint32) (*Email, error) {
 	var e Email
 	var received sql.NullTime
+	var isRead int
 	err := s.DB.QueryRowContext(ctx, queries.EmailByUid,
 		alias, uid,
 	).Scan(&e.Id, &e.Alias, &e.MessageId, &e.Uid, &e.FromAddr, &e.ToAddr,
-		&e.CcAddr, &e.Subject, &e.BodyText, &e.BodyHtml, &received, &e.FilePath)
+		&e.CcAddr, &e.Subject, &e.BodyText, &e.BodyHtml, &received, &e.FilePath, &isRead)
 	if err != nil {
 		return nil, errtrace.Wrapf(err, "select email alias=%s uid=%d", alias, uid)
 	}
 	if received.Valid {
 		e.ReceivedAt = received.Time
 	}
+	e.IsRead = isRead != 0
 	return &e, nil
 }
 
@@ -284,14 +292,16 @@ func scanEmailRows(rows *sql.Rows) ([]Email, error) {
 	for rows.Next() {
 		var e Email
 		var received sql.NullTime
+		var isRead int
 		if err := rows.Scan(&e.Id, &e.Alias, &e.MessageId, &e.Uid, &e.FromAddr,
 			&e.ToAddr, &e.CcAddr, &e.Subject, &e.BodyText, &e.BodyHtml,
-			&received, &e.FilePath); err != nil {
+			&received, &e.FilePath, &isRead); err != nil {
 			return nil, errtrace.Wrap(err, "scan email row")
 		}
 		if received.Valid {
 			e.ReceivedAt = received.Time
 		}
+		e.IsRead = isRead != 0
 		out = append(out, e)
 	}
 	if err := rows.Err(); err != nil {

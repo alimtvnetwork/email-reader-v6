@@ -182,23 +182,68 @@ func TestEmailsService_ListPage_PaginationOffsetOverflow(t *testing.T) {
 	}
 }
 
-// Tripwire: when the deferred slices land (store.Email.IsRead +
-// DeletedAt), this test fails and forces us to re-design the no-op
-// branches into real filters.
-func TestEmailsService_ListPage_DeferredFlags_AreNoOps(t *testing.T) {
+// OnlyUnread is now wired to the freshly-exposed `store.Email.IsRead`
+// field. Mixed read/unread input must yield only the unread rows; Total
+// must reflect the post-filter count.
+func TestEmailsService_ListPage_OnlyUnread_FiltersReadRows(t *testing.T) {
+	t0 := time.Now()
+	rows := []store.Email{
+		mkRow(3, "a", "fresh", t0),
+		mkRow(2, "a", "already-read", t0),
+		mkRow(1, "a", "also-fresh", t0),
+	}
+	rows[1].IsRead = true // middle row is read
+	s, _ := newTestSvcWithRows(t, rows)
+
+	res := s.ListPage(context.Background(), EmailQuery{
+		Alias: "a", OnlyUnread: true,
+	})
+	if res.HasError() {
+		t.Fatalf("err: %v", res.Error())
+	}
+	got := res.Value()
+	if got.Total != 2 {
+		t.Fatalf("Total=%d want 2 (one read row dropped)", got.Total)
+	}
+	for _, it := range got.Items {
+		if it.Subject == "already-read" {
+			t.Errorf("read row leaked into OnlyUnread results: %+v", it)
+		}
+	}
+}
+
+// OnlyUnread=false must leave read rows in place — no accidental filter.
+func TestEmailsService_ListPage_OnlyUnread_OffKeepsReadRows(t *testing.T) {
+	rows := []store.Email{
+		mkRow(2, "a", "read", time.Now()),
+		mkRow(1, "a", "unread", time.Now()),
+	}
+	rows[0].IsRead = true
+	s, _ := newTestSvcWithRows(t, rows)
+
+	res := s.ListPage(context.Background(), EmailQuery{Alias: "a"})
+	if res.HasError() || res.Value().Total != 2 {
+		t.Fatalf("Total=%d want 2; err=%v", res.Value().Total, res.Error())
+	}
+}
+
+// Residual tripwire: IncludeDeleted is still a no-op until P4.3 lands
+// the DeletedAt column. When that slice ships, this test should fail
+// and force the no-op branch to become a real filter.
+func TestEmailsService_ListPage_IncludeDeleted_StillNoOp(t *testing.T) {
 	rows := []store.Email{mkRow(1, "a", "s", time.Now())}
 	s, _ := newTestSvcWithRows(t, rows)
 
 	res := s.ListPage(context.Background(), EmailQuery{
-		Alias: "a", OnlyUnread: true, IncludeDeleted: true,
+		Alias: "a", IncludeDeleted: true,
 	})
 	if res.HasError() {
 		t.Fatalf("err: %v", res.Error())
 	}
 	if res.Value().Total != 1 {
-		t.Fatalf("OnlyUnread/IncludeDeleted dropped rows in P4.6 (Total=%d). "+
-			"Either the deferred slices landed (good — wire real filters and "+
-			"replace this tripwire) or a regression slipped in.", res.Value().Total)
+		t.Fatalf("IncludeDeleted altered Total in P4.6 follow-up (Total=%d). "+
+			"P4.3 likely landed — replace this tripwire with real filter coverage.",
+			res.Value().Total)
 	}
 }
 
