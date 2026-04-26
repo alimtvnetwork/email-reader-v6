@@ -205,42 +205,6 @@ func (s *EmailsService) Count(ctx context.Context, alias string) errtrace.Result
 	return errtrace.Ok(n)
 }
 
-// ============================================================
-// Deprecated package-level wrappers — preserved for back-compat
-// during the Phase 2 view migration. Removed in P2.8 once every
-// caller goes through an injected *EmailsService.
-// ============================================================
-
-// Deprecated: use (*EmailsService).List. See NewEmailsService.
-func ListEmails(ctx context.Context, opts ListEmailsOptions) errtrace.Result[[]EmailSummary] {
-	svc := mustDefaultEmailsService()
-	return svc.List(ctx, opts)
-}
-
-// Deprecated: use (*EmailsService).Get. See NewEmailsService.
-func GetEmail(ctx context.Context, alias string, uid uint32) errtrace.Result[*EmailDetail] {
-	svc := mustDefaultEmailsService()
-	return svc.Get(ctx, alias, uid)
-}
-
-// Deprecated: use (*EmailsService).Count. See NewEmailsService.
-func CountEmails(ctx context.Context, alias string) errtrace.Result[int] {
-	svc := mustDefaultEmailsService()
-	return svc.Count(ctx, alias)
-}
-
-// mustDefaultEmailsService builds a default-injected service.
-// Constructor cannot fail here — defaultStoreOpener is non-nil — so
-// we panic on the impossible branch to keep the wrapper signatures
-// clean. Removed with the wrappers in P2.8.
-func mustDefaultEmailsService() *EmailsService {
-	res := NewEmailsService(defaultStoreOpener)
-	if res.HasError() {
-		panic("core: default EmailsService construction failed: " + res.Error().Error())
-	}
-	return res.Value()
-}
-
 func toSummary(e store.Email) EmailSummary {
 	s := EmailSummary{
 		Id:       e.Id,
