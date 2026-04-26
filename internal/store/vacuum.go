@@ -76,9 +76,7 @@ func (s *Store) PruneOpenedUrlsBeforeBatched(ctx context.Context, cutoff time.Ti
 			return total, batches, err
 		}
 		res, err := s.DB.ExecContext(ctx,
-			`DELETE FROM OpenedUrls WHERE rowid IN (
-			   SELECT rowid FROM OpenedUrls WHERE OpenedAt < ? LIMIT ?
-			 )`,
+			queries.PruneOpenedUrlsBatched,
 			cutoffUTC, batchSize,
 		)
 		if err != nil {
