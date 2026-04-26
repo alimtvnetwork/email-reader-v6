@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"sort"
 
 	"github.com/lovable/email-read/internal/config"
 	"github.com/lovable/email-read/internal/errtrace"
