@@ -40,6 +40,7 @@ type settingsExtension struct {
 	OpenUrlAllowedSchemes []string `json:"openUrlAllowedSchemes"`
 	AllowLocalhostUrls    bool     `json:"allowLocalhostUrls"`
 	AutoStartWatch        bool     `json:"autoStartWatch"`
+	OpenUrlsRetentionDays uint16   `json:"openUrlsRetentionDays"`
 	UpdatedAt             string   `json:"updatedAt"` // RFC3339; "" when never written
 }
 
@@ -300,6 +301,7 @@ func applyInputToRaw(raw *rawConfigWithSettings, in SettingsInput, now time.Time
 	raw.ext.OpenUrlAllowedSchemes = append([]string(nil), in.OpenUrlAllowedSchemes...)
 	raw.ext.AllowLocalhostUrls = in.AllowLocalhostUrls
 	raw.ext.AutoStartWatch = in.AutoStartWatch
+	raw.ext.OpenUrlsRetentionDays = in.OpenUrlsRetentionDays
 	raw.ext.UpdatedAt = now.UTC().Format(time.RFC3339Nano)
 }
 
@@ -335,6 +337,12 @@ func snapshotFromRaw(raw *rawConfigWithSettings) (SettingsSnapshot, error) {
 		// Fresh / legacy file → keep documented default true.
 		autoStart = defaults.AutoStartWatch
 	}
+	retention := raw.ext.OpenUrlsRetentionDays
+	if raw.ext.UpdatedAt == "" {
+		// Fresh / legacy file → apply documented default rather than 0
+		// (which would silently disable retention).
+		retention = defaults.OpenUrlsRetentionDays
+	}
 	updatedAt, _ := time.Parse(time.RFC3339Nano, raw.ext.UpdatedAt)
 	return SettingsSnapshot{
 		PollSeconds: clampPollSeconds(raw.cfg.Watch.PollSeconds),
@@ -346,6 +354,7 @@ func snapshotFromRaw(raw *rawConfigWithSettings) (SettingsSnapshot, error) {
 		OpenUrlAllowedSchemes: schemes,
 		AllowLocalhostUrls:    raw.ext.AllowLocalhostUrls,
 		AutoStartWatch:        autoStart,
+		OpenUrlsRetentionDays: retention,
 		ConfigPath:            cfgPath,
 		DataDir:               dataDir,
 		EmailArchiveDir:       emailDir,
