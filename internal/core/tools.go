@@ -64,13 +64,17 @@ type openedUrlRecorder interface {
 }
 
 // Tools is the unified service holding the four sub-tool implementations.
-// Only OpenUrl is wired in this slice; the other fields are reserved.
+// OpenUrl + ReadOnce + ExportCsv + CachedDiagnose + RecentOpenedUrls are
+// wired in this slice; the AccountEvent cache invalidation hook lands
+// when `core.Accounts` exposes a Subscribe channel.
 type Tools struct {
-	browser urlLauncher
-	store   openedUrlRecorder
-	cfg     ToolsConfig
-	openMu  sync.Mutex // serialises per-key dedup checks; v1 keeps it simple
-	keys    map[string]time.Time
+	browser       urlLauncher
+	store         openedUrlRecorder
+	cfg           ToolsConfig
+	openMu        sync.Mutex // serialises per-key dedup checks
+	keys          map[string]time.Time
+	diagCacheOnce sync.Once
+	diagCachePtr  *diagnoseCache
 }
 
 // NewTools constructs a Tools service. Validation: scheme list non-empty,
