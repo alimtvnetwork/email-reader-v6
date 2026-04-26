@@ -17,12 +17,23 @@ import (
 )
 
 // DashboardOptions wires the dashboard to app state + actions.
+//
+// **Phase 2.3 migration.** The old shape defaulted `LoadStats` to the
+// deprecated package-level `core.LoadDashboardStats`. The new shape
+// requires a typed `*core.DashboardService` (constructed once at app
+// boot via `core.NewDashboardService`). `LoadStats` survives as an
+// optional override used exclusively by tests to inject deterministic
+// counts without standing up a real service. When `LoadStats` is nil
+// we delegate to `Service.LoadStats`. When both are nil we render a
+// degraded card row (status: "dashboard service not wired") rather
+// than panicking — keeps headless / partial-bootstrap previews safe.
 type DashboardOptions struct {
 	Alias        string
 	OnStartWatch func()
 	OnRefresh    func()
-	LoadStats    LoadStatsFunc
-	Bus          *watcher.Bus // optional; live counter row when non-nil
+	Service      *core.DashboardService // production seam — constructed in app bootstrap
+	LoadStats    LoadStatsFunc          // test-only override; takes precedence over Service when non-nil
+	Bus          *watcher.Bus           // optional; live counter row when non-nil
 }
 
 // LoadStatsFunc is the seam used by tests to inject deterministic counts.
@@ -30,8 +41,10 @@ type DashboardOptions struct {
 type LoadStatsFunc func(ctx context.Context, alias string) errtrace.Result[core.DashboardStats]
 
 func BuildDashboard(opts DashboardOptions) fyne.CanvasObject {
-	if opts.LoadStats == nil {
-		opts.LoadStats = core.LoadDashboardStats
+	if opts.LoadStats == nil && opts.Service != nil {
+		// Bind the service's typed method to the LoadStatsFunc shape so
+		// downstream code (refresh closure, tests) sees one uniform seam.
+		opts.LoadStats = opts.Service.LoadStats
 	}
 	heading := widget.NewLabelWithStyle("Dashboard", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	subtitle := widget.NewLabel("Live counts from data/config.json + data/emails.db.")
