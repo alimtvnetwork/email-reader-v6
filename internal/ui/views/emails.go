@@ -194,6 +194,43 @@ func buildEmailsBrowser(heading fyne.CanvasObject, opts EmailsOptions, rows []co
 	)
 }
 
+// emailsErrorBody renders the load-failure warning WITHOUT a heading
+// row — used by the per-render `buildEmailsBody` swap path where the
+// heading is owned by the outer Border.
+func emailsErrorBody(err error) fyne.CanvasObject {
+	warn := widget.NewLabel("⚠ Failed to load emails: " + err.Error())
+	warn.Wrapping = fyne.TextWrapWord
+	return container.NewVBox(warn)
+}
+
+// emailsEmptyRowsBody renders the empty-state WITHOUT a heading row.
+// Mirrors `emailsEmptyRows` minus the heading + separator since the
+// outer Border already provides that chrome.
+func emailsEmptyRowsBody(alias string) fyne.CanvasObject {
+	empty := widget.NewLabel(fmt.Sprintf("No emails stored yet for %q. Run a watch or one-shot fetch first.", alias))
+	empty.Wrapping = fyne.TextWrapWord
+	return container.NewVBox(empty)
+}
+
+// buildEmailsBrowserBody composes the split-pane list + detail
+// browser WITHOUT a leading heading row. Used by the per-render swap
+// path. Identical to `buildEmailsBrowser` minus the heading-bearing
+// Border `top` argument.
+func buildEmailsBrowserBody(opts EmailsOptions, rows []core.EmailSummary) fyne.CanvasObject {
+	status := widget.NewLabel("Loading…")
+	status.Wrapping = fyne.TextWrapWord
+	detailBox := container.NewVBox(widget.NewLabel("Select an email on the left."))
+	detailScroll := container.NewVScroll(detailBox)
+
+	list := newEmailList(rows)
+	list.OnSelected = makeEmailSelectHandler(opts, rows, detailBox, detailScroll, status)
+
+	status.SetText(fmt.Sprintf("%d email(s) for %s.", len(rows), opts.Alias))
+	split := container.NewHSplit(list, detailScroll)
+	split.SetOffset(0.35)
+	return container.NewBorder(nil, status, nil, nil, split)
+}
+
 // newEmailList builds the email summary list widget.
 func newEmailList(rows []core.EmailSummary) *widget.List {
 	return widget.NewList(
