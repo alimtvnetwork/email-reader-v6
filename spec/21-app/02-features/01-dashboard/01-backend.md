@@ -234,4 +234,78 @@ No behavior change is expected — only the call shape.
 
 ---
 
+## 9. Symbol Map (AC → Go symbol)
+
+Authoritative bridge between `97-acceptance-criteria.md` IDs and the production Go identifiers an AI implementer must touch. **Status legend:** ✅ shipped on `main` · ⏳ planned (this spec is the build order) · 🧪 test-only.
+
+### 9.1 Service surface
+
+| AC IDs           | Go symbol                                                                         | File                                            | Status |
+|------------------|-----------------------------------------------------------------------------------|-------------------------------------------------|:------:|
+| F-01, T-02, P-01 | `core.Dashboard` (struct) + `NewDashboard(store.Store, Clock) *Dashboard`         | `internal/core/dashboard.go`                    |   ⏳   |
+| F-01, P-01, P-03 | `(*Dashboard).Summary(ctx) errtrace.Result[DashboardSummary]`                     | `internal/core/dashboard.go`                    |   ⏳   |
+| F-10, E-03       | `(*Dashboard).RecentActivity(ctx, limit int) errtrace.Result[[]ActivityRow]`      | `internal/core/dashboard.go`                    |   ⏳   |
+| F-04, F-05       | `(*Dashboard).AccountHealth(ctx) errtrace.Result[[]AccountHealthRow]`             | `internal/core/dashboard.go`                    |   ⏳   |
+| F-04, F-05       | `core.ComputeHealth(row AccountHealthRow, now time.Time) HealthLevel`             | `internal/core/dashboard.go`                    |   ⏳   |
+| —                | `core.LoadDashboardStats(ctx, alias) errtrace.Result[DashboardStats]` *(legacy)*  | `internal/core/dashboard.go`                    |   ✅   |
+
+### 9.2 Projection types
+
+| AC IDs        | Go symbol                                  | File                                | Status |
+|---------------|--------------------------------------------|-------------------------------------|:------:|
+| F-01, F-02    | `core.DashboardSummary` (struct)           | `internal/core/dashboard.go`        |   ⏳   |
+| F-10, L-01    | `core.ActivityRow` (struct)                | `internal/core/dashboard.go`        |   ⏳   |
+| F-04, F-05    | `core.AccountHealthRow` (struct)           | `internal/core/dashboard.go`        |   ⏳   |
+| F-04, F-05    | `core.HealthLevel` (string enum)           | `internal/core/dashboard.go`        |   ⏳   |
+
+### 9.3 Store / SQL surface
+
+| AC IDs   | Go symbol / SQL artefact                                                      | File                                  | Status |
+|----------|-------------------------------------------------------------------------------|---------------------------------------|:------:|
+| D-01     | Migration `M0007_AddEmailIsRead`                                              | `internal/store/migrate/`             |   ⏳   |
+| D-01     | Migration `M0008_CreateWatchEvent`                                            | `internal/store/migrate/`             |   ⏳   |
+| D-01     | Migration `M0009_AddWatchStateHealth`                                         | `internal/store/migrate/`             |   ⏳   |
+| F-04, L-02 | `WatchState` table (PascalCase columns: `Alias`, `LastPollAt`, `LastErrorAt`, `ConsecutiveFailures`) | `internal/store/store.go`             |   ✅   |
+| F-10, D-02 | `WatchEvent` table + `IxWatchEventOccurredAt`, `IxWatchEventAlias`           | `internal/store/store.go`             |   ⏳   |
+| D-02     | `store.TrimWatchEventLog(ctx, keep int)` — invoked by watcher per poll OK     | `internal/store/vacuum.go`            |   ⏳   |
+| F-01     | `Store.SummaryCounts(ctx) errtrace.Result[SummaryCountsRow]` *(typed shim)*   | `internal/store/shims.go`             |   ⏳   |
+| F-10     | `Store.QueryRecentWatchEvents(ctx, limit int) ([]WatchEventRow, error)`       | `internal/store/shims.go`             |   ⏳   |
+| F-04     | `Store.QueryAccountHealth(ctx) ([]AccountHealthRow, error)`                   | `internal/store/shims.go`             |   ⏳   |
+
+### 9.4 Live-update surface
+
+| AC IDs        | Go symbol                                                                | File                                    | Status |
+|---------------|--------------------------------------------------------------------------|-----------------------------------------|:------:|
+| L-01, L-02    | `core.WatchEvent` + `core.WatchEventKind` + `eventbus.Bus[WatchEvent]`   | `internal/core/watch.go`                |   ✅   |
+| L-03, L-05    | `BridgeWatcherBus(ctx, *watcher.Bus, *eventbus.Bus[WatchEvent]) func()`  | `internal/core/watch_bridge.go`         |   ✅   |
+
+### 9.5 Errors & logging
+
+| AC IDs        | Go symbol                                                              | File                                    | Status |
+|---------------|------------------------------------------------------------------------|-----------------------------------------|:------:|
+| E-01, E-04    | `errtrace.ErrDashboardSummaryFailed` (= 21101)                         | `internal/errtrace/codes_gen.go`        |   ⏳   |
+| E-03          | `errtrace.ErrDashboardInvalidLimit` (= 21102)                          | `internal/errtrace/codes_gen.go`        |   ⏳   |
+| —             | Codes 21100, 21103, 21104, 21105 (per §4 table)                        | `internal/errtrace/codes_gen.go`        |   ⏳   |
+| G-01, G-02, G-03 | `dashboardSlog` (`component=dashboard`) + `FormatDashboard*` helpers | `internal/ui/dashboard_log.go`          |   ⏳   |
+
+### 9.6 Test contract
+
+| AC IDs        | Test symbol                                                          | File                                            | Status |
+|---------------|----------------------------------------------------------------------|-------------------------------------------------|:------:|
+| T-01, T-02    | `Test_Summary_EmptyStore_ReturnsZeros` (+7 cases per §6)             | `internal/core/dashboard_test.go`               |   ⏳   |
+| T-04          | `Test_Dashboard_RaceClean` (`-race` matrix)                          | `internal/core/dashboard_race_test.go`          |   ⏳   |
+| T-05          | `BenchmarkDashboardSummary_100k`, `BenchmarkDashboardLiveInsert`     | `internal/core/dashboard_bench_test.go`         |   ⏳   |
+| L-01, L-02    | `TestCF_D1_DashboardLiveTiles` *(shipped under CF naming)*           | `internal/core/cf_d1_dashboard_test.go`         |   ✅   |
+
+### 9.7 View-layer touchpoints (referenced from this backend)
+
+| AC IDs        | Go symbol                                                              | File                                    | Status |
+|---------------|------------------------------------------------------------------------|-----------------------------------------|:------:|
+| F-08, F-09    | `dashboardView.Refresh()` (debounced, F5 binding)                      | `internal/ui/views/dashboard.go`        |   ✅*  |
+| L-01          | `dashboardView.attachLive()` / `DetachLive()`                          | `internal/ui/views/dashboard.go`        |   ✅*  |
+
+`✅*` = scaffolded; full AC alignment lands with the `Dashboard` service refactor above.
+
+---
+
 **End of `01-dashboard/01-backend.md`**
