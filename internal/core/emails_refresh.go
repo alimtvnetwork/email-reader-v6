@@ -84,11 +84,15 @@ func (s *EmailsService) WithRefresher(r Refresher) *EmailsService {
 // `Unit{}` on success — the new rows are observable via subsequent
 // `List` / `ListPage` calls.
 //
-// Spec: §2.5. Error envelope detailed in the file-level comment.
+// Spec: §2.5. Error envelope:
+//   - empty alias               → ErrWatchAliasRequired
+//   - no refresher injected     → ErrCoreInvalidArgument (config bug)
+//   - context already cancelled → ErrCoreInvalidArgument + alias ctx
+//   - watcher returns error     → ErrWatcherPollCycle + alias ctx
 func (s *EmailsService) Refresh(ctx context.Context, alias string) errtrace.Result[Unit] {
 	if strings.TrimSpace(alias) == "" {
 		return errtrace.Err[Unit](errtrace.NewCoded(
-			errtrace.ErrCoreInvalidArgument,
+			errtrace.ErrWatchAliasRequired,
 			"core.EmailsService.Refresh: alias is required"))
 	}
 	if s.refresher == nil {
@@ -109,7 +113,7 @@ func (s *EmailsService) Refresh(ctx context.Context, alias string) errtrace.Resu
 	}
 	if err := s.refresher.PollOnce(ctx, alias); err != nil {
 		return errtrace.Err[Unit](
-			errtrace.WrapCode(err, errtrace.ErrWatcherPollFailed,
+			errtrace.WrapCode(err, errtrace.ErrWatcherPollCycle,
 				"core.EmailsService.Refresh").
 				WithContext("alias", alias),
 		)
