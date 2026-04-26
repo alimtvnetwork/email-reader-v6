@@ -28,6 +28,12 @@ const emailColumns = `Id, Alias, MessageId, Uid, FromAddr, ToAddr, CcAddr, Subje
 // EmailByUid selects a single email row by (Alias, Uid). Static query.
 const EmailByUid = `SELECT ` + emailColumns + ` FROM Emails WHERE Alias = ? AND Uid = ?`
 
+// EmailsCountAll counts every row in Emails. Static query.
+const EmailsCountAll = `SELECT COUNT(1) FROM Emails`
+
+// EmailsCountByAlias counts rows matching a single alias. Static query.
+const EmailsCountByAlias = `SELECT COUNT(1) FROM Emails WHERE Alias = ?`
+
 // EmailsListInput captures the optional filter + pagination knobs for
 // composing the EmailsList query. Mirrors store.EmailQuery — kept as a
 // separate type so the queries package has no upward dependency on store.
