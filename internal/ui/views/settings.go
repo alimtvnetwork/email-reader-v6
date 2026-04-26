@@ -74,6 +74,7 @@ func buildSettingsForm(svc *core.Settings, snap core.SettingsSnapshot) fyne.Canv
 			{Text: "Poll interval (seconds)", Widget: w.pollEntry, HintText: "1–60. Applied to running watcher live."},
 			{Text: "Chrome / Chromium path", Widget: w.chromeEntry, HintText: "Leave blank to auto-detect."},
 			{Text: "Density", Widget: w.densitySelect, HintText: "Compact tightens paddings (process-local)."},
+			{Text: "Opened-URLs retention (days)", Widget: w.retentionEntry, HintText: "0–3650. 0 = never prune."},
 		},
 	}
 	actions := newSettingsActions(svc, w, status)
