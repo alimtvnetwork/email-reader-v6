@@ -141,7 +141,7 @@ func TestExportCsv_FilteredStreaming(t *testing.T) {
 
 	ctx := context.Background()
 	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	insert := func(alias, mid string, uid int64, recv time.Time) {
+	insert := func(alias, mid string, uid uint32, recv time.Time) {
 		t.Helper()
 		if _, _, err := st.UpsertEmail(ctx, &store.Email{
 			Alias: alias, MessageId: mid, Uid: uid,
@@ -163,10 +163,10 @@ func TestExportCsv_FilteredStreaming(t *testing.T) {
 		Alias: "alpha",
 		Since: t0.Add(-time.Hour), Until: t0.Add(24 * time.Hour),
 	}, progress)
-	rep, err := res.Get()
-	if err != nil {
+	if err := res.Error(); err != nil {
 		t.Fatalf("ExportCsv: %v", err)
 	}
+	rep := res.Value()
 	if rep.RowCount != 1 {
 		t.Fatalf("want 1 row, got %d", rep.RowCount)
 	}
