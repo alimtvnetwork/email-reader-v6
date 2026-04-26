@@ -43,13 +43,42 @@ Last updated: 2026-04-26 (UTC) — Slice #35 landed: AST guard test for AC-DB-50
 | 32 | **Chunked `PruneBatchSize`** — `store.PruneOpenedUrlsBeforeBatched(ctx, cutoff, batchSize)` loops `DELETE … WHERE rowid IN (SELECT rowid … LIMIT ?)`; `DefaultPruneBatchSize = 5000`. Runtime closure reads live `PruneBatchSize` from settings. Closes AC-DB-43. | `internal/store/{vacuum,vacuum_batched_test}.go`, `internal/ui/watch_runtime.go` |
 | 33 | **Structured-logging migration** — `internal/ui/maintenance_log.go` adopts `log/slog` with package-private `maintenanceSlog` carrying `component=maintenance`; INFO on success / WARN on error; `Format*` helpers re-canonicalised to `event=…` tail; emit-test verifies all 4 callbacks. | `internal/ui/{maintenance_log,maintenance_log_test,maintenance_log_jobs_test,maintenance_log_emit_test}.go` |
 | 34 | **AC-DB-47 AST guard** — `Test_AST_MaintenanceOnly` walks repo, parses every production `.go`, rejects any `*ast.BasicLit` whose trimmed body equals `VACUUM`/`ANALYZE` or starts with `pragma wal_checkpoint`. Allowlist: `internal/store/vacuum.go`. Statement-shaped matcher avoids false positives on UI labels. | `internal/store/ast_maintenance_only_test.go` |
+| 35 | **AC-DB-50 AST guard** — `Test_AST_DriverImportLimit` walks repo with `parser.ImportsOnly`, rejects any production `.go` outside `internal/store/` that imports a known SQL driver. `driverImportPaths` covers modernc/sqlite, mattn/go-sqlite3, lib/pq, jackc/pgx/v5(+stdlib), go-sql-driver/mysql, microsoft/go-mssqldb, and bare `database/sql/driver`. Reuses `repoRootForMaintenanceGuard` + `skipUninterestingDir` from #34. | `internal/store/ast_driver_import_limit_test.go` |
 
 Verification: 16 packages green under `nix run nixpkgs#go -- {vet,test} -tags nofyne -race -count=2 ./...`; `go build -tags nofyne ./...` clean; fn-length linter **0/0** across edited Go files.
 
 ## Remaining tracked work
 
-See `spec/21-app/99-consistency-report.md` §6 for the canonical delta list. Open items:
+### A. spec/23-app-database — sandbox-runnable AC tests still missing (named in spec/23-app-database/97-acceptance-criteria.md)
 
+Behaviour-equivalents may already exist in `internal/store/store_test.go` / `internal/core/cf_acceptance_*_test.go` under different names, but the spec-named tests below have not been added yet:
+
+- AC-DB-01 `Test_Open_FreshSchema`
+- AC-DB-02 `Test_Schema_ColumnsMatchSpec`
+- AC-DB-03 `Test_Schema_IndexesMatchSpec`
+- AC-DB-04 `Test_Email_UniqueAliasMessageId`
+- AC-DB-05 `Test_OpenedUrl_Dedup_PartialIndex`
+- AC-DB-06 `Test_OpenedUrl_FkSetNull`
+- AC-DB-07 `Test_OpenedUrl_OriginCheck`
+- AC-DB-08 `Test_OpenedUrl_DecisionCheck` *(blocked on `Decision` column landing)*
+- AC-DB-09 `Test_Email_HasAttachmentCheck`
+- AC-DB-10 `Test_Store_PragmaOnEveryConn`
+- AC-DB-11 `Test_Store_WalPersists`
+- AC-DB-20 `Test_Queries_AllImplemented` *(blocked on `internal/store/queries/` landing)*
+- AC-DB-21 `Test_AST_NoStraySql` *(needs allowlist for store/queries + store/migrate)*
+- AC-DB-22…26 query-behaviour tests
+- AC-DB-27 `Test_Queries_PlanGolden`
+- AC-DB-28 `Test_Queries_Perf`
+- AC-DB-30…36 migrate suite *(blocked on `internal/store/migrate/` landing)*
+- AC-DB-37 `Test_AST_DdlOnlyInMigrate` *(blocked on migrate package; meanwhile no DDL exists outside the bootstrap path)*
+- AC-DB-40…46 maintenance-behaviour tests *(spec-named — present behaviour is locked under different names today)*
+- AC-DB-51 `Test_AST_NoSqlTypeLeak`
+- AC-DB-52 `Test_AST_CoreUsesStoreOnly`
+- AC-DB-53 `Test_DateTime_FormatUtc`
+- AC-DB-54 `Test_BooleanPositive`
+- AC-DB-55 `Test_LogScan_NoOriginalUrlLeak`
+
+### B. Long-running cross-cutting items
 1. **App boot smoke test** (user-side) — launch desktop binary; validate Settings render/live-switch (incl. the 4 maintenance knob rows), density toggle, Watch Start/Stop, Dashboard tiles incrementing, Recent opens against a populated DB, retention-days field round-trips a Save, all four canonical maintenance log lines appear (`event=prune`, `event=analyze`, `event=wal_checkpoint`, `event=vacuum`) at the configured cadences, and a flaky-network simulation produces the `⏳ backing off after N consecutive error(s)` line. (Requires manual user run.)
 2. **Persist Density preference** (deferred per design-system §8) — when persistence lands, swap `Settings` view's local-only density handler for a `SettingsInput` field write.
 3. **Static "Accounts" / "Rules enabled" tile auto-refresh** — hook the dashboard refresh into `core.AccountEvent` and a future `core.RuleEvent`.
@@ -57,4 +86,14 @@ See `spec/21-app/99-consistency-report.md` §6 for the canonical delta list. Ope
 5. **Per-decision prune queries** — `Q-OPEN-PRUNE-LAUNCHED` (365d) vs `Q-OPEN-PRUNE-BLOCKED` (90d) split, blocked on the OpenedUrls `Decision` column landing.
 
 ## Next logical step for the next AI session
-All sandbox-runnable items in the spec/23-app-database/04 backlog are now closed (ANALYZE, VACUUM, wal_checkpoint, retention sweep, backoff, batched prune, Settings UI, structured logging, AC-DB-47 AST guard). The remaining 5 items (#1-#5 above) all require either user-side desktop runs, external CI infrastructure, or upstream schema work (the OpenedUrls `Decision` column). The next sandbox-runnable slice would need to come from a *different* spec area — e.g., spec/21-app §99 still tracks deltas in tools/dashboard/rules surfaces. Suggest re-reading `spec/21-app/99-consistency-report.md` §6 alongside this status file to pick the next workstream.
+Top sandbox-runnable candidates (no schema work, no external infra, ranked by isolation):
+
+(a) **AC-DB-51 `Test_AST_NoSqlTypeLeak`** — AST scan of public methods in `internal/store/...` asserting no `*sql.DB`, `*sql.Tx`, `*sql.Rows` in return types. Same pattern as #34/#35; one new file in `internal/store/`. Verifiable today.
+
+(b) **AC-DB-52 `Test_AST_CoreUsesStoreOnly`** — AST scan of `internal/core/*` import lists asserting no direct `database/sql` or driver imports. Pairs naturally with #35; one file. Verifiable today.
+
+(c) **AC-DB-53 `Test_DateTime_FormatUtc`** — Open a temp DB, insert one row in each of `Email`/`WatchState`/`OpenedUrls`, SELECT back the datetime columns, regex-match against RFC 3339 UTC (`/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/`). Pure store-package test. Verifiable today.
+
+(d) **AC-DB-54 `Test_BooleanPositive`** — `PRAGMA table_info` over every column in every table; reject any column whose name starts with `Is`/`Has` and whose default is `1` (i.e. positive condition encoded as "0 means yes"). Pure store-package test. Verifiable today.
+
+Recommended order for the next `next` slice: **(a) AC-DB-51** — smallest scope, mirrors #34/#35 idioms, closes another row in §97. Items #1-#5 in section B still need user-side, infra, or upstream-schema work.
