@@ -21,9 +21,14 @@ type SettingsSnapshot struct {
 	AllowLocalhostUrls    bool
 	AutoStartWatch        bool
 	OpenUrlsRetentionDays uint16 // 0 = disabled (never prune); else age cutoff in days
-	ConfigPath            string // read-only, absolute
-	DataDir               string // read-only, absolute
-	EmailArchiveDir       string // read-only, absolute
+	// Maintenance knobs (spec/23-app-database/04 §5).
+	WeeklyVacuumOn        time.Weekday // 0..6 (Sunday..Saturday)
+	WeeklyVacuumHourLocal uint8        // 0..23
+	WalCheckpointHours    uint8        // 1..168
+	PruneBatchSize        uint32       // 100..50000
+	ConfigPath            string       // read-only, absolute
+	DataDir               string       // read-only, absolute
+	EmailArchiveDir       string       // read-only, absolute
 	UpdatedAt             time.Time
 }
 
@@ -37,6 +42,11 @@ type SettingsInput struct {
 	AllowLocalhostUrls    bool
 	AutoStartWatch        bool
 	OpenUrlsRetentionDays uint16
+	// Maintenance knobs (spec/23-app-database/04 §5).
+	WeeklyVacuumOn        time.Weekday
+	WeeklyVacuumHourLocal uint8
+	WalCheckpointHours    uint8
+	PruneBatchSize        uint32
 }
 
 // BrowserOverride mirrors config.Browser but is owned by Settings so the UI
@@ -142,5 +152,10 @@ func DefaultSettingsInput() SettingsInput {
 		AllowLocalhostUrls:    false,
 		AutoStartWatch:        true,
 		OpenUrlsRetentionDays: 90,
+		// Maintenance defaults (spec/23-app-database/04 §5).
+		WeeklyVacuumOn:        time.Sunday,
+		WeeklyVacuumHourLocal: 3,
+		WalCheckpointHours:    6,
+		PruneBatchSize:        5000,
 	}
 }
