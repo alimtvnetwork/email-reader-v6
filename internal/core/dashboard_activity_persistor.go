@@ -30,7 +30,10 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/lovable/email-read/internal/errtrace"
@@ -117,37 +120,84 @@ func persistOne(ctx context.Context, sink WatchEventSink, ev WatchEvent) error {
 	return nil
 }
 
-// encodeWatchEventPayload serialises the optional Message + Err into
-// the JSON shape the activity adapter (`activityPayload` in
-// `internal/store/shims.go`) decodes. Empty/zero values are omitted
-// via `omitempty` so the rendered JSON matches the schema's default
-// `'{}'` for events that carry no extra data — this keeps
-// hand-seeded test fixtures byte-perfect compatible with persistor
-// output.
+// encodeWatchEventPayload serialises the optional Message + numeric
+// ErrorCode into the JSON shape the activity adapter
+// (`activityPayload` in `internal/store/shims.go`) decodes. Empty/
+// zero values are omitted via `omitempty` so the rendered JSON
+// matches the schema's default `'{}'` for events that carry no
+// extra data — this keeps hand-seeded test fixtures byte-perfect
+// compatible with persistor output.
+//
+// **ErrorCode extraction (Slice #108).** The `WatchEvent.Err` is a
+// Go `error`. We walk the unwrap chain via `errors.As` looking for
+// the first `*errtrace.Coded` carrier and parse the trailing 5-digit
+// numeric portion of its wire-format `Code` (e.g.
+// `"ER-EXP-21601"` → `21601`). The leading `2` is part of the spec'd
+// block range (`2NNNN`); we keep it so the int round-trips back to
+// the original code via `RegisteredCodes[strconv.Itoa(n)]` if the
+// dashboard ever needs to render the symbolic name. Errors with no
+// `*Coded` in the chain (raw `errors.New`, third-party drivers that
+// haven't been wrapped yet) yield a zero ErrorCode — same as the
+// no-error path — so the dashboard simply omits the `(err N)`
+// suffix for those rows.
 func encodeWatchEventPayload(ev WatchEvent) string {
 	type wire struct {
-		Message string `json:"Message,omitempty"`
-		// ErrorCode is intentionally NOT populated here — the
-		// `WatchEvent.Err` is a Go error, not a numeric ER-* code.
-		// Wiring `errtrace.Coded.Code` into the payload is a
-		// follow-on slice (requires a `errors.As` walk + a
-		// `.Code` getter that doesn't yet exist on the public
-		// surface). Until then, the dashboard renders error
-		// rows without a `(err N)` suffix — same UX as the empty-
-		// payload case the views/dashboard test exercises.
+		Message   string `json:"Message,omitempty"`
+		ErrorCode int    `json:"ErrorCode,omitempty"`
 	}
-	w := wire{Message: ev.Message}
-	if w.Message == "" {
+	w := wire{
+		Message:   ev.Message,
+		ErrorCode: extractErrorCode(ev.Err),
+	}
+	if w.Message == "" && w.ErrorCode == 0 {
 		// Match the schema default exactly so persisted rows look
 		// like the hand-seeded test fixtures.
 		return "{}"
 	}
 	b, err := json.Marshal(w)
 	if err != nil {
-		// Marshal of a single string field cannot fail in
-		// practice; fall back to the empty-payload sentinel
-		// rather than dropping the audit row.
+		// Marshal of two scalar fields cannot fail in practice;
+		// fall back to the empty-payload sentinel rather than
+		// dropping the audit row.
 		return "{}"
 	}
 	return string(b)
+}
+
+// extractErrorCode walks `err`'s unwrap chain looking for the first
+// `*errtrace.Coded` carrier and returns the numeric tail of its
+// `Code` (e.g. `ER-EXP-21601` → 21601). Returns 0 when:
+//   - err is nil,
+//   - no `*Coded` is in the chain,
+//   - the carrier's Code is empty,
+//   - or the trailing token is not a parseable integer.
+//
+// Pulled out of `encodeWatchEventPayload` so the parsing logic can
+// be table-tested in isolation against every shape that has bitten
+// us in production (raw errors, double-wrapped Coded, Coded with an
+// empty Code, malformed Code missing the trailing block).
+func extractErrorCode(err error) int {
+	if err == nil {
+		return 0
+	}
+	var coded *errtrace.Coded
+	if !errors.As(err, &coded) || coded == nil {
+		return 0
+	}
+	raw := string(coded.Code)
+	if raw == "" {
+		return 0
+	}
+	// Last `-`-delimited token is the numeric block (`21601`).
+	// Using LastIndex lets us tolerate future prefix shapes
+	// (e.g. `ER-FOO-BAR-21601`) without re-touching this code.
+	idx := strings.LastIndex(raw, "-")
+	if idx < 0 || idx == len(raw)-1 {
+		return 0
+	}
+	n, perr := strconv.Atoi(raw[idx+1:])
+	if perr != nil {
+		return 0
+	}
+	return n
 }

@@ -4,10 +4,13 @@ package core
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/lovable/email-read/internal/errtrace"
 	"github.com/lovable/email-read/internal/eventbus"
 	"github.com/lovable/email-read/internal/store"
 )
@@ -93,5 +96,102 @@ func TestStartWatchEventPersistor_PersistsAllKinds(t *testing.T) {
 	}
 	if !seen[int(WatchEmailStored)] || !seen[int(WatchRuleMatched)] {
 		t.Errorf("missing new kinds in persisted rows; saw %+v", seen)
+	}
+}
+
+// ----- Slice #108: ErrorCode payload extraction --------------------
+
+func TestExtractErrorCode_Table(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want int
+	}{
+		{"nil", nil, 0},
+		{"plain error has no code", errors.New("boom"), 0},
+		{"coded with numeric tail",
+			errtrace.NewCoded(errtrace.Code("ER-EXP-21601"), "do thing"), 21601},
+		{"wrapped coded is found via errors.As",
+			fmt.Errorf("outer: %w",
+				errtrace.NewCoded(errtrace.Code("ER-CFG-21042"), "open")), 21042},
+		{"empty code", errtrace.NewCoded(errtrace.Code(""), "x"), 0},
+		{"malformed (no dash)", errtrace.NewCoded(errtrace.Code("ER21999"), "x"), 0},
+		{"malformed (trailing dash)", errtrace.NewCoded(errtrace.Code("ER-FOO-"), "x"), 0},
+		{"malformed (non-numeric tail)", errtrace.NewCoded(errtrace.Code("ER-FOO-BAR"), "x"), 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := extractErrorCode(tc.err); got != tc.want {
+				t.Errorf("got %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestEncodeWatchEventPayload_WithErrorCode(t *testing.T) {
+	ev := WatchEvent{
+		Kind:  WatchError,
+		Alias: "a",
+		Err:   errtrace.NewCoded(errtrace.Code("ER-EXP-21601"), "expand"),
+	}
+	got := encodeWatchEventPayload(ev)
+	want := `{"ErrorCode":21601}`
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestEncodeWatchEventPayload_MessageAndErrorCode(t *testing.T) {
+	ev := WatchEvent{
+		Message: "expand failed",
+		Err:     errtrace.NewCoded(errtrace.Code("ER-EXP-21601"), "expand"),
+	}
+	got := encodeWatchEventPayload(ev)
+	want := `{"Message":"expand failed","ErrorCode":21601}`
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestEncodeWatchEventPayload_NilErrAndEmptyMessage_StillSchemaDefault(t *testing.T) {
+	if got := encodeWatchEventPayload(WatchEvent{Kind: WatchHeartbeat}); got != "{}" {
+		t.Errorf("got %q, want %q", got, "{}")
+	}
+}
+
+func TestPersistor_RoundTripsErrorCodeThroughSQLite(t *testing.T) {
+	s := openPersistorTestStore(t)
+	bus := eventbus.New[WatchEvent](4)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	stop := StartWatchEventPersistor(ctx, bus, s)
+	defer stop()
+
+	bus.Publish(WatchEvent{
+		Kind:  WatchError,
+		Alias: "a",
+		At:    time.Now(),
+		Err:   errtrace.NewCoded(errtrace.Code("ER-EXP-21601"), "expand"),
+	})
+
+	// Poll for the row to appear.
+	deadline := time.Now().Add(2 * time.Second)
+	var rows []store.StoreActivityRow
+	for time.Now().Before(deadline) {
+		var err error
+		rows, err = s.QueryRecentActivity(ctx, 1)
+		if err != nil {
+			t.Fatalf("QueryRecentActivity: %v", err)
+		}
+		if len(rows) == 1 {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("got %d rows, want 1", len(rows))
+	}
+	if rows[0].ErrorCode != 21601 {
+		t.Errorf("ErrorCode round-trip: got %d, want 21601", rows[0].ErrorCode)
 	}
 }
