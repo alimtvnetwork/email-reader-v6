@@ -38,9 +38,9 @@ func Test_AST_MaintenanceOnly(t *testing.T) {
 		"internal/store/vacuum.go": true,
 	}
 
-	// Match VACUUM / ANALYZE as whole words (case-sensitive — SQLite
-	// statements are conventionally upper-case in this codebase) and
-	// the wal_checkpoint pragma in any case.
+	// Match VACUUM / ANALYZE as whole upper-case words and the
+	// wal_checkpoint pragma in any case. SQLite statements are
+	// conventionally upper-case across this codebase.
 	keywordRe := regexp.MustCompile(`\b(VACUUM|ANALYZE)\b|(?i)PRAGMA\s+wal_checkpoint`)
 
 	fset := token.NewFileSet()
@@ -76,9 +76,9 @@ func Test_AST_MaintenanceOnly(t *testing.T) {
 		if readErr != nil {
 			return readErr
 		}
-		file, parseErr := parser.ParseFile(fset, path, src, parser.ParseComments)
+		file, parseErr := parser.ParseFile(fset, path, src, 0)
 		if parseErr != nil {
-			// Parse errors are not our concern here; skip.
+			// Files that fail to parse aren't our concern here.
 			return nil
 		}
 		ast.Inspect(file, func(n ast.Node) bool {
@@ -86,9 +86,8 @@ func Test_AST_MaintenanceOnly(t *testing.T) {
 			if !ok || lit.Kind != token.STRING {
 				return true
 			}
-			val := lit.Value
-			if keywordRe.MatchString(val) {
-				violations = append(violations, rel+": "+val)
+			if keywordRe.MatchString(lit.Value) {
+				violations = append(violations, rel+": "+lit.Value)
 			}
 			return true
 		})
