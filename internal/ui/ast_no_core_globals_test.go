@@ -31,14 +31,13 @@
 //	  Files under internal/ui/views/ may not call `config.Load()`
 //	  or `store.Default()`. Views must receive their dependencies
 //	  via injected services or via the shared `BuildServices()`
-//	  bundle. A small allowlist captures the three pre-existing
-//	  legacy call sites (tools_read.go, tools_openurl.go,
-//	  launch.go) — these are tracked TODOs that will be migrated in
-//	  a follow-up slice; the allowlist makes them visible and
+//	  bundle. A small allowlist captures the pre-existing legacy
+//	  call sites; these are tracked TODOs that will be migrated in
+//	  a follow-up slice. The allowlist makes them visible and
 //	  prevents new ones from creeping in.
 //
 // Why an allowlist instead of failing-loud: the alternative is to
-// either (a) hold up shipping the guard until those 3 files are
+// either (a) hold up shipping the guard until those files are
 // migrated — coupling unrelated work into a single slice, against
 // our atomic-slice contract — or (b) ship no guard at all and let
 // regression risk accumulate. The allowlist is the lesser evil and
@@ -51,6 +50,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -81,7 +81,8 @@ var deletedCoreSymbols = map[string]struct{}{
 
 // viewLayerGlobalsAllowlist captures known pre-Phase-2 calls to
 // `config.Load()` from `internal/ui/views/`. Each entry is a
-// repo-relative file path. Anything *not* in this set must be empty.
+// repo-relative file path (using forward slashes for portability).
+// Anything *not* in this set must be empty.
 //
 // To remove an entry: migrate the file to receive its config via an
 // injected dependency (typically a `*core.Tools` or new service),
@@ -93,8 +94,9 @@ var viewLayerGlobalsAllowlist = map[string]struct{}{
 	"views/tools_read.go":    {}, // tools tab read helper
 }
 
+// TestAST_NoDeletedCoreSymbolsFromUI enforces Contract A.
 func TestAST_NoDeletedCoreSymbolsFromUI(t *testing.T) {
-	violations := walkUITree(t, func(rel string, file *ast.File) []string {
+	violations := walkUITree(t, func(rel string, file *ast.File, fset *token.FileSet) []string {
 		var hits []string
 		ast.Inspect(file, func(n ast.Node) bool {
 			sel, ok := n.(*ast.SelectorExpr)
@@ -106,26 +108,30 @@ func TestAST_NoDeletedCoreSymbolsFromUI(t *testing.T) {
 				return true
 			}
 			if _, dead := deletedCoreSymbols[sel.Sel.Name]; dead {
-				hits = append(hits, "core."+sel.Sel.Name)
+				pos := fset.Position(sel.Pos())
+				hits = append(hits, rel+":"+itoa(pos.Line)+": core."+sel.Sel.Name)
 			}
 			return true
 		})
 		return hits
 	})
 	if len(violations) > 0 {
-		t.Fatalf("internal/ui/ references %d deleted core symbol(s) — these were removed in P2.8b and must not return:\n%s",
-			len(violations), strings.Join(violations, "\n"))
+		sort.Strings(violations)
+		t.Fatalf("internal/ui/ references %d deleted core symbol(s) — these were removed in P2.8b and must not return:\n  %s",
+			len(violations), strings.Join(violations, "\n  "))
 	}
 }
 
+// TestAST_NoConfigGlobalsInViews enforces Contract B.
 func TestAST_NoConfigGlobalsInViews(t *testing.T) {
-	violations := walkUITree(t, func(rel string, file *ast.File) []string {
+	violations := walkUITree(t, func(rel string, file *ast.File, fset *token.FileSet) []string {
+		relSlash := filepath.ToSlash(rel)
 		// Only enforce inside views/.
-		if !strings.HasPrefix(filepath.ToSlash(rel), "views/") {
+		if !strings.HasPrefix(relSlash, "views/") {
 			return nil
 		}
 		// Skip allowlisted legacy call sites.
-		if _, ok := viewLayerGlobalsAllowlist[filepath.ToSlash(rel)]; ok {
+		if _, ok := viewLayerGlobalsAllowlist[relSlash]; ok {
 			return nil
 		}
 		// Skip test files — fixtures may legitimately stub config.
@@ -146,49 +152,89 @@ func TestAST_NoConfigGlobalsInViews(t *testing.T) {
 			if !ok {
 				return true
 			}
+			pos := fset.Position(call.Pos())
 			switch {
 			case pkg.Name == "config" && sel.Sel.Name == "Load":
-				hits = append(hits, "config.Load()")
+				hits = append(hits, relSlash+":"+itoa(pos.Line)+": config.Load()")
 			case pkg.Name == "store" && sel.Sel.Name == "Default":
-				hits = append(hits, "store.Default()")
+				hits = append(hits, relSlash+":"+itoa(pos.Line)+": store.Default()")
 			}
 			return true
 		})
 		return hits
 	})
 	if len(violations) > 0 {
-		t.Fatalf("view-layer purity violation — internal/ui/views/ files must receive deps via injected services, not call package globals directly:\n%s\n\nFix: either inject the dependency through *Services / *core.Tools, OR (if this is a known legacy site that needs follow-up migration) add the file path to viewLayerGlobalsAllowlist with a comment explaining the migration plan.",
-			strings.Join(violations, "\n"))
+		sort.Strings(violations)
+		t.Fatalf("view-layer purity violation — internal/ui/views/ files must receive deps via injected services, not call package globals directly:\n  %s\n\nFix: either inject the dependency through *Services / *core.Tools, OR (if this is a known legacy site that needs follow-up migration) add the file path to viewLayerGlobalsAllowlist with a comment explaining the migration plan.",
+			strings.Join(violations, "\n  "))
 	}
 }
 
 // walkUITree parses every non-vendor .go file under uiRoot and runs
-// `check` against each. Returns aggregated "rel-path: hit" lines.
-func walkUITree(t *testing.T, check func(rel string, file *ast.File) []string) []string {
+// `check` against each. Returns aggregated violation strings.
+//
+// We use go/parser directly (not packages.Load) because the latter
+// requires a working build for the active tag set; this guard must
+// run under `-tags nofyne` and still see `//go:build !nofyne` files.
+func walkUITree(t *testing.T, check func(rel string, file *ast.File, fset *token.FileSet) []string) []string {
 	t.Helper()
 	fset := token.NewFileSet()
 	var out []string
-
-	err := filepath.Walk(uiRoot, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
+	err := filepath.Walk(uiRoot, func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
 		}
-		if info.IsDir() || !strings.HasSuffix(path, ".go") || strings.Contains(path, "vendor") {
+		if info.IsDir() {
+			// Skip vendored / generated tree just in case.
+			if info.Name() == "vendor" || info.Name() == "testdata" {
+				return filepath.SkipDir
+			}
 			return nil
 		}
-		file, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
-		if err != nil {
-			return nil // Skip unparseable files
+		if !strings.HasSuffix(path, ".go") {
+			return nil
 		}
-		rel, _ := filepath.Rel(uiRoot, path)
-		hits := check(rel, file)
-		for _, h := range hits {
-			out = append(out, rel+": "+h)
+		// ParseFile honours build tags only via the BuildContext in
+		// go/build; go/parser itself ignores them, which is exactly
+		// what we want — the guard sees every file regardless of
+		// `//go:build` line so it can't be bypassed by tag.
+		f, parseErr := parser.ParseFile(fset, path, nil, parser.SkipObjectResolution)
+		if parseErr != nil {
+			t.Fatalf("parse %s: %v", path, parseErr)
 		}
+		rel, relErr := filepath.Rel(uiRoot, path)
+		if relErr != nil {
+			rel = path
+		}
+		out = append(out, check(rel, f, fset)...)
 		return nil
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("walk %s: %v", uiRoot, err)
 	}
 	return out
+}
+
+// itoa is a tiny strconv.Itoa stand-in to avoid importing strconv
+// just for line numbers in error messages.
+func itoa(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	neg := n < 0
+	if neg {
+		n = -n
+	}
+	var buf [20]byte
+	i := len(buf)
+	for n > 0 {
+		i--
+		buf[i] = byte('0' + n%10)
+		n /= 10
+	}
+	if neg {
+		i--
+		buf[i] = '-'
+	}
+	return string(buf[i:])
 }
