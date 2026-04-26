@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/lovable/email-read/internal/config"
 	"github.com/lovable/email-read/internal/errtrace"
 	"github.com/lovable/email-read/internal/mailclient"
 )
@@ -29,15 +30,34 @@ type ReadResult struct {
 	Duration time.Duration
 }
 
+// readDialer is the slim seam for tests; *mailclient.Client satisfies it.
+type readDialer func(config.Account) (readClient, error)
+
+type readClient interface {
+	SelectInbox() (mailclient.MailboxStats, error)
+	FetchRecentHeaders(stats mailclient.MailboxStats, limit uint32) ([]mailclient.HeaderSummary, error)
+	Close() error
+}
+
+// defaultReadDialer wraps mailclient.Dial into the readDialer signature.
+func defaultReadDialer(a config.Account) (readClient, error) { return mailclient.Dial(a) }
+
 // ReadOnce dials, logs in, selects INBOX, fetches `Limit` headers, and
 // closes `progress` on return. Watcher cursor is never written.
 func (t *Tools) ReadOnce(ctx context.Context, spec ReadSpec, progress chan<- string) errtrace.Result[ReadResult] {
+	return readOnceWith(ctx, spec, progress, defaultReadDialer, resolveAccountByAlias)
+}
+
+// readOnceWith is the testable inner that takes injected seams.
+func readOnceWith(ctx context.Context, spec ReadSpec, progress chan<- string,
+	dial readDialer, resolve func(string) (config.Account, string, error),
+) errtrace.Result[ReadResult] {
 	defer closeProgress(progress)
 	limit, err := normalizeReadSpec(spec)
 	if err != nil {
 		return errtrace.Err[ReadResult](err)
 	}
-	acct, err := resolveAccount(spec.Alias)
+	acct, alias, err := resolve(spec.Alias)
 	if err != nil {
 		return errtrace.Err[ReadResult](err)
 	}
@@ -45,28 +65,31 @@ func (t *Tools) ReadOnce(ctx context.Context, spec ReadSpec, progress chan<- str
 	if err := ctxCheck(ctx); err != nil {
 		return errtrace.Err[ReadResult](err)
 	}
-	return runReadOnce(ctx, acct, limit, progress)
+	return runReadOnce(ctx, alias, acct, uint32(limit), progress, dial)
 }
 
-// runReadOnce is the IMAP-touching half — split from OpenUrl so the
-// public method body stays ≤ 15 LOC per coding-standards §3.
-func runReadOnce(ctx context.Context, acct any, limit int, progress chan<- string) errtrace.Result[ReadResult] {
+// runReadOnce performs the IMAP-touching half — split so the public
+// method body stays ≤ 15 LOC per coding-standards §3.
+func runReadOnce(ctx context.Context, alias string, acct config.Account, limit uint32,
+	progress chan<- string, dial readDialer,
+) errtrace.Result[ReadResult] {
 	started := time.Now()
-	cli, err := dialAndLogin(acct, progress)
+	cli, err := dial(acct)
 	if err != nil {
-		return errtrace.Err[ReadResult](errtrace.WrapCode(err, errtrace.ErrToolsReadFetchFailed, "dial/login"))
+		return errtrace.Err[ReadResult](errtrace.WrapCode(err, errtrace.ErrToolsReadFetchFailed, "dial"))
 	}
 	defer cli.Close()
+	send(progress, "dial OK; login OK")
 	if err := ctxCheck(ctx); err != nil {
 		return errtrace.Err[ReadResult](err)
 	}
-	hdrs, err := selectAndFetch(cli, uint32(limit), progress)
+	hdrs, err := selectAndFetch(cli, limit, progress)
 	if err != nil {
 		return errtrace.Err[ReadResult](errtrace.WrapCode(err, errtrace.ErrToolsReadFetchFailed, "select/fetch"))
 	}
 	dur := time.Since(started)
 	send(progress, fmt.Sprintf("fetched %d header(s) in %s", len(hdrs), dur.Round(time.Millisecond)))
-	return errtrace.Ok(ReadResult{Headers: hdrs, Duration: dur})
+	return errtrace.Ok(ReadResult{Alias: alias, Headers: hdrs, Duration: dur})
 }
 
 func normalizeReadSpec(spec ReadSpec) (int, error) {
@@ -80,55 +103,34 @@ func normalizeReadSpec(spec ReadSpec) (int, error) {
 	return limit, nil
 }
 
-func resolveAccount(alias string) (mailclient.Account, error) {
+// resolveAccountByAlias is the production resolver: empty alias → first
+// configured account; non-empty → looked up via core.GetAccount.
+func resolveAccountByAlias(alias string) (config.Account, string, error) {
 	if alias == "" {
 		r := ListAccounts()
 		if r.HasError() {
-			return mailclient.Account{}, r.Error()
+			return config.Account{}, "", r.Error()
 		}
 		if len(r.Value()) == 0 {
-			return mailclient.Account{}, errtrace.NewCoded(errtrace.ErrToolsInvalidArgument, "no accounts configured")
+			return config.Account{}, "", errtrace.NewCoded(errtrace.ErrToolsInvalidArgument, "no accounts configured")
 		}
-		return toMailAccount(r.Value()[0]), nil
+		first := r.Value()[0]
+		return first, first.Alias, nil
 	}
 	r := GetAccount(alias)
 	if r.HasError() {
-		return mailclient.Account{}, r.Error()
+		return config.Account{}, "", r.Error()
 	}
-	return toMailAccount(r.Value()), nil
+	return r.Value(), alias, nil
 }
 
-func dialAndLogin(acct any, progress chan<- string) (readCloser, error) {
-	a, ok := acct.(mailclient.Account)
-	if !ok {
-		return nil, errtrace.New("internal: account type mismatch")
-	}
-	cli, err := mailclient.Dial(a.toConfig())
-	if err != nil {
-		return nil, err
-	}
-	send(progress, "dial OK; login OK")
-	return cli, nil
-}
-
-func selectAndFetch(cli readCloser, limit uint32, progress chan<- string) ([]mailclient.HeaderSummary, error) {
+func selectAndFetch(cli readClient, limit uint32, progress chan<- string) ([]mailclient.HeaderSummary, error) {
 	stats, err := cli.SelectInbox()
 	if err != nil {
 		return nil, err
 	}
 	send(progress, fmt.Sprintf("INBOX selected: %d messages, UidNext=%d", stats.Messages, stats.UidNext))
-	hdrs, err := cli.FetchRecentHeaders(stats, limit)
-	if err != nil {
-		return nil, err
-	}
-	return hdrs, nil
-}
-
-// readCloser is the slim interface the read flow needs from mailclient.
-type readCloser interface {
-	SelectInbox() (mailclient.MailboxStats, error)
-	FetchRecentHeaders(stats mailclient.MailboxStats, limit uint32) ([]mailclient.HeaderSummary, error)
-	Close() error
+	return cli.FetchRecentHeaders(stats, limit)
 }
 
 func ctxCheck(ctx context.Context) error {
