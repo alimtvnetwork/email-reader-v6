@@ -195,25 +195,34 @@ func GetAccount(alias string) errtrace.Result[config.Account] {
 
 // RemoveAccount deletes the account with the given alias.
 func RemoveAccount(alias string) errtrace.Result[struct{}] {
-	cfg, err := config.Load()
-	if err != nil {
-		return errtrace.Err[struct{}](
-			errtrace.WrapCode(err, errtrace.ErrConfigOpen, "load config").
-				WithContext("Alias", alias),
-		)
-	}
-	if !cfg.RemoveAccount(alias) {
-		return errtrace.Err[struct{}](
-			errtrace.NewCoded(errtrace.ErrConfigAccountMissing, "remove account").
-				WithContext("Alias", alias),
-		)
-	}
-	if err := config.Save(cfg); err != nil {
-		return errtrace.Err[struct{}](
-			errtrace.WrapCode(err, errtrace.ErrConfigEncode, "save config").
-				WithContext("Alias", alias),
-		)
+	var result errtrace.Result[struct{}]
+	// CF-A2: Load+Remove+Save must be atomic vs Settings.Save and
+	// other AddAccount/RemoveAccount calls.
+	config.WithWriteLock(func() {
+		cfg, err := config.Load()
+		if err != nil {
+			result = errtrace.Err[struct{}](
+				errtrace.WrapCode(err, errtrace.ErrConfigOpen, "load config").
+					WithContext("Alias", alias))
+			return
+		}
+		if !cfg.RemoveAccount(alias) {
+			result = errtrace.Err[struct{}](
+				errtrace.NewCoded(errtrace.ErrConfigAccountMissing, "remove account").
+					WithContext("Alias", alias))
+			return
+		}
+		if err := config.Save(cfg); err != nil {
+			result = errtrace.Err[struct{}](
+				errtrace.WrapCode(err, errtrace.ErrConfigEncode, "save config").
+					WithContext("Alias", alias))
+			return
+		}
+		result = errtrace.Ok(struct{}{})
+	})
+	if result.HasError() {
+		return result
 	}
 	publishAccountEvent(AccountRemoved, alias)
-	return errtrace.Ok(struct{}{})
+	return result
 }
