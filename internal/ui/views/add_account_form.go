@@ -248,11 +248,18 @@ func resetAccountEntries(e *accountFormEntries) {
 	e.mailbox.SetText("")
 }
 
-// newAccountSubmitButton wires the primary "Save account" button: validate
-// → call opts.Save → render status → run OnSaved hook on success.
-func newAccountSubmitButton(opts AddAccountFormOptions, e *accountFormEntries, status *widget.Label, clear func()) *widget.Button {
-	submit := widget.NewButton("Save account", func() {
-		v := ValidateAccountForm(accountFormInputFromEntries(e))
+// newAccountSubmitButton wires the primary Save button: validate → call
+// opts.Save → render status → run OnSaved hook on success. The button
+// label and password-required behaviour both flip based on edit mode.
+func newAccountSubmitButton(opts AddAccountFormOptions, e *accountFormEntries, status *widget.Label, clear func(), editing bool) *widget.Button {
+	label := "Save account"
+	if editing {
+		label = "Update account"
+	}
+	submit := widget.NewButton(label, func() {
+		input := accountFormInputFromEntries(e)
+		input.AllowBlankPassword = editing
+		v := ValidateAccountForm(input)
 		if !v.Valid {
 			status.SetText("⚠ " + strings.Join(v.Errors, " · "))
 			return
@@ -263,7 +270,9 @@ func newAccountSubmitButton(opts AddAccountFormOptions, e *accountFormEntries, s
 			return
 		}
 		status.SetText(formatAccountSavedMessage(r.Value()))
-		clear()
+		if !editing {
+			clear()
+		}
 		if opts.OnSaved != nil {
 			opts.OnSaved()
 		}
