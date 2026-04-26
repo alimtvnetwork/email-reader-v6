@@ -206,6 +206,7 @@ func viewFor(item NavItem, state *AppState, gotoNav func(NavKind), onAccountsCha
 		if rt != nil {
 			opts.Watch = rt.Watch
 			opts.PollSeconds = rt.PollSeconds
+			opts.Bus = rt.Bus
 		}
 		return views.BuildWatch(opts)
 	case NavTools:
