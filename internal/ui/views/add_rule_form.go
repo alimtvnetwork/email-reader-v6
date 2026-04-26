@@ -150,6 +150,13 @@ func newRuleSubmitButton(opts AddRuleFormOptions, e *ruleFormEntries, status *wi
 			status.SetText("⚠ " + strings.Join(v.Errors, " · "))
 			return
 		}
+		if opts.Save == nil {
+			// Degraded path: bootstrap didn't wire a *RulesService and
+			// no test override was supplied. Surface the wiring gap
+			// instead of nil-panicking on submit.
+			status.SetText("⚠ Rules service not wired (no Service or Save injected)")
+			return
+		}
 		r := opts.Save(ruleInputFromValid(v))
 		if r.HasError() {
 			status.SetText("⚠ Save failed: " + r.Error().Error())
