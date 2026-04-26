@@ -182,6 +182,7 @@ func DefaultSettingsInput() SettingsInput {
 	return SettingsInput{
 		PollSeconds:           3,
 		Theme:                 ThemeDark,
+		Density:               DensityComfortable,
 		OpenUrlAllowedSchemes: []string{"https"},
 		AllowLocalhostUrls:    false,
 		AutoStartWatch:        true,
