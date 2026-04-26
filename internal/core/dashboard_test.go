@@ -42,8 +42,7 @@ func TestNewDashboardService_RejectsNilDeps(t *testing.T) {
 			if !res.HasError() {
 				t.Fatalf("expected error, got %+v", res.Value())
 			}
-			if !errors.Is(res.Error(), errtrace.ErrCoreInvalidArgument) &&
-				!hasCode(res.Error(), errtrace.ErrCoreInvalidArgument) {
+			if !hasCode(res.Error(), errtrace.ErrCoreInvalidArgument) {
 				t.Errorf("error code = %v, want ErrCoreInvalidArgument", codeOf(res.Error()))
 			}
 			if got := res.Error().Error(); !containsStr(got, tc.wantSubstr) {
