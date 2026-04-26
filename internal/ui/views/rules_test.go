@@ -76,10 +76,10 @@ func TestMoveRule_DefensiveBounds_NoOp(t *testing.T) {
 	reload := func() { reloads++ }
 
 	cases := []struct{ from, to int }{
-		{0, 0},   // same index
-		{-1, 0},  // negative
-		{0, 99},  // out of range
-		{99, 0},  // out of range
+		{0, 0},  // same index
+		{-1, 0}, // negative
+		{0, 99}, // out of range
+		{99, 0}, // out of range
 	}
 	for _, tc := range cases {
 		moveRule(names, tc.from, tc.to, opts, status, reload)
