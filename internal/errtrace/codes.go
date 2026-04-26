@@ -49,11 +49,15 @@ const (
 	ErrRuleSeedDefault    Code = "ER-RUL-21305"
 
 	// ER-WCH (Watcher) — block 21400–21499
-	ErrWatcherStart        Code = "ER-WCH-21401"
-	ErrWatcherPollCycle    Code = "ER-WCH-21402"
-	ErrWatcherProcessEmail Code = "ER-WCH-21403"
-	ErrWatcherEventPublish Code = "ER-WCH-21404"
-	ErrWatcherShutdown     Code = "ER-WCH-21405"
+	ErrWatcherStart          Code = "ER-WCH-21401"
+	ErrWatcherPollCycle      Code = "ER-WCH-21402"
+	ErrWatcherProcessEmail   Code = "ER-WCH-21403"
+	ErrWatcherEventPublish   Code = "ER-WCH-21404"
+	ErrWatcherShutdown       Code = "ER-WCH-21405"
+	ErrWatchAlreadyStarted   Code = "ER-WCH-21406"
+	ErrWatchNotRunning       Code = "ER-WCH-21407"
+	ErrWatchAliasRequired    Code = "ER-WCH-21410"
+	ErrWatchSubscribeClosed  Code = "ER-WCH-21411"
 
 	// ER-BRW (Browser) — block 21500–21599
 	ErrBrowserLaunch        Code = "ER-BRW-21501"

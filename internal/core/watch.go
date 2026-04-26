@@ -1,0 +1,245 @@
+// watch.go is the `core.Watch` service: a single source of truth for
+// which aliases are currently being watched. It owns a `runners` map
+// keyed by Alias, manages goroutine lifecycle (Start spawns, Stop
+// cancels), and fans out `WatchEvent`s via an `eventbus.Publisher`.
+//
+// This first slice ships the service shell — runners map, start/stop
+// pipeline, event bus, and the `LoopFactory` seam. Wiring the real
+// `internal/watcher.Run` behind `LoopFactory` lands in a follow-up
+// slice (it requires threading `*config.Account`, `*rules.Engine`,
+// `*browser.Launcher`, `*store.Store` through the call site, which is
+// out of scope here). Tests use a stub LoopFactory.
+//
+// Spec: spec/21-app/02-features/05-watch/01-backend.md §1–§4.
+package core
+
+import (
+	"context"
+	"sync"
+	"time"
+
+	"github.com/lovable/email-read/internal/errtrace"
+	"github.com/lovable/email-read/internal/eventbus"
+)
+
+// WatchEventKind discriminates lifecycle + runtime events emitted on
+// the Watch bus. Mirrors the spec §4 enum (Start / Stop / Error /
+// Heartbeat); the in-flight watcher events live on `watcher.Bus` and
+// will be bridged into this stream by the follow-up slice.
+type WatchEventKind uint8
+
+const (
+	WatchStart     WatchEventKind = 1
+	WatchStop      WatchEventKind = 2
+	WatchError     WatchEventKind = 3
+	WatchHeartbeat WatchEventKind = 4
+)
+
+// String returns the canonical log form.
+func (k WatchEventKind) String() string {
+	switch k {
+	case WatchStart:
+		return "Start"
+	case WatchStop:
+		return "Stop"
+	case WatchError:
+		return "Error"
+	case WatchHeartbeat:
+		return "Heartbeat"
+	}
+	return "Unknown"
+}
+
+// WatchEvent is the published payload. Consumers switch on Kind.
+type WatchEvent struct {
+	Kind    WatchEventKind
+	Alias   string
+	At      time.Time
+	Message string
+	Err     error // populated when Kind == WatchError
+}
+
+// WatchOptions is the request shape for Start. PollSeconds is the
+// initial cadence; live updates flow through Settings.Subscribe (the
+// CF-W1 contract — out of scope for this slice).
+type WatchOptions struct {
+	Alias       string
+	PollSeconds int
+}
+
+// LoopFactory is the seam over `internal/watcher.Run`. The real
+// factory wraps `watcher.Options` + `watcher.Run`; tests inject a stub
+// that records calls. Each Loop gets its own goroutine spawned by
+// Watch; Loop.Run blocks until ctx is cancelled.
+type LoopFactory interface {
+	New(opts WatchOptions) Loop
+}
+
+// Loop is the runnable produced by LoopFactory.New. Implementations
+// MUST honour ctx.Done() and return promptly on cancellation.
+type Loop interface {
+	Run(ctx context.Context) error
+}
+
+// runner pairs a Loop with its cancel func + the goroutine done-chan
+// so Stop can both cancel ctx AND wait for clean shutdown.
+type runner struct {
+	loop   Loop
+	cancel context.CancelFunc
+	done   chan struct{}
+}
+
+// Watch is the service. Concurrency: `mu` guards `runners`; the bus
+// has its own internal locking. Never iterate `runners` while holding
+// `mu` for write — Stop's goroutine-wait is done outside the lock.
+type Watch struct {
+	loop LoopFactory
+	bus  *eventbus.Bus[WatchEvent]
+	now  func() time.Time
+
+	mu      sync.RWMutex
+	runners map[string]*runner
+}
+
+// NewWatch constructs a Watch. `now` is injectable for deterministic
+// timestamps in tests (production passes `time.Now`). `loop` and
+// `bus` are required; nil triggers ER-COR-21701.
+func NewWatch(lf LoopFactory, bus *eventbus.Bus[WatchEvent], now func() time.Time) errtrace.Result[*Watch] {
+	if lf == nil || bus == nil || now == nil {
+		return errtrace.Err[*Watch](errtrace.NewCoded(errtrace.ErrCoreInvalidArgument, "NewWatch: nil dep"))
+	}
+	return errtrace.Ok(&Watch{
+		loop: lf, bus: bus, now: now, runners: map[string]*runner{},
+	})
+}
+
+// Start launches the watch loop for `opts.Alias`. Returns
+// ErrWatchAlreadyStarted if a runner exists; ErrWatchAliasRequired if
+// the alias is empty. Publishes a WatchStart event on success.
+func (w *Watch) Start(ctx context.Context, opts WatchOptions) errtrace.Result[struct{}] {
+	if opts.Alias == "" {
+		return errtrace.Err[struct{}](errtrace.NewCoded(errtrace.ErrWatchAliasRequired, "alias empty"))
+	}
+	if err := w.reserveRunner(opts.Alias); err != nil {
+		return errtrace.Err[struct{}](err)
+	}
+	w.spawnRunner(ctx, opts)
+	w.publish(WatchEvent{Kind: WatchStart, Alias: opts.Alias, Message: "watch started"})
+	return errtrace.Ok(struct{}{})
+}
+
+// reserveRunner inserts a placeholder under mu.Lock so a concurrent
+// Start for the same alias loses cleanly. The placeholder's loop /
+// cancel / done are filled in by spawnRunner — callers MUST follow
+// reserve+spawn in lock-step.
+func (w *Watch) reserveRunner(alias string) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if _, ok := w.runners[alias]; ok {
+		return errtrace.NewCoded(errtrace.ErrWatchAlreadyStarted, "alias "+alias+" already watched")
+	}
+	w.runners[alias] = &runner{}
+	return nil
+}
+
+// spawnRunner builds the Loop, fills the placeholder, and launches the
+// goroutine. The goroutine signals `done` on exit so Stop can wait.
+func (w *Watch) spawnRunner(parent context.Context, opts WatchOptions) {
+	loopCtx, cancel := context.WithCancel(parent)
+	loop := w.loop.New(opts)
+	done := make(chan struct{})
+	w.mu.Lock()
+	r := w.runners[opts.Alias]
+	r.loop, r.cancel, r.done = loop, cancel, done
+	w.mu.Unlock()
+	go w.runLoop(loopCtx, opts.Alias, loop, done)
+}
+
+// runLoop runs the loop and surfaces any non-nil terminal error as a
+// WatchError event before signalling `done`.
+func (w *Watch) runLoop(ctx context.Context, alias string, loop Loop, done chan struct{}) {
+	defer close(done)
+	if err := loop.Run(ctx); err != nil && ctx.Err() == nil {
+		w.publish(WatchEvent{Kind: WatchError, Alias: alias, Err: err, Message: "loop exited with error"})
+	}
+}
+
+// Stop cancels the runner for `alias` and waits up to `timeout` for
+// graceful shutdown. Returns ErrWatchNotRunning if no runner exists.
+// Publishes WatchStop on success.
+func (w *Watch) Stop(alias string, timeout time.Duration) errtrace.Result[struct{}] {
+	r, err := w.takeRunner(alias)
+	if err != nil {
+		return errtrace.Err[struct{}](err)
+	}
+	r.cancel()
+	if err := waitOrTimeout(r.done, timeout); err != nil {
+		return errtrace.Err[struct{}](errtrace.WrapCode(err, errtrace.ErrWatcherShutdown, "Stop "+alias))
+	}
+	w.publish(WatchEvent{Kind: WatchStop, Alias: alias, Message: "watch stopped"})
+	return errtrace.Ok(struct{}{})
+}
+
+// takeRunner removes and returns the runner under mu.Lock. Releases
+// the lock before any blocking wait so Start/Stop on other aliases
+// stay responsive.
+func (w *Watch) takeRunner(alias string) (*runner, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	r, ok := w.runners[alias]
+	if !ok {
+		return nil, errtrace.NewCoded(errtrace.ErrWatchNotRunning, "alias "+alias+" not watched")
+	}
+	delete(w.runners, alias)
+	return r, nil
+}
+
+// IsRunning reports whether `alias` currently has an active runner.
+func (w *Watch) IsRunning(alias string) bool {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	_, ok := w.runners[alias]
+	return ok
+}
+
+// List returns the set of currently-watched aliases (snapshot, sorted
+// in insertion order is NOT guaranteed). Useful for the UI's status
+// chip and for the CLI's `email-read watch ls`.
+func (w *Watch) List() []string {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	out := make([]string, 0, len(w.runners))
+	for alias := range w.runners {
+		out = append(out, alias)
+	}
+	return out
+}
+
+// Subscribe returns a buffered receive channel for WatchEvents and an
+// unsubscribe func. Always call cancel to release the slot.
+func (w *Watch) Subscribe() (<-chan WatchEvent, func()) {
+	return w.bus.Subscribe()
+}
+
+// publish stamps `At` if missing then forwards to the bus.
+func (w *Watch) publish(ev WatchEvent) {
+	if ev.At.IsZero() {
+		ev.At = w.now()
+	}
+	w.bus.Publish(ev)
+}
+
+// waitOrTimeout blocks until `done` closes or `timeout` elapses. A
+// zero/negative timeout means "wait forever".
+func waitOrTimeout(done <-chan struct{}, timeout time.Duration) error {
+	if timeout <= 0 {
+		<-done
+		return nil
+	}
+	select {
+	case <-done:
+		return nil
+	case <-time.After(timeout):
+		return errtrace.NewCoded(errtrace.ErrWatcherShutdown, "shutdown timed out")
+	}
+}
