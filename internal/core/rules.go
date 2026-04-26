@@ -96,7 +96,19 @@ func NewRulesService(loadCfg configLoader, saveCfg cfgWriter, cfgPath cfgPathFn)
 	return errtrace.Ok(&RulesService{loadCfg: loadCfg, saveCfg: saveCfg, cfgPath: cfgPath})
 }
 
-// Add validates input, compiles regex patterns to catch syntax errors
+// NewDefaultRulesService is the production-bootstrap convenience
+// constructor: builds a `*RulesService` wired to the real
+// `config.Load` / `config.Save` / `config.Path`. Used by `internal/ui`
+// (Phase 2.7 wiring) so the UI package never needs to know the
+// unexported `configLoader` / `cfgWriter` / `cfgPathFn` shapes.
+//
+// Cannot fail in practice (all three deps are non-nil), but returns
+// a Result envelope to keep the constructor signature parallel with
+// `NewRulesService` and `NewDefaultEmailsService`.
+func NewDefaultRulesService() errtrace.Result[*RulesService] {
+	return NewRulesService(config.Load, config.Save, config.Path)
+}
+
 // before persisting, and writes the rule. Upsert semantics: a rule
 // with the same name is replaced.
 func (s *RulesService) Add(in RuleInput) errtrace.Result[*AddRuleResult] {
