@@ -459,12 +459,58 @@ func SetEmailDeletedAt(deletedAt *int64, alias string, uids []uint32) (string, [
 //
 // Spec: spec/21-app/01-features/01-dashboard/00-overview.md §4 +
 // roadmap-phases.md §PHASE 3 (deferred Store.QueryAccountHealth shim).
+// AccountHealthSelectAll returns one row per known alias (union of
+// every alias seen in WatchEvents OR Emails OR WatchState) with the
+// five store-derived columns the Dashboard `AccountHealth`
+// projection needs:
+//
+//   - LastPollAt          — most recent OccurredAt where Kind IN (1, 4)
+//                           i.e. WatchEventStart (1) or
+//                           WatchEventHeartbeat (4). Both signal "the
+//                           watcher is alive at this instant".
+//   - LastErrorAt         — most recent OccurredAt where Kind = 3 (Error).
+//   - EmailsStored        — COUNT(1) over Emails grouped by Alias.
+//   - UnreadCount         — SUM(IsRead = 0) over Emails grouped by Alias.
+//   - ConsecutiveFailures — read straight off `WatchState` (m0014
+//                           column). The watcher bumps this counter
+//                           on every poll error and zeroes it on
+//                           every poll success (Slice #106).
+//
+// **Why `ConsecutiveFailures` is now column-addressable** — Slice
+// #102 deliberately deferred this projection because computing it
+// from `WatchEvents` required a per-alias window walk back to the
+// most recent non-error event. Slice #106's m0014 migration moved
+// the counter onto `WatchState` where it lives behind a single
+// alias-keyed primary index, so the projection becomes a trivial
+// LEFT JOIN with COALESCE-to-zero for aliases that have no
+// `WatchState` row yet (back-fill scenario: an account with stored
+// Emails from a pre-watcher import).
+//
+// **Why LEFT JOIN (not the alias_set CTE)** — `WatchState`'s alias
+// is already in `alias_set` IF the watcher has ever run for that
+// alias. We extend `alias_set` to also union over `WatchState`
+// itself so first-boot-error rows (poll error before any
+// `WatchEvents` or `Emails` exist) still surface in the dashboard.
+//
+// **What this intentionally does NOT compute:**
+//
+//   - `Health` — purely derived in `core.ComputeHealth` from the
+//     other fields + clock; the store has no business computing it.
+//
+// **Why timestamps as TEXT (not unix-seconds)** — `WatchEvents.OccurredAt`
+// is RFC3339 TEXT (m0008's canonical timestamp convention for that
+// table). Caller parses on the Go side via `time.Parse(time.RFC3339Nano, …)`.
+//
+// Spec: spec/21-app/01-features/01-dashboard/00-overview.md §4 +
+// roadmap-phases.md §PHASE 3 (closed by Slice #106).
 const AccountHealthSelectAll = `
 WITH
   alias_set AS (
     SELECT DISTINCT Alias FROM WatchEvents
     UNION
     SELECT DISTINCT Alias FROM Emails
+    UNION
+    SELECT DISTINCT Alias FROM WatchState
   ),
   poll AS (
     SELECT Alias, MAX(OccurredAt) AS LastPollAt
@@ -483,12 +529,14 @@ WITH
 SELECT a.Alias,
        p.LastPollAt,
        e.LastErrorAt,
-       COALESCE(em.Stored, 0) AS EmailsStored,
-       COALESCE(em.Unread, 0) AS UnreadCount
+       COALESCE(em.Stored, 0)              AS EmailsStored,
+       COALESCE(em.Unread, 0)              AS UnreadCount,
+       COALESCE(ws.ConsecutiveFailures, 0) AS ConsecutiveFailures
 FROM alias_set a
 LEFT JOIN poll       p  ON p.Alias  = a.Alias
 LEFT JOIN err        e  ON e.Alias  = a.Alias
 LEFT JOIN emails_agg em ON em.Alias = a.Alias
+LEFT JOIN WatchState ws ON ws.Alias = a.Alias
 ORDER BY a.Alias`
 
 // RecentActivitySelectN returns up to `?` most-recent rows from the
