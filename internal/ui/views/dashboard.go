@@ -5,6 +5,7 @@ package views
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -28,18 +29,26 @@ import (
 // wired") rather than panicking — keeps headless / partial-bootstrap
 // previews safe.
 type DashboardOptions struct {
-	Alias        string
-	OnStartWatch func()
-	OnRefresh    func()
-	Service      *core.DashboardService     // production seam — constructed in app bootstrap
-	Summary      SummaryFunc                // test-only override; takes precedence over Service when non-nil
-	Bus          *watcher.Bus               // optional; live counter row when non-nil
-	HealthSource core.AccountHealthSource   // Slice #103 production seam — per-account health rollup; nil → row hidden
+	Alias          string
+	OnStartWatch   func()
+	OnRefresh      func()
+	Service        *core.DashboardService     // production seam — constructed in app bootstrap
+	Summary        SummaryFunc                // test-only override; takes precedence over Service when non-nil
+	Bus            *watcher.Bus               // optional; live counter row when non-nil
+	HealthSource   core.AccountHealthSource   // Slice #103 production seam — per-account health rollup; nil → row hidden
+	ActivitySource core.ActivitySource        // Slice #105 production seam — recent watch-event feed; nil → row hidden
 }
 
 // SummaryFunc is the seam used by tests to inject deterministic counts.
 // Returns a Result envelope so failures carry an error code (Delta #2).
 type SummaryFunc func(ctx context.Context, alias string) errtrace.Result[core.DashboardSummary]
+
+// recentActivityRenderLimit is the cap fed into
+// `(*DashboardService).RecentActivity` from the dashboard view. Picked
+// to fit one screen of typical readout (10 lines × ~80 char ≈ what a
+// glanceable activity feed should show); user-driven deeper feeds will
+// land as a dedicated `Activity` nav slice with pagination.
+const recentActivityRenderLimit = 10
 
 func BuildDashboard(opts DashboardOptions) fyne.CanvasObject {
 	if opts.Summary == nil && opts.Service != nil {
@@ -60,12 +69,20 @@ func BuildDashboard(opts DashboardOptions) fyne.CanvasObject {
 	health.Wrapping = fyne.TextWrapWord
 	health.Hide()
 
+	// Slice #105: recent-activity readout. Hidden when neither
+	// the Service nor an ActivitySource is wired (degraded boot).
+	activity := widget.NewLabel("")
+	activity.Wrapping = fyne.TextWrapWord
+	activity.Hide()
+
 	autoStart := newAutoStartIndicator()
 	refresh := makeDashboardRefresh(opts, cards, status)
 	refreshHealth := makeDashboardHealthRefresh(opts, health)
+	refreshActivity := makeDashboardActivityRefresh(opts, activity)
 	combined := func() {
 		refresh()
 		refreshHealth()
+		refreshActivity()
 	}
 	combined()
 
@@ -75,6 +92,7 @@ func BuildDashboard(opts DashboardOptions) fyne.CanvasObject {
 		heading, subtitle, widget.NewSeparator(),
 		cards.Row, widget.NewSeparator(),
 		health,
+		activity,
 		live, widget.NewSeparator(),
 		actions, autoStart, status,
 	)
@@ -126,6 +144,92 @@ func formatHealthRollup(rows []core.AccountHealthRow) string {
 	}
 	return fmt.Sprintf("Health: %d ● healthy · %d ◐ warning · %d ✗ error",
 		healthy, warn, errCount)
+}
+
+// makeDashboardActivityRefresh returns a closure that loads the most
+// recent N activity rows (`recentActivityRenderLimit`) and renders
+// them as a multi-line readout on `lbl`. When neither `opts.Service`
+// nor `opts.ActivitySource` is wired the label stays hidden
+// (degraded boot — Slice #105 wiring may not yet be active if
+// WatchRuntime failed to open the store).
+//
+// Errors surface inline with a "⚠" prefix so a transient store
+// failure doesn't blank the whole dashboard.
+func makeDashboardActivityRefresh(opts DashboardOptions, lbl *widget.Label) func() {
+	return func() {
+		if opts.Service == nil || opts.ActivitySource == nil {
+			lbl.Hide()
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		res := opts.Service.RecentActivity(ctx, recentActivityRenderLimit, opts.ActivitySource)
+		if res.HasError() {
+			lbl.SetText("⚠ Recent activity: " + res.Error().Error())
+			lbl.Show()
+			return
+		}
+		lbl.SetText(formatRecentActivity(res.Value()))
+		lbl.Show()
+	}
+}
+
+// formatRecentActivity renders a multi-line "Recent activity" block
+// — one header line plus one "HH:MM:SS  alias  · kind · message"
+// line per row. Empty input yields a single "(no recent activity)"
+// line so the absence is explicit rather than an empty gap.
+//
+// The kind is rendered with a single-glyph prefix so eyes can scan
+// the column at speed: ▶ (started) · ✓ (succeeded) · ✗ (failed) ·
+// ✉ (email stored) · ◆ (rule matched). Unknown future ActivityKind
+// values fall through to a bare "•" so a roll-out of a new kind
+// doesn't blank the row.
+func formatRecentActivity(rows []core.ActivityRow) string {
+	if len(rows) == 0 {
+		return "Recent activity:\n  (no recent activity)"
+	}
+	var b strings.Builder
+	b.WriteString("Recent activity:")
+	for _, r := range rows {
+		b.WriteString("\n  ")
+		b.WriteString(r.OccurredAt.Format("15:04:05"))
+		b.WriteString("  ")
+		if r.Alias != "" {
+			b.WriteString(r.Alias)
+			b.WriteString("  ")
+		}
+		b.WriteString(activityGlyph(r.Kind))
+		b.WriteString(" ")
+		b.WriteString(string(r.Kind))
+		if r.Message != "" {
+			b.WriteString(" · ")
+			b.WriteString(r.Message)
+		}
+		if r.ErrorCode != 0 {
+			b.WriteString(fmt.Sprintf(" (err %d)", r.ErrorCode))
+		}
+	}
+	return b.String()
+}
+
+// activityGlyph returns the single-glyph prefix for an ActivityKind.
+// Picked so the column is visually distinct at a glance even before
+// the user reads the kind word.
+func activityGlyph(k core.ActivityKind) string {
+	switch k {
+	case core.ActivityPollStarted:
+		return "▶"
+	case core.ActivityPollSucceeded:
+		return "✓"
+	case core.ActivityPollFailed:
+		return "✗"
+	case core.ActivityEmailStored:
+		return "✉"
+	case core.ActivityRuleMatched:
+		return "◆"
+	default:
+		return "•"
+	}
 }
 
 // newAutoStartIndicator returns a label that shows the current

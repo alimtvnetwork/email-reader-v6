@@ -44,11 +44,17 @@ import (
 // nil until `AttachHealthSource` is called from the lazy
 // `WatchRuntimeOrNil()` path (mirrors how `AttachRefresher` wires the
 // production refresher into `Emails`).
+//
+// `ActivitySource` is the production `core.ActivitySource` adapter
+// returned by `core.NewStoreActivitySource(rt.Store)`. Same lazy-
+// attach pattern as `HealthSource` (Slice #105). When nil the
+// dashboard hides its recent-activity list rather than panicking.
 type Services struct {
-	Dashboard    *core.DashboardService
-	Emails       *core.EmailsService
-	Rules        *core.RulesService
-	HealthSource core.AccountHealthSource
+	Dashboard      *core.DashboardService
+	Emails         *core.EmailsService
+	Rules          *core.RulesService
+	HealthSource   core.AccountHealthSource
+	ActivitySource core.ActivitySource
 }
 
 // BuildServices constructs all three Phase 2 services. Call once at
