@@ -107,6 +107,7 @@ const (
 	ErrSettingsConcurrentEdit   Code = "ER-SET-21779"
 	ErrSettingsDetectChromeStat Code = "ER-SET-21780"
 	ErrSettingsEventDropped     Code = "ER-SET-21781"
+	ErrSettingsRetentionDays    Code = "ER-SET-21782"
 
 	// ER-TLS (Tools) — block 21750–21769
 	ErrToolsInvalidArgument     Code = "ER-TLS-21750"
