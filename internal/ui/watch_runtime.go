@@ -132,6 +132,7 @@ func attachRuntimeServices(ctx context.Context, rt *WatchRuntime) error {
 
 	bus := watcher.NewBus(64)
 	rt.Bus = bus
+	rt.PollChans = core.NewPollChanRegistry()
 
 	engine, launcher := buildEngineAndLauncher(rt.cfg)
 	if settings != nil {
@@ -144,13 +145,14 @@ func attachRuntimeServices(ctx context.Context, rt *WatchRuntime) error {
 		return rt.cfg.FindAccount(alias)
 	}
 	lfRes := core.NewRealLoopFactory(core.RealLoopFactoryDeps{
-		Resolver: resolver,
-		Engine:   engine,
-		Launcher: launcher,
-		Store:    rt.Store,
-		Bus:      bus,
-		Logger:   log.New(os.Stdout, "watch ", log.LstdFlags),
-		Verbose:  false,
+		Resolver:  resolver,
+		Engine:    engine,
+		Launcher:  launcher,
+		Store:     rt.Store,
+		Bus:       bus,
+		Logger:    log.New(os.Stdout, "watch ", log.LstdFlags),
+		Verbose:   false,
+		PollChans: rt.PollChans,
 	})
 	if lfRes.HasError() {
 		return errtrace.Wrap(lfRes.Error(), "build loop factory")
