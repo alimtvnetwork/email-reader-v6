@@ -253,14 +253,33 @@ func (t *Tools) checkDedup(ctx context.Context, spec OpenUrlSpec, canonical stri
 	return false, nil
 }
 
-// recordAudit writes the persistent + in-memory audit entries. Failures
-// are logged-and-swallowed: the launch already happened (§7 trade-off).
-func (t *Tools) recordAudit(ctx context.Context, spec OpenUrlSpec, canonical string) {
+// recordAuditExt writes the persistent + in-memory audit entries with
+// the Delta-#1 rich payload (Alias / Origin / OriginalUrl / IsDeduped /
+// IsIncognito / TraceId). Failures are logged-and-swallowed: the launch
+// already happened (§7 trade-off). When EmailId == 0 the persistent
+// insert is skipped (FK to Emails would fail) but the in-memory dedup
+// key is still recorded.
+func (t *Tools) recordAuditExt(ctx context.Context, spec OpenUrlSpec, canonical, original, traceId string, deduped bool) {
 	key := spec.Alias + "|" + canonical
 	t.openMu.Lock()
 	t.keys[key] = time.Now()
 	t.openMu.Unlock()
-	if spec.EmailId > 0 {
-		_, _ = t.store.RecordOpenedUrl(ctx, spec.EmailId, spec.RuleName, canonical)
+	if spec.EmailId == 0 {
+		return
 	}
+	origStr := ""
+	if original != canonical {
+		origStr = original
+	}
+	_, _ = t.store.RecordOpenedUrlExt(ctx, store.OpenedUrlInsert{
+		EmailId:     spec.EmailId,
+		RuleName:    spec.RuleName,
+		Url:         canonical,
+		Alias:       spec.Alias,
+		Origin:      string(spec.Origin),
+		OriginalUrl: origStr,
+		IsDeduped:   deduped,
+		IsIncognito: true, // OpenUrl always launches in incognito (§5)
+		TraceId:     traceId,
+	})
 }
