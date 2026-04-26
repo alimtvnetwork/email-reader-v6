@@ -1,4 +1,6 @@
-# 21-app spec authoring — atomic task list
+# 21-app spec authoring — atomic task list (ARCHIVED)
+
+**Archived:** 2026-04-26 — all 35 tasks complete. Original location was `mem://workflow/02-spec-21-app-tasklist.md`; moved here so the live workflow folder only holds in-flight work. Implementation deltas now live in `spec/21-app/99-consistency-report.md` §6 and are tracked from `mem://workflow/01-status` "Remaining tracked work".
 
 **Created:** 2026-04-25
 **Source of truth** for the spec/21-app authoring round. On each `next` command, find the first unchecked item, do exactly that one task, mark it `[x]`, and stop.
