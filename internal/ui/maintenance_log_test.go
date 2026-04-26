@@ -64,3 +64,30 @@ func TestFormatRetentionSweep_SingleLine(t *testing.T) {
 		}
 	}
 }
+
+func TestFormatAnalyzeRun_Success_IncludesTriggerAndOk(t *testing.T) {
+	got := FormatAnalyzeRun(1500, nil)
+	want := "ui: maintenance: analyze: triggered_at=1500 ok"
+	if got != want {
+		t.Fatalf("analyze success format mismatch:\n got %q\nwant %q", got, want)
+	}
+}
+
+func TestFormatAnalyzeRun_Error_PreservesTriggerAndError(t *testing.T) {
+	got := FormatAnalyzeRun(1234, errors.New("locked"))
+	if !strings.HasPrefix(got, "ui: maintenance: analyze: ") {
+		t.Errorf("missing canonical prefix: %q", got)
+	}
+	if !strings.Contains(got, "triggered_at=1234") {
+		t.Errorf("trigger count lost: %q", got)
+	}
+	if !strings.Contains(got, "error=locked") {
+		t.Errorf("error message lost: %q", got)
+	}
+	if strings.Contains(got, " ok") {
+		t.Errorf("error case must not include the ok marker: %q", got)
+	}
+	if strings.ContainsAny(got, "\n\r") {
+		t.Errorf("analyze log line contains newline: %q", got)
+	}
+}
