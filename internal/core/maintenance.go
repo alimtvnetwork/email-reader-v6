@@ -33,6 +33,17 @@ import (
 // busyness does not wedge the loop).
 type Pruner func(ctx context.Context, cutoff time.Time) (int64, error)
 
+// Analyzer is the seam over store.Analyze. Optional: when nil the
+// ANALYZE-after-N-deletes logic is skipped and the cumulative counter
+// is never reset (which is harmless — Pruner still runs).
+type Analyzer func(ctx context.Context) error
+
+// AnalyzeThresholdRows is the cumulative-delete count above which the
+// Maintenance loop fires Analyzer and resets the counter. Mirrors
+// store.AnalyzeThreshold (kept here as a separate const so the core
+// package does not import store at construction time).
+const AnalyzeThresholdRows int64 = 1000
+
 // SnapshotSource returns the current OpenUrlsRetentionDays. Reading
 // it on every tick (rather than caching at construction) means the
 // user can change the knob in Settings and the sweep starts honouring
@@ -47,6 +58,11 @@ type MaintenanceOptions struct {
 	Pruner Pruner
 	// Retention is required: nothing to schedule without the knob.
 	Retention SnapshotSource
+	// Analyzer is optional. When non-nil, the loop tracks cumulative
+	// deletes across ticks and invokes Analyzer once the count crosses
+	// AnalyzeThresholdRows; the counter then resets to zero. Spec
+	// 23-app-database/04 §2.
+	Analyzer Analyzer
 	// Now defaults to time.Now.
 	Now func() time.Time
 	// TickInterval defaults to 1 minute. The retention tick fires at
@@ -58,6 +74,10 @@ type MaintenanceOptions struct {
 	// OnSweep is an optional observer (logging / metrics / tests). Fired
 	// after every sweep attempt, success or error.
 	OnSweep func(deleted int64, err error)
+	// OnAnalyze is an optional observer fired when Analyzer runs.
+	// Receives the cumulative-delete count that triggered it and the
+	// Analyzer's error (nil on success). Used by tests + structured logs.
+	OnAnalyze func(triggeredAt int64, err error)
 }
 
 // Maintenance is the goroutine handle. Construct via NewMaintenance,
