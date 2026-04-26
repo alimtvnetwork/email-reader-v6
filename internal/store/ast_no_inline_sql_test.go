@@ -29,6 +29,7 @@ import (
 	"go/parser"
 	"go/token"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -158,7 +159,7 @@ func findModuleRoot() (string, error) {
 		return "", err
 	}
 	for {
-		if _, err := fs.Stat(dirFS{}, filepath.Join(dir, "go.mod")); err == nil {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
 			return dir, nil
 		}
 		parent := filepath.Dir(dir)
@@ -168,12 +169,6 @@ func findModuleRoot() (string, error) {
 		dir = parent
 	}
 }
-
-// dirFS is a tiny adapter so we can use fs.Stat without pulling in os
-// directly here (mirrors the style of ast_no_sql_type_leak_test.go).
-type dirFS struct{}
-
-func (dirFS) Open(name string) (fs.File, error) { return nil, fs.ErrInvalid }
 
 // unquoteLoose strips the surrounding " or ` from an *ast.BasicLit
 // value. We don't decode escape sequences — the only thing we care
