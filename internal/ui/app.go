@@ -195,6 +195,8 @@ func viewFor(item NavItem, state *AppState, gotoNav func(NavKind), onAccountsCha
 		return views.BuildRules(views.RulesOptions{})
 	case NavAccounts:
 		return views.BuildAccounts(views.AccountsOptions{})
+	case NavWatch:
+		return views.BuildWatch(views.WatchOptions{Alias: state.Alias()})
 	case NavTools:
 		return views.BuildTools(views.ToolsOptions{
 			OnAccountsChanged: onAccountsChanged,
