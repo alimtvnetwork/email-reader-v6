@@ -10,13 +10,11 @@ package core
 
 import (
 	"context"
-	"database/sql"
 	"encoding/csv"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/lovable/email-read/internal/errtrace"
@@ -89,7 +87,7 @@ func (t *Tools) ExportCsv(ctx context.Context, spec ExportSpec, progress chan<- 
 }
 
 func runExportCsv(ctx context.Context, st *store.Store, progress chan<- ExportProgress) errtrace.Result[ExportReport] {
-	total, err := countEmails(ctx, st, ExportSpec{})
+	total, err := st.CountEmailsFiltered(ctx, store.EmailExportFilter{})
 	if err != nil {
 		return errtrace.Err[ExportReport](errtrace.WrapCode(err, errtrace.ErrToolsInvalidArgument, "count emails"))
 	}
@@ -108,7 +106,7 @@ func runExportCsv(ctx context.Context, st *store.Store, progress chan<- ExportPr
 // COUNT query and its own SELECT so we can emit accurate TotalRows in
 // the Counting tick before any I/O happens on the writer.
 func runExportCsvFiltered(ctx context.Context, st *store.Store, spec ExportSpec, progress chan<- ExportProgress) errtrace.Result[ExportReport] {
-	total, err := countEmails(ctx, st, spec)
+	total, err := st.CountEmailsFiltered(ctx, emailExportFilterFromSpec(spec))
 	if err != nil {
 		return errtrace.Err[ExportReport](errtrace.WrapCode(err, errtrace.ErrToolsInvalidArgument, "count emails"))
 	}
@@ -125,6 +123,17 @@ func runExportCsvFiltered(ctx context.Context, st *store.Store, spec ExportSpec,
 	sendExport(progress, ExportProgress{Phase: PhaseFlushing, TotalRows: total, RowsWritten: written})
 	sendExport(progress, ExportProgress{Phase: PhaseDone, TotalRows: total, RowsWritten: written})
 	return errtrace.Ok(ExportReport{OutPath: path, RowCount: written})
+}
+
+// emailExportFilterFromSpec translates the user-facing ExportSpec into
+// the primitive store-side filter. Keeps the import direction one-way:
+// core → store.
+func emailExportFilterFromSpec(spec ExportSpec) store.EmailExportFilter {
+	return store.EmailExportFilter{
+		Alias: spec.Alias,
+		Since: spec.Since,
+		Until: spec.Until,
+	}
 }
 
 // resolveExportPath honours an explicit OutPath (already preflighted) or
@@ -163,7 +172,7 @@ func streamFilteredExport(ctx context.Context, st *store.Store, spec ExportSpec,
 	if err := w.Write(exporter.Columns); err != nil {
 		return 0, errtrace.Wrap(err, "write csv header")
 	}
-	rows, err := queryFilteredEmails(ctx, st, spec)
+	rows, err := st.QueryEmailExportRows(ctx, emailExportFilterFromSpec(spec))
 	if err != nil {
 		return 0, err
 	}
@@ -173,8 +182,9 @@ func streamFilteredExport(ctx context.Context, st *store.Store, spec ExportSpec,
 
 // writeFilteredRows iterates the result set, formatting each row with
 // the same column order as exporter.Columns and emitting a tick every
-// progressTickRows.
-func writeFilteredRows(rows *sql.Rows, w *csv.Writer, total int, progress chan<- ExportProgress) (int, error) {
+// progressTickRows. Takes the typed `store.RowsScanner` so this file
+// stays free of `database/sql`.
+func writeFilteredRows(rows store.RowsScanner, w *csv.Writer, total int, progress chan<- ExportProgress) (int, error) {
 	written := 0
 	for rows.Next() {
 		var (
@@ -207,69 +217,6 @@ func writeFilteredRows(rows *sql.Rows, w *csv.Writer, total int, progress chan<-
 	return written, nil
 }
 
-// queryFilteredEmails composes the SELECT for slice 2. Bind parameters
-// are appended in lock-step with the WHERE clauses to keep it injection
-// safe.
-func queryFilteredEmails(ctx context.Context, st *store.Store, spec ExportSpec) (*sql.Rows, error) {
-	q, args := buildExportQuery(spec)
-	rows, err := st.DB.QueryContext(ctx, q, args...)
-	if err != nil {
-		return nil, errtrace.Wrap(err, "query emails")
-	}
-	return rows, nil
-}
-
-// buildExportQuery returns the streaming SELECT + bound args for the
-// supplied spec. Exported-by-test only: package-private.
-func buildExportQuery(spec ExportSpec) (string, []any) {
-	var sb strings.Builder
-	sb.WriteString(`SELECT Id, Alias, MessageId, Uid, FromAddr, ToAddr, CcAddr,
-	                       Subject, BodyText, BodyHtml, ReceivedAt, FilePath, CreatedAt
-	                FROM Emails`)
-	where, args := whereForExport(spec)
-	if where != "" {
-		sb.WriteString(" WHERE ")
-		sb.WriteString(where)
-	}
-	sb.WriteString(" ORDER BY Id ASC")
-	return sb.String(), args
-}
-
-func whereForExport(spec ExportSpec) (string, []any) {
-	var clauses []string
-	var args []any
-	if spec.Alias != "" {
-		clauses = append(clauses, "Alias = ?")
-		args = append(args, spec.Alias)
-	}
-	if !spec.Since.IsZero() {
-		clauses = append(clauses, "ReceivedAt >= ?")
-		args = append(args, spec.Since.UTC())
-	}
-	if !spec.Until.IsZero() {
-		clauses = append(clauses, "ReceivedAt < ?")
-		args = append(args, spec.Until.UTC())
-	}
-	return strings.Join(clauses, " AND "), args
-}
-
-// countEmails returns the row count matching the spec's filters. An
-// empty spec counts the entire table (used by the slice-1 path).
-func countEmails(ctx context.Context, st *store.Store, spec ExportSpec) (int, error) {
-	var sb strings.Builder
-	sb.WriteString(`SELECT COUNT(*) FROM Emails`)
-	where, args := whereForExport(spec)
-	if where != "" {
-		sb.WriteString(" WHERE ")
-		sb.WriteString(where)
-	}
-	row := st.DB.QueryRowContext(ctx, sb.String(), args...)
-	var n int
-	if err := row.Scan(&n); err != nil {
-		return 0, err
-	}
-	return n, nil
-}
 
 func preflightExport(spec ExportSpec) error {
 	if !spec.Since.IsZero() && !spec.Until.IsZero() && !spec.Until.After(spec.Since) {

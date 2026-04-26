@@ -17,7 +17,6 @@ package core
 
 import (
 	"context"
-	"strings"
 	"sync"
 	"time"
 
@@ -202,10 +201,9 @@ func validateOpenedUrlListSpec(spec *OpenedUrlListSpec) error {
 }
 
 func queryOpenedUrls(ctx context.Context, st *store.Store, spec OpenedUrlListSpec) errtrace.Result[[]OpenedUrlRow] {
-	q, args := buildOpenedUrlsQuery(spec)
-	rows, err := st.DB.QueryContext(ctx, q, args...)
+	rows, err := st.QueryOpenedUrls(ctx, openedUrlFilterFromSpec(spec))
 	if err != nil {
-		return errtrace.Err[[]OpenedUrlRow](errtrace.WrapCode(err, errtrace.ErrToolsInvalidArgument, "QueryContext"))
+		return errtrace.Err[[]OpenedUrlRow](errtrace.WrapCode(err, errtrace.ErrToolsInvalidArgument, "QueryOpenedUrls"))
 	}
 	defer rows.Close()
 	out, err := scanOpenedUrlRows(rows)
@@ -215,27 +213,16 @@ func queryOpenedUrls(ctx context.Context, st *store.Store, spec OpenedUrlListSpe
 	return errtrace.Ok(out)
 }
 
-// buildOpenedUrlsQuery composes the SELECT + bound args for the live
-// Delta-#1 schema. Alias and Origin clauses are appended only when set,
-// keeping the SQL planner-friendly for the common "no filter" case.
-func buildOpenedUrlsQuery(spec OpenedUrlListSpec) (string, []any) {
-	var sb strings.Builder
-	sb.WriteString(`SELECT Id, EmailId, Alias, RuleName, Origin, Url,
-	                       OriginalUrl, IsDeduped, IsIncognito, TraceId, OpenedAt
-	                  FROM OpenedUrls
-	                 WHERE OpenedAt < ?`)
-	args := []any{spec.Before}
-	if spec.Alias != "" {
-		sb.WriteString(" AND Alias = ?")
-		args = append(args, spec.Alias)
+// openedUrlFilterFromSpec translates the core-side spec (which carries
+// the typed `OpenUrlOrigin` enum) into the primitive store-side filter.
+// Keeps the import direction one-way: core → store.
+func openedUrlFilterFromSpec(spec OpenedUrlListSpec) store.OpenedUrlListFilter {
+	return store.OpenedUrlListFilter{
+		Before: spec.Before,
+		Alias:  spec.Alias,
+		Origin: string(spec.Origin),
+		Limit:  spec.Limit,
 	}
-	if spec.Origin != "" {
-		sb.WriteString(" AND Origin = ?")
-		args = append(args, string(spec.Origin))
-	}
-	sb.WriteString(" ORDER BY OpenedAt DESC, Id DESC LIMIT ?")
-	args = append(args, spec.Limit)
-	return sb.String(), args
 }
 
 func scanOpenedUrlRows(rows interface {
