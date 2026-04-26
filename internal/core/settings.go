@@ -308,41 +308,11 @@ func applyInputToRaw(raw *rawConfigWithSettings, in SettingsInput, now time.Time
 // snapshotFromRaw builds a SettingsSnapshot from the loaded raw form,
 // applying defaults for any missing extension fields.
 func snapshotFromRaw(raw *rawConfigWithSettings) (SettingsSnapshot, error) {
-	cfgPath, err := config.Path()
+	paths, err := resolveSnapshotPaths()
 	if err != nil {
-		return SettingsSnapshot{}, errtrace.WrapCode(err,
-			errtrace.ErrConfigOpen, "resolve config path")
+		return SettingsSnapshot{}, err
 	}
-	dataDir, err := config.DataDir()
-	if err != nil {
-		return SettingsSnapshot{}, errtrace.WrapCode(err,
-			errtrace.ErrConfigOpen, "resolve data dir")
-	}
-	emailDir, err := config.EmailDir()
-	if err != nil {
-		return SettingsSnapshot{}, errtrace.WrapCode(err,
-			errtrace.ErrConfigOpen, "resolve email dir")
-	}
-	defaults := DefaultSettingsInput()
-	theme, _ := ParseThemeMode(raw.ext.Theme)
-	if raw.ext.Theme == "" {
-		theme = defaults.Theme
-	}
-	schemes := canonSchemes(raw.ext.OpenUrlAllowedSchemes)
-	if len(schemes) == 0 {
-		schemes = defaults.OpenUrlAllowedSchemes
-	}
-	autoStart := raw.ext.AutoStartWatch
-	if raw.ext.UpdatedAt == "" {
-		// Fresh / legacy file → keep documented default true.
-		autoStart = defaults.AutoStartWatch
-	}
-	retention := raw.ext.OpenUrlsRetentionDays
-	if raw.ext.UpdatedAt == "" {
-		// Fresh / legacy file → apply documented default rather than 0
-		// (which would silently disable retention).
-		retention = defaults.OpenUrlsRetentionDays
-	}
+	ext := projectExtension(raw.ext)
 	updatedAt, _ := time.Parse(time.RFC3339Nano, raw.ext.UpdatedAt)
 	return SettingsSnapshot{
 		PollSeconds: clampPollSeconds(raw.cfg.Watch.PollSeconds),
@@ -350,16 +320,69 @@ func snapshotFromRaw(raw *rawConfigWithSettings) (SettingsSnapshot, error) {
 			ChromePath:   raw.cfg.Browser.ChromePath,
 			IncognitoArg: raw.cfg.Browser.IncognitoArg,
 		},
-		Theme:                 theme,
-		OpenUrlAllowedSchemes: schemes,
+		Theme:                 ext.theme,
+		OpenUrlAllowedSchemes: ext.schemes,
 		AllowLocalhostUrls:    raw.ext.AllowLocalhostUrls,
-		AutoStartWatch:        autoStart,
-		OpenUrlsRetentionDays: retention,
-		ConfigPath:            cfgPath,
-		DataDir:               dataDir,
-		EmailArchiveDir:       emailDir,
+		AutoStartWatch:        ext.autoStart,
+		OpenUrlsRetentionDays: ext.retention,
+		ConfigPath:            paths.cfg,
+		DataDir:               paths.data,
+		EmailArchiveDir:       paths.email,
 		UpdatedAt:             updatedAt,
 	}, nil
+}
+
+type snapshotPaths struct{ cfg, data, email string }
+
+// resolveSnapshotPaths fetches the three absolute display paths surfaced
+// on every Get. Pulled out of snapshotFromRaw to keep that function under
+// the 15-statement linter cap.
+func resolveSnapshotPaths() (snapshotPaths, error) {
+	cfgPath, err := config.Path()
+	if err != nil {
+		return snapshotPaths{}, errtrace.WrapCode(err,
+			errtrace.ErrConfigOpen, "resolve config path")
+	}
+	dataDir, err := config.DataDir()
+	if err != nil {
+		return snapshotPaths{}, errtrace.WrapCode(err,
+			errtrace.ErrConfigOpen, "resolve data dir")
+	}
+	emailDir, err := config.EmailDir()
+	if err != nil {
+		return snapshotPaths{}, errtrace.WrapCode(err,
+			errtrace.ErrConfigOpen, "resolve email dir")
+	}
+	return snapshotPaths{cfg: cfgPath, data: dataDir, email: emailDir}, nil
+}
+
+type projectedExtension struct {
+	theme     ThemeMode
+	schemes   []string
+	autoStart bool
+	retention uint16
+}
+
+// projectExtension layers DefaultSettingsInput defaults over an extension
+// block read from disk. Missing values (empty Theme, nil schemes, fresh
+// file with empty UpdatedAt) fall back to the documented defaults.
+func projectExtension(ext settingsExtension) projectedExtension {
+	defaults := DefaultSettingsInput()
+	theme, _ := ParseThemeMode(ext.Theme)
+	if ext.Theme == "" {
+		theme = defaults.Theme
+	}
+	schemes := canonSchemes(ext.OpenUrlAllowedSchemes)
+	if len(schemes) == 0 {
+		schemes = defaults.OpenUrlAllowedSchemes
+	}
+	autoStart := ext.AutoStartWatch
+	retention := ext.OpenUrlsRetentionDays
+	if ext.UpdatedAt == "" {
+		autoStart = defaults.AutoStartWatch
+		retention = defaults.OpenUrlsRetentionDays
+	}
+	return projectedExtension{theme: theme, schemes: schemes, autoStart: autoStart, retention: retention}
 }
 
 // clampPollSeconds projects an int from the legacy schema into the uint16
