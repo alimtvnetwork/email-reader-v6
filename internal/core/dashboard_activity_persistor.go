@@ -78,8 +78,13 @@ func startWatchEventPersistor(ctx context.Context, bus *eventbus.Bus[WatchEvent]
 // StartWatchEventPersistor is the exported entry point used by the UI
 // bootstrap (`internal/ui/watch_runtime.go`). Thin wrapper over the
 // unexported `startWatchEventPersistor` so the test package can call
-// the impl without exporting test seams.
+// the impl without exporting test seams. Explicit `*store.Store` nil
+// check defeats the typed-nil-interface trap (a nil pointer wrapped
+// in an interface is NOT == nil inside the implementation).
 func StartWatchEventPersistor(ctx context.Context, bus *eventbus.Bus[WatchEvent], st *store.Store) func() {
+	if st == nil {
+		return func() {}
+	}
 	return startWatchEventPersistor(ctx, bus, st)
 }
 
