@@ -112,9 +112,9 @@ func newSettingsWidgets(snap core.SettingsSnapshot) *settingsWidgets {
 	w.chromeEntry.SetText(snap.BrowserOverride.ChromePath)
 
 	w.densitySelect = widget.NewSelect([]string{"Comfortable", "Compact"}, func(v string) {
-		applyDensity(v)
+		theme.SetDensity(theme.Density(ParseDensityChoice(v)))
 	})
-	w.densitySelect.SetSelected(densityLabel(theme.ActiveDensity()))
+	w.densitySelect.SetSelected(DensityLabelFor(int(theme.ActiveDensity())))
 	return w
 }
 
@@ -165,24 +165,14 @@ func newSettingsPaths(snap core.SettingsSnapshot) fyne.CanvasObject {
 
 // readSettingsInput validates + projects widget state into a SettingsInput.
 // Returns a friendly error for the status line when poll seconds are out
-// of range or non-numeric.
+// of range or non-numeric. Delegates pure logic to ParsePollSeconds /
+// ProjectSettingsInput so the headless test suite can exercise both.
 func readSettingsInput(w *settingsWidgets) (core.SettingsInput, error) {
-	poll, err := strconv.Atoi(w.pollEntry.Text)
-	if err != nil || poll < 1 || poll > 60 {
-		return core.SettingsInput{}, fmt.Errorf("poll interval must be 1–60 seconds")
+	poll, err := ParsePollSeconds(w.pollEntry.Text)
+	if err != nil {
+		return core.SettingsInput{}, err
 	}
-	mode, _ := core.ParseThemeMode(w.themeSelect.Selected)
-	return core.SettingsInput{
-		PollSeconds: uint16(poll),
-		Theme:       mode,
-		BrowserOverride: core.BrowserOverride{
-			ChromePath:   w.chromeEntry.Text,
-			IncognitoArg: w.initial.BrowserOverride.IncognitoArg,
-		},
-		OpenUrlAllowedSchemes: w.initial.OpenUrlAllowedSchemes,
-		AllowLocalhostUrls:    w.initial.AllowLocalhostUrls,
-		AutoStartWatch:        w.initial.AutoStartWatch,
-	}, nil
+	return ProjectSettingsInput(w.themeSelect.Selected, poll, w.chromeEntry.Text, w.initial), nil
 }
 
 // repopulateWidgets refreshes the form after a Reset so the user sees the
@@ -192,23 +182,4 @@ func repopulateWidgets(w *settingsWidgets, snap core.SettingsSnapshot) {
 	w.themeSelect.SetSelected(snap.Theme.String())
 	w.pollEntry.SetText(strconv.Itoa(int(snap.PollSeconds)))
 	w.chromeEntry.SetText(snap.BrowserOverride.ChromePath)
-}
-
-// applyDensity translates the Select label into a theme.Density and pushes
-// it through theme.SetDensity. Unknown labels are no-ops.
-func applyDensity(label string) {
-	switch label {
-	case "Compact":
-		theme.SetDensity(theme.DensityCompact)
-	case "Comfortable":
-		theme.SetDensity(theme.DensityComfortable)
-	}
-}
-
-// densityLabel renders a theme.Density as the matching Select label.
-func densityLabel(d theme.Density) string {
-	if d == theme.DensityCompact {
-		return "Compact"
-	}
-	return "Comfortable"
 }
