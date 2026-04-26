@@ -211,6 +211,15 @@ const WatchStateGet = `SELECT Alias, LastUid, LastSubject, LastReceivedAt, Updat
 // branch's UpdatedAt come from the same SQLite RFC3339 "now" expression
 // — caller passes that expression in (declared in store/datetime.go) so
 // the queries package stays free of dialect drift.
+//
+// **Why this UPSERT does NOT touch `ConsecutiveFailures`** — the
+// counter (added in m0014) has its own dedicated bump/reset path
+// (`WatchStateBumpFailures` / `WatchStateResetFailures`). Folding it
+// into this UPSERT would force every caller (baseline-set, advance-
+// cursor, finalize-batch) to know whether the call site is a poll
+// outcome boundary, which it is not — the watcher's success/failure
+// pivot lives in `runLoop` after `pollOnce` returns. Keeping the two
+// concerns separate keeps each query single-purpose.
 func WatchStateUpsert(nowExpr string) string {
 	return `INSERT INTO WatchState (Alias, LastUid, LastSubject, LastReceivedAt, UpdatedAt)
        VALUES (?, ?, ?, ?, ` + nowExpr + `)
@@ -219,6 +228,43 @@ func WatchStateUpsert(nowExpr string) string {
            LastSubject    = excluded.LastSubject,
            LastReceivedAt = excluded.LastReceivedAt,
            UpdatedAt      = ` + nowExpr
+}
+
+// WatchStateBumpFailures increments the m0014 `ConsecutiveFailures`
+// counter for one alias and refreshes `UpdatedAt`. Caller binds:
+// (1) the alias. The function takes the same `nowExpr` shape as
+// `WatchStateUpsert` so the queries package stays dialect-agnostic.
+//
+// **Why an UPSERT (not a plain UPDATE)** — the watcher may emit a
+// poll error before any successful poll has ever inserted a
+// WatchState row (e.g. first-boot connect failure). A plain UPDATE
+// would silently affect zero rows in that case and the counter
+// would never start incrementing. The INSERT branch seeds with
+// `ConsecutiveFailures = 1` (this IS the first failure) and zero
+// values for the cursor columns; subsequent UPSERTs keep the
+// cursor sticky (we deliberately do NOT zero LastUid here — that
+// would lose the watcher's resume position).
+func WatchStateBumpFailures(nowExpr string) string {
+	return `INSERT INTO WatchState (Alias, LastUid, LastSubject, LastReceivedAt, UpdatedAt, ConsecutiveFailures)
+       VALUES (?, 0, '', NULL, ` + nowExpr + `, 1)
+       ON CONFLICT(Alias) DO UPDATE SET
+           ConsecutiveFailures = WatchState.ConsecutiveFailures + 1,
+           UpdatedAt           = ` + nowExpr
+}
+
+// WatchStateResetFailures zeroes the m0014 counter on a successful
+// poll. Plain UPDATE is sufficient: a successful poll always runs
+// after `loadWatchState`, which has already inserted (or read) the
+// row. If the row is somehow missing the UPDATE is a harmless no-op
+// — the next poll will create it via `WatchStateUpsert`.
+//
+// Caller binds: (1) the alias. UpdatedAt is refreshed so dashboard
+// "last activity" projections that key off this column tick.
+func WatchStateResetFailures(nowExpr string) string {
+	return `UPDATE WatchState SET
+              ConsecutiveFailures = 0,
+              UpdatedAt           = ` + nowExpr + `
+            WHERE Alias = ?`
 }
 
 // ---------------- OpenedUrls (reads) ----------------
@@ -371,54 +417,57 @@ func SetEmailDeletedAt(deletedAt *int64, alias string, uids []uint32) (string, [
 }
 
 // AccountHealthSelectAll returns one row per known alias (union of
-// every alias seen in WatchEvents OR Emails) with the four
-// store-derived columns the Dashboard `AccountHealth` projection
-// needs:
+// every alias seen in WatchEvents OR Emails OR WatchState) with the
+// five store-derived columns the Dashboard `AccountHealth`
+// projection needs:
 //
-//   - LastPollAt   — most recent OccurredAt where Kind IN (1, 4)
-//                    i.e. WatchEventStart (1) or WatchEventHeartbeat (4).
-//                    Both signal "the watcher is alive at this instant",
-//                    so MAX over that pair is the cleanest "last poll"
-//                    proxy without introducing a new event kind.
-//   - LastErrorAt  — most recent OccurredAt where Kind = 3 (Error).
-//   - EmailsStored — COUNT(1) over Emails grouped by Alias.
-//   - UnreadCount  — SUM(IsRead = 0) over Emails grouped by Alias.
+//   - LastPollAt          — most recent OccurredAt where Kind IN (1, 4)
+//                           i.e. WatchEventStart (1) or
+//                           WatchEventHeartbeat (4). Both signal "the
+//                           watcher is alive at this instant".
+//   - LastErrorAt         — most recent OccurredAt where Kind = 3 (Error).
+//   - EmailsStored        — COUNT(1) over Emails grouped by Alias.
+//   - UnreadCount         — SUM(IsRead = 0) over Emails grouped by Alias.
+//   - ConsecutiveFailures — read straight off `WatchState` (m0014
+//                           column). The watcher bumps this counter
+//                           on every poll error and zeroes it on
+//                           every poll success (Slice #106).
+//
+// **Why `ConsecutiveFailures` is now column-addressable** — Slice
+// #102 deliberately deferred this projection because computing it
+// from `WatchEvents` required a per-alias window walk back to the
+// most recent non-error event. Slice #106's m0014 migration moved
+// the counter onto `WatchState` where it lives behind a single
+// alias-keyed primary index, so the projection becomes a trivial
+// LEFT JOIN with COALESCE-to-zero for aliases that have no
+// `WatchState` row yet (back-fill scenario: an account with stored
+// Emails from a pre-watcher import).
+//
+// **Why LEFT JOIN (not the alias_set CTE)** — `WatchState`'s alias
+// is already in `alias_set` IF the watcher has ever run for that
+// alias. We extend `alias_set` to also union over `WatchState`
+// itself so first-boot-error rows (poll error before any
+// `WatchEvents` or `Emails` exist) still surface in the dashboard.
 //
 // **What this intentionally does NOT compute:**
 //
-//   - `ConsecutiveFailures` — requires a window-function walk
-//     (count trailing Kind=3 events back to the most recent non-3
-//     event). SQLite's `lag()`/`row_number()` would work but adds a
-//     CTE per alias and the field is only consulted by the Health
-//     "≥3" branch in `core.ComputeHealth`. Slice #102 ships the
-//     four cheap projections; ConsecutiveFailures stays at zero
-//     until a follow-on slice teaches the watcher to write a
-//     dedicated counter column to WatchState (the natural home —
-//     no SQL gymnastics, single UPDATE per poll outcome).
 //   - `Health` — purely derived in `core.ComputeHealth` from the
 //     other fields + clock; the store has no business computing it.
-//
-// **Why the LEFT JOIN structure (not a single GROUP BY)** — the
-// natural alias set is `WatchEvents ∪ Emails` (an account can have
-// no watch events yet but a back-fill of emails, or vice versa). A
-// single GROUP BY on either table would silently drop the other
-// half. The CTE union materialises the alias set explicitly; the
-// three left joins each contribute their slice of columns; missing
-// rows COALESCE to zero / SQL NULL (which scans as a zero
-// `time.Time` on the Go side via `sql.NullString`).
 //
 // **Why timestamps as TEXT (not unix-seconds)** — `WatchEvents.OccurredAt`
 // is RFC3339 TEXT (m0008's canonical timestamp convention for that
 // table). Caller parses on the Go side via `time.Parse(time.RFC3339Nano, …)`.
 //
 // Spec: spec/21-app/01-features/01-dashboard/00-overview.md §4 +
-// roadmap-phases.md §PHASE 3 (deferred Store.QueryAccountHealth shim).
+// roadmap-phases.md §PHASE 3 (closed by Slice #106).
 const AccountHealthSelectAll = `
 WITH
   alias_set AS (
     SELECT DISTINCT Alias FROM WatchEvents
     UNION
     SELECT DISTINCT Alias FROM Emails
+    UNION
+    SELECT DISTINCT Alias FROM WatchState
   ),
   poll AS (
     SELECT Alias, MAX(OccurredAt) AS LastPollAt
@@ -437,12 +486,14 @@ WITH
 SELECT a.Alias,
        p.LastPollAt,
        e.LastErrorAt,
-       COALESCE(em.Stored, 0) AS EmailsStored,
-       COALESCE(em.Unread, 0) AS UnreadCount
+       COALESCE(em.Stored, 0)              AS EmailsStored,
+       COALESCE(em.Unread, 0)              AS UnreadCount,
+       COALESCE(ws.ConsecutiveFailures, 0) AS ConsecutiveFailures
 FROM alias_set a
 LEFT JOIN poll       p  ON p.Alias  = a.Alias
 LEFT JOIN err        e  ON e.Alias  = a.Alias
 LEFT JOIN emails_agg em ON em.Alias = a.Alias
+LEFT JOIN WatchState ws ON ws.Alias = a.Alias
 ORDER BY a.Alias`
 
 // RecentActivitySelectN returns up to `?` most-recent rows from the

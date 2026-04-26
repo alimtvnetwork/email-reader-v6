@@ -179,6 +179,33 @@ func (s *Store) UpsertWatchState(ctx context.Context, ws WatchState) error {
 	return nil
 }
 
+// BumpConsecutiveFailures increments the m0014 `ConsecutiveFailures`
+// counter for `alias` (creating the row when missing — see the
+// `WatchStateBumpFailures` doc-comment on the first-boot-error
+// rationale). Best-effort from the watcher's perspective: the caller
+// logs but does not abort the poll loop on failure (the next poll
+// will retry).
+func (s *Store) BumpConsecutiveFailures(ctx context.Context, alias string) error {
+	_, err := s.DB.ExecContext(ctx, queries.WatchStateBumpFailures(sqliteRFC3339NowExpr), alias)
+	if err != nil {
+		return errtrace.Wrap(err, "bump consecutive failures")
+	}
+	return nil
+}
+
+// ResetConsecutiveFailures zeroes the m0014 counter for `alias`. Called
+// after every successful poll cycle. Plain UPDATE: a successful poll
+// always runs after `loadWatchState`, which has either inserted or
+// read the WatchState row, so a zero-rows-affected return is a
+// harmless no-op (next poll's `UpsertWatchState` will create the row).
+func (s *Store) ResetConsecutiveFailures(ctx context.Context, alias string) error {
+	_, err := s.DB.ExecContext(ctx, queries.WatchStateResetFailures(sqliteRFC3339NowExpr), alias)
+	if err != nil {
+		return errtrace.Wrap(err, "reset consecutive failures")
+	}
+	return nil
+}
+
 // OpenedUrlInsert is the rich payload for `RecordOpenedUrlExt` introduced
 // by Delta #1. The legacy `RecordOpenedUrl(emailId, ruleName, url)` call
 // path still works (Tools.OpenUrl uses the Ext form; watcher and CLI
