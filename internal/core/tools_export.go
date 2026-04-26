@@ -87,7 +87,7 @@ func (t *Tools) ExportCsv(ctx context.Context, spec ExportSpec, progress chan<- 
 }
 
 func runExportCsv(ctx context.Context, st *store.Store, progress chan<- ExportProgress) errtrace.Result[ExportReport] {
-	total, err := countEmails(ctx, st, ExportSpec{})
+	total, err := st.CountEmails(ctx, store.EmailExportFilter{})
 	if err != nil {
 		return errtrace.Err[ExportReport](errtrace.WrapCode(err, errtrace.ErrToolsInvalidArgument, "count emails"))
 	}
@@ -106,7 +106,7 @@ func runExportCsv(ctx context.Context, st *store.Store, progress chan<- ExportPr
 // COUNT query and its own SELECT so we can emit accurate TotalRows in
 // the Counting tick before any I/O happens on the writer.
 func runExportCsvFiltered(ctx context.Context, st *store.Store, spec ExportSpec, progress chan<- ExportProgress) errtrace.Result[ExportReport] {
-	total, err := countEmails(ctx, st, spec)
+	total, err := st.CountEmails(ctx, emailExportFilterFromSpec(spec))
 	if err != nil {
 		return errtrace.Err[ExportReport](errtrace.WrapCode(err, errtrace.ErrToolsInvalidArgument, "count emails"))
 	}
@@ -123,6 +123,17 @@ func runExportCsvFiltered(ctx context.Context, st *store.Store, spec ExportSpec,
 	sendExport(progress, ExportProgress{Phase: PhaseFlushing, TotalRows: total, RowsWritten: written})
 	sendExport(progress, ExportProgress{Phase: PhaseDone, TotalRows: total, RowsWritten: written})
 	return errtrace.Ok(ExportReport{OutPath: path, RowCount: written})
+}
+
+// emailExportFilterFromSpec translates the user-facing ExportSpec into
+// the primitive store-side filter. Keeps the import direction one-way:
+// core → store.
+func emailExportFilterFromSpec(spec ExportSpec) store.EmailExportFilter {
+	return store.EmailExportFilter{
+		Alias: spec.Alias,
+		Since: spec.Since,
+		Until: spec.Until,
+	}
 }
 
 // resolveExportPath honours an explicit OutPath (already preflighted) or
