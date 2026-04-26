@@ -64,6 +64,18 @@ func fileFilter(includeTests bool) func(os.FileInfo) bool {
 	}
 }
 
+// shouldSkipDir filters out vendor, hidden dirs, testdata, and node_modules.
+func shouldSkipDir(name string) bool {
+	if strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_") {
+		return true
+	}
+	switch name {
+	case "vendor", "node_modules", "testdata":
+		return true
+	}
+	return false
+}
+
 // readSubdirs returns names of immediate subdirectories of dir.
 func readSubdirs(dir string) ([]string, error) {
 	entries, err := os.ReadDir(dir)
