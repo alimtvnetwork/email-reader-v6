@@ -6,23 +6,28 @@ package core
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 
-	"github.com/lovable/email-read/internal/storetest"
+	"github.com/lovable/email-read/internal/store"
 )
 
 func TestNewStoreAccountHealthSource_PropagatesConsecutiveFailures(t *testing.T) {
-	st := storetest.Open(t)
+	s, err := store.OpenAt(filepath.Join(t.TempDir(), "cf.db"))
+	if err != nil {
+		t.Fatalf("OpenAt: %v", err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
 	ctx := context.Background()
 
 	const alias = "stuck@example.com"
 	for i := 0; i < 5; i++ {
-		if err := st.BumpConsecutiveFailures(ctx, alias); err != nil {
+		if err := s.BumpConsecutiveFailures(ctx, alias); err != nil {
 			t.Fatalf("bump #%d: %v", i, err)
 		}
 	}
 
-	src := NewStoreAccountHealthSource(st)
+	src := NewStoreAccountHealthSource(s)
 	if src == nil {
 		t.Fatal("NewStoreAccountHealthSource returned nil for a real store")
 	}
