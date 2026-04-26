@@ -171,3 +171,67 @@ func newStatCard(title, initial string) statCard {
 		Value:     v,
 	}
 }
+
+// liveTiles groups the four live counter cards. Reuses statCard so the
+// styling matches the static stats row above.
+type liveTiles struct {
+	Polls   statCard
+	NewMail statCard
+	Matches statCard
+	Opens   statCard
+	Errors  statCard
+}
+
+func newLiveTiles() liveTiles {
+	return liveTiles{
+		Polls:   newStatCard("Polls", "0"),
+		NewMail: newStatCard("New mail", "0"),
+		Matches: newStatCard("Rule matches", "0"),
+		Opens:   newStatCard("Opens", "0"),
+		Errors:  newStatCard("Errors", "0"),
+	}
+}
+
+// applyCounters writes the latest WatchCounters values into the tile labels.
+func (t liveTiles) applyCounters(c WatchCounters) {
+	t.Polls.Value.SetText(fmt.Sprintf("%d", c.Polls))
+	t.NewMail.Value.SetText(fmt.Sprintf("%d", c.NewMail))
+	t.Matches.Value.SetText(fmt.Sprintf("%d", c.Matches))
+	t.Opens.Value.SetText(fmt.Sprintf("%d / %d", c.Opens, c.Opens+c.OpenFail))
+	t.Errors.Value.SetText(fmt.Sprintf("%d", c.Errors))
+}
+
+// newDashboardLiveRow builds the live counter caption + tile row. When
+// opts.Bus is nil (headless boot, missing runtime) it returns a single
+// muted placeholder so the dashboard still renders.
+func newDashboardLiveRow(opts DashboardOptions) fyne.CanvasObject {
+	caption := widget.NewLabel(FormatDashboardCounterScope(DashboardCounterScope{Alias: opts.Alias}))
+	if opts.Bus == nil {
+		placeholder := widget.NewLabel("(live counters appear once the watcher is running)")
+		return container.NewVBox(caption, placeholder)
+	}
+	tiles := newLiveTiles()
+	row := container.NewGridWithColumns(5,
+		tiles.Polls.Container, tiles.NewMail.Container,
+		tiles.Matches.Container, tiles.Opens.Container, tiles.Errors.Container,
+	)
+	go subscribeDashboardBus(opts, tiles)
+	return container.NewVBox(caption, row)
+}
+
+// subscribeDashboardBus drains the watcher Bus and pushes the latest
+// counters into the tile labels. Filters by alias when one is selected;
+// otherwise aggregates across all aliases (dashboard-only behaviour).
+// Closing the bus channel terminates the goroutine cleanly.
+func subscribeDashboardBus(opts DashboardOptions, tiles liveTiles) {
+	events, cancel := opts.Bus.Subscribe()
+	defer cancel()
+	var counters WatchCounters
+	for ev := range events {
+		if !DashboardAcceptsEvent(ev, opts.Alias) {
+			continue
+		}
+		counters = AccumulateCounters(counters, ev)
+		tiles.applyCounters(counters)
+	}
+}
