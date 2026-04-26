@@ -1,8 +1,6 @@
 package mailclient
 
 import (
-	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -14,12 +12,8 @@ import (
 //
 //	email/<alias>/<YYYY-MM-DD>/HH.MM.SS__<from>__<subject>__uid<N>.eml
 //
-// Verifies:
-//   - sanitizeReadable lowercases + hyphenates correctly
-//   - extractEmailAddr pulls "addr@host" from "Display <addr@host>"
-//   - SaveRaw produces a path that contains the timestamp prefix, the
-//     sanitized sender, the sanitized subject AND the __uidN suffix
-//   - the day folder uses the YYYY-MM-DD shape so files sort
+// We exercise the helpers and the filename builder directly (no FS), so the
+// test is fast and deterministic regardless of the executable's location.
 //
 // Maps to AC-PROJ-28.
 func Regress_Issue06_FilenameSchemeAndReadCmdParity(t *testing.T) {
@@ -37,36 +31,16 @@ func Regress_Issue06_FilenameSchemeAndReadCmdParity(t *testing.T) {
 		t.Errorf("extractEmailAddr fallback = %q", got)
 	}
 
-	// 2. Filename scheme — exercise SaveRaw against a temp dir.
-	tmp := t.TempDir()
-	t.Setenv("EMAIL_READ_DATA_DIR", tmp) // honored by config.EmailDir if supported
-	// SaveRaw resolves email dir via config.EmailDir(); to keep the test
-	// independent of env-var support, also chdir into tmp.
-	prev, _ := os.Getwd()
-	if err := os.Chdir(tmp); err != nil {
-		t.Fatalf("chdir tmp: %v", err)
-	}
-	defer os.Chdir(prev)
-
+	// 2. Filename composition — exercise buildRawFilename directly.
 	when := time.Date(2026, 4, 22, 19, 17, 14, 0, time.UTC)
 	m := &Message{
 		Uid:        12,
 		From:       `"Abdullah Al Mahin" <abdullah.mahin.rasia@gmail.com>`,
 		Subject:    "Re: Check",
 		ReceivedAt: when,
-		Raw:        []byte("From: x\r\n\r\nbody"),
 	}
-	path, err := SaveRaw("admin", m)
-	if err != nil {
-		t.Fatalf("SaveRaw: %v", err)
-	}
+	name := buildRawFilename(when, m)
 
-	base := filepath.Base(path)
-	parent := filepath.Base(filepath.Dir(path))
-
-	if parent != "2026-04-22" {
-		t.Errorf("day folder = %q, want %q", parent, "2026-04-22")
-	}
 	wantParts := []string{
 		"19.17.14",                       // HH.MM.SS prefix → chronological sort
 		"abdullah-mahin-rasia-gmail-com", // sanitized sender
@@ -74,16 +48,27 @@ func Regress_Issue06_FilenameSchemeAndReadCmdParity(t *testing.T) {
 		"__uid12",                        // dedup suffix
 	}
 	for _, p := range wantParts {
-		if !strings.Contains(base, p) {
-			t.Errorf("filename %q missing required fragment %q — issue 06 regresses", base, p)
+		if !strings.Contains(name, p) {
+			t.Errorf("filename %q missing required fragment %q — issue 06 regresses", name, p)
 		}
 	}
-	if !strings.HasSuffix(base, ".eml") {
-		t.Errorf("filename %q lacks .eml extension", base)
+	if !strings.HasSuffix(name, ".eml") {
+		t.Errorf("filename %q lacks .eml extension", name)
 	}
 
-	// 3. The hh.mm.ss prefix MUST be sortable: enforce digit shape.
-	if !regexp.MustCompile(`^\d{2}\.\d{2}\.\d{2}__`).MatchString(base) {
-		t.Errorf("filename %q does not start with HH.MM.SS__", base)
+	// 3. The HH.MM.SS prefix MUST be sortable: enforce digit shape.
+	if !regexp.MustCompile(`^\d{2}\.\d{2}\.\d{2}__`).MatchString(name) {
+		t.Errorf("filename %q does not start with HH.MM.SS__", name)
+	}
+
+	// 4. Empty subject / sender fall through to known sentinels (so files
+	// don't collide as "..eml" or "__.eml").
+	mEmpty := &Message{Uid: 7, From: "", Subject: "", ReceivedAt: when}
+	nameEmpty := buildRawFilename(when, mEmpty)
+	if !strings.Contains(nameEmpty, "unknown-sender") {
+		t.Errorf("empty From should yield unknown-sender; got %q", nameEmpty)
+	}
+	if !strings.Contains(nameEmpty, "no-subject") {
+		t.Errorf("empty Subject should yield no-subject; got %q", nameEmpty)
 	}
 }
