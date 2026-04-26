@@ -38,6 +38,7 @@ func BuildDashboard(opts DashboardOptions) fyne.CanvasObject {
 	status := widget.NewLabel("Loaded just now.")
 	status.Wrapping = fyne.TextWrapWord
 
+	autoStart := newAutoStartIndicator()
 	refresh := makeDashboardRefresh(opts, cards, status)
 	refresh()
 
@@ -45,8 +46,51 @@ func BuildDashboard(opts DashboardOptions) fyne.CanvasObject {
 	return container.NewVBox(
 		heading, subtitle, widget.NewSeparator(),
 		cards.Row, widget.NewSeparator(),
-		actions, status,
+		actions, autoStart, status,
 	)
+}
+
+// newAutoStartIndicator returns a label that shows the current
+// `Settings.AutoStartWatch` value and updates live on every SettingsEvent
+// (CF-D1). Constructs its own Settings client + background subscriber so
+// the dashboard owns no extra options. On any setup failure it shows a
+// neutral "Auto-start: unknown" — never blocks the UI.
+//
+// Spec: spec/21-app/02-features/07-settings/99-consistency-report.md CF-D1.
+func newAutoStartIndicator() *widget.Label {
+	lbl := widget.NewLabel("Auto-start watcher: unknown")
+	s := core.NewSettings(time.Now)
+	if s.HasError() {
+		return lbl
+	}
+	svc := s.Value()
+	if snap := svc.Get(context.Background()); !snap.HasError() {
+		lbl.SetText(formatAutoStart(snap.Value().AutoStartWatch))
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	events, _ := svc.Subscribe(ctx)
+	go forwardAutoStartEvents(events, lbl, cancel)
+	return lbl
+}
+
+// forwardAutoStartEvents drains Settings events and updates the label.
+// The cancel func keeps `ctx` alive for the goroutine's lifetime — when
+// the channel closes we release it. (Dashboard widget tear-down is not
+// observable from here in current Fyne; the leak is bounded to one
+// goroutine per BuildDashboard, which only runs on shell rebuilds.)
+func forwardAutoStartEvents(events <-chan core.SettingsEvent, lbl *widget.Label, cancel context.CancelFunc) {
+	defer cancel()
+	for ev := range events {
+		lbl.SetText(formatAutoStart(ev.Snapshot.AutoStartWatch))
+	}
+}
+
+// formatAutoStart renders the auto-start value as a human-readable label.
+func formatAutoStart(on bool) string {
+	if on {
+		return "Auto-start watcher: ● ON"
+	}
+	return "Auto-start watcher: ○ off"
 }
 
 // dashboardCards groups the four stat tiles plus their parent grid container.

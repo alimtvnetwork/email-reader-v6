@@ -325,8 +325,8 @@ func runWatch(parent context.Context, alias string, verbose bool) error {
 	ctx, stop := newWatchContext(parent)
 	defer stop()
 
-	pollCh, cancelPoll := startPollReloadBridge(ctx)
-	defer cancelPoll()
+	pollCh, cancelReload := startReloadBridges(ctx, launcher)
+	defer cancelReload()
 
 	logger := log.New(os.Stdout, "", 0)
 	return watcher.Run(ctx, watcher.Options{
@@ -341,32 +341,40 @@ func runWatch(parent context.Context, alias string, verbose bool) error {
 	})
 }
 
-// startPollReloadBridge subscribes to core.Settings and forwards every
-// `PollSeconds` change as an int onto the returned channel. Wires the
-// CF-W1 contract from spec/21-app/02-features/07-settings/01-backend.md §8.
-// On any setup failure (e.g., config not loadable) it returns (nil, no-op):
-// the watcher then runs with a static cadence — exactly the pre-Settings
-// behaviour, which is the safest fallback.
-func startPollReloadBridge(ctx context.Context) (<-chan int, func()) {
+// startReloadBridges subscribes to core.Settings ONCE and fans out events
+// to both live consumers — Watch poll cadence (CF-W1) and browser launcher
+// (CF-T1). One subscription keeps the publish-side simpler and avoids two
+// goroutines competing for the same Settings stream.
+//
+// Returns the int channel feeding watcher.Options.PollSecondsCh and a
+// cancel func that closes the subscription. On Settings setup failure
+// the channel is nil and cancel is a no-op (pre-Settings behaviour).
+func startReloadBridges(ctx context.Context, launcher *browser.Launcher) (<-chan int, func()) {
 	s := core.NewSettings(time.Now)
 	if s.HasError() {
 		return nil, func() {}
 	}
 	events, cancel := s.Value().Subscribe(ctx)
 	out := make(chan int, 4)
-	go forwardPollSeconds(events, out)
+	go forwardSettingsEvents(events, out, launcher)
 	return out, cancel
 }
 
-// forwardPollSeconds drains Settings events and emits PollSeconds ints.
-// Closing of `events` (via cancel) terminates the goroutine cleanly.
-func forwardPollSeconds(events <-chan core.SettingsEvent, out chan<- int) {
+// forwardSettingsEvents drains Settings events and dispatches to each
+// consumer: PollSeconds onto `out` (non-blocking; drop if full — watcher
+// picks up the latest on the NEXT event), and BrowserOverride into the
+// launcher via Reload. Channel close terminates the goroutine cleanly.
+func forwardSettingsEvents(events <-chan core.SettingsEvent, out chan<- int, launcher *browser.Launcher) {
 	for ev := range events {
 		select {
 		case out <- int(ev.Snapshot.PollSeconds):
 		default:
-			// watcher hasn't drained yet — drop; it will pick up the
-			// latest value on the NEXT Settings event.
+		}
+		if launcher != nil {
+			launcher.Reload(config.Browser{
+				ChromePath:   ev.Snapshot.BrowserOverride.ChromePath,
+				IncognitoArg: ev.Snapshot.BrowserOverride.IncognitoArg,
+			})
 		}
 	}
 	close(out)
