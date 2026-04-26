@@ -369,3 +369,78 @@ func SetEmailDeletedAt(deletedAt *int64, alias string, uids []uint32) (string, [
 	}
 	return sb.String(), args
 }
+
+// AccountHealthSelectAll returns one row per known alias (union of
+// every alias seen in WatchEvents OR Emails) with the four
+// store-derived columns the Dashboard `AccountHealth` projection
+// needs:
+//
+//   - LastPollAt   — most recent OccurredAt where Kind IN (1, 4)
+//                    i.e. WatchEventStart (1) or WatchEventHeartbeat (4).
+//                    Both signal "the watcher is alive at this instant",
+//                    so MAX over that pair is the cleanest "last poll"
+//                    proxy without introducing a new event kind.
+//   - LastErrorAt  — most recent OccurredAt where Kind = 3 (Error).
+//   - EmailsStored — COUNT(1) over Emails grouped by Alias.
+//   - UnreadCount  — SUM(IsRead = 0) over Emails grouped by Alias.
+//
+// **What this intentionally does NOT compute:**
+//
+//   - `ConsecutiveFailures` — requires a window-function walk
+//     (count trailing Kind=3 events back to the most recent non-3
+//     event). SQLite's `lag()`/`row_number()` would work but adds a
+//     CTE per alias and the field is only consulted by the Health
+//     "≥3" branch in `core.ComputeHealth`. Slice #102 ships the
+//     four cheap projections; ConsecutiveFailures stays at zero
+//     until a follow-on slice teaches the watcher to write a
+//     dedicated counter column to WatchState (the natural home —
+//     no SQL gymnastics, single UPDATE per poll outcome).
+//   - `Health` — purely derived in `core.ComputeHealth` from the
+//     other fields + clock; the store has no business computing it.
+//
+// **Why the LEFT JOIN structure (not a single GROUP BY)** — the
+// natural alias set is `WatchEvents ∪ Emails` (an account can have
+// no watch events yet but a back-fill of emails, or vice versa). A
+// single GROUP BY on either table would silently drop the other
+// half. The CTE union materialises the alias set explicitly; the
+// three left joins each contribute their slice of columns; missing
+// rows COALESCE to zero / SQL NULL (which scans as a zero
+// `time.Time` on the Go side via `sql.NullString`).
+//
+// **Why timestamps as TEXT (not unix-seconds)** — `WatchEvents.OccurredAt`
+// is RFC3339 TEXT (m0008's canonical timestamp convention for that
+// table). Caller parses on the Go side via `time.Parse(time.RFC3339Nano, …)`.
+//
+// Spec: spec/21-app/01-features/01-dashboard/00-overview.md §4 +
+// roadmap-phases.md §PHASE 3 (deferred Store.QueryAccountHealth shim).
+const AccountHealthSelectAll = `
+WITH
+  alias_set AS (
+    SELECT DISTINCT Alias FROM WatchEvents
+    UNION
+    SELECT DISTINCT Alias FROM Emails
+  ),
+  poll AS (
+    SELECT Alias, MAX(OccurredAt) AS LastPollAt
+    FROM WatchEvents WHERE Kind IN (1, 4) GROUP BY Alias
+  ),
+  err AS (
+    SELECT Alias, MAX(OccurredAt) AS LastErrorAt
+    FROM WatchEvents WHERE Kind = 3 GROUP BY Alias
+  ),
+  emails_agg AS (
+    SELECT Alias,
+           COUNT(1) AS Stored,
+           SUM(CASE WHEN IsRead = 0 THEN 1 ELSE 0 END) AS Unread
+    FROM Emails GROUP BY Alias
+  )
+SELECT a.Alias,
+       p.LastPollAt,
+       e.LastErrorAt,
+       COALESCE(em.Stored, 0) AS EmailsStored,
+       COALESCE(em.Unread, 0) AS UnreadCount
+FROM alias_set a
+LEFT JOIN poll       p  ON p.Alias  = a.Alias
+LEFT JOIN err        e  ON e.Alias  = a.Alias
+LEFT JOIN emails_agg em ON em.Alias = a.Alias
+ORDER BY a.Alias`
