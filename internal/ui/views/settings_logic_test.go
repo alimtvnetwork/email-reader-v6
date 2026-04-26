@@ -52,7 +52,8 @@ func Test_ProjectSettingsInput_PreservesInvariants(t *testing.T) {
 		AllowLocalhostUrls:    true,
 		AutoStartWatch:        false,
 	}
-	in := ProjectSettingsInput("Light", 7, "/opt/chrome", 30, prev)
+	maint := MaintenanceFields{WeekdayLabel: "Sunday", HourLocal: 3, WalHours: 6, PruneBatchSize: 5000}
+	in := ProjectSettingsInput("Light", 7, "/opt/chrome", 30, maint, prev)
 	if in.Theme != core.ThemeLight {
 		t.Errorf("Theme=%v want Light", in.Theme)
 	}
@@ -77,7 +78,8 @@ func Test_ProjectSettingsInput_PreservesInvariants(t *testing.T) {
 }
 
 func Test_ProjectSettingsInput_UnknownThemeFallsBackDark(t *testing.T) {
-	in := ProjectSettingsInput("nonsense", 3, "", 90, core.SettingsSnapshot{})
+	maint := MaintenanceFields{WeekdayLabel: "Sunday", HourLocal: 3, WalHours: 6, PruneBatchSize: 5000}
+	in := ProjectSettingsInput("nonsense", 3, "", 90, maint, core.SettingsSnapshot{})
 	if in.Theme != core.ThemeDark {
 		t.Errorf("unknown theme should fall back to Dark, got %v", in.Theme)
 	}
@@ -101,8 +103,74 @@ func Test_ParseRetentionDays_Bounds(t *testing.T) {
 
 func Test_ProjectSettingsInput_RetentionZeroDisablesPruning(t *testing.T) {
 	// Round-trips the spec semantic that 0 = never prune.
-	in := ProjectSettingsInput("Dark", 3, "", 0, core.SettingsSnapshot{})
+	maint := MaintenanceFields{WeekdayLabel: "Sunday", HourLocal: 3, WalHours: 6, PruneBatchSize: 5000}
+	in := ProjectSettingsInput("Dark", 3, "", 0, maint, core.SettingsSnapshot{})
 	if in.OpenUrlsRetentionDays != 0 {
 		t.Errorf("0 should round-trip as 0 (disabled), got %d", in.OpenUrlsRetentionDays)
+	}
+}
+
+func Test_ParseVacuumHourLocal_Bounds(t *testing.T) {
+	for _, in := range []string{"0", "3", "23"} {
+		if _, err := ParseVacuumHourLocal(in); err != nil {
+			t.Errorf("ParseVacuumHourLocal(%q) unexpected error: %v", in, err)
+		}
+	}
+	for _, in := range []string{"-1", "24", "99", "", "abc"} {
+		if _, err := ParseVacuumHourLocal(in); err == nil {
+			t.Errorf("ParseVacuumHourLocal(%q) expected error", in)
+		}
+	}
+}
+
+func Test_ParseWalCheckpointHours_Bounds(t *testing.T) {
+	for _, in := range []string{"1", "6", "168"} {
+		if _, err := ParseWalCheckpointHours(in); err != nil {
+			t.Errorf("ParseWalCheckpointHours(%q) unexpected error: %v", in, err)
+		}
+	}
+	for _, in := range []string{"0", "169", "-1", "", "abc"} {
+		if _, err := ParseWalCheckpointHours(in); err == nil {
+			t.Errorf("ParseWalCheckpointHours(%q) expected error", in)
+		}
+	}
+}
+
+func Test_ParsePruneBatchSize_Bounds(t *testing.T) {
+	for _, in := range []string{"100", "5000", "50000"} {
+		if _, err := ParsePruneBatchSize(in); err != nil {
+			t.Errorf("ParsePruneBatchSize(%q) unexpected error: %v", in, err)
+		}
+	}
+	for _, in := range []string{"99", "50001", "0", "-5", "", "abc"} {
+		if _, err := ParsePruneBatchSize(in); err == nil {
+			t.Errorf("ParsePruneBatchSize(%q) expected error", in)
+		}
+	}
+}
+
+func Test_ParseWeekdayLabel_RoundTrip(t *testing.T) {
+	labels := WeekdayLabels()
+	if len(labels) != 7 {
+		t.Fatalf("expected 7 weekday labels, got %d", len(labels))
+	}
+	for i, label := range labels {
+		if got := ParseWeekdayLabel(label); got != i {
+			t.Errorf("ParseWeekdayLabel(%q)=%d want %d", label, got, i)
+		}
+	}
+	if got := ParseWeekdayLabel("nonsense"); got != 0 {
+		t.Errorf("unknown label should default to 0 (Sunday), got %d", got)
+	}
+}
+
+func Test_ProjectSettingsInput_MaintenanceFields(t *testing.T) {
+	maint := MaintenanceFields{WeekdayLabel: "Wednesday", HourLocal: 4, WalHours: 12, PruneBatchSize: 2000}
+	in := ProjectSettingsInput("Dark", 3, "", 90, maint, core.SettingsSnapshot{})
+	if in.WeeklyVacuumOn != 3 { // time.Wednesday
+		t.Errorf("WeeklyVacuumOn=%d want 3 (Wednesday)", in.WeeklyVacuumOn)
+	}
+	if in.WeeklyVacuumHourLocal != 4 || in.WalCheckpointHours != 12 || in.PruneBatchSize != 2000 {
+		t.Errorf("maintenance fields lost: %+v", in)
 	}
 }
