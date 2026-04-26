@@ -34,8 +34,11 @@ func ApplyToFyne(mode core.ThemeMode) errtrace.Result[struct{}] {
 	if a == nil {
 		return errtrace.Ok(struct{}{})
 	}
-	fyne.Do(func() {
-		a.Settings().SetTheme(NewAppTheme())
-	})
+	// Fyne v2.5.2 has no public UI-thread marshalling helper (`fyne.Do`
+	// landed post-v2.6). SetTheme itself is safe to call from any
+	// goroutine: it swaps the theme pointer under a mutex and posts
+	// refresh events on Fyne's internal queue. Once we upgrade to a
+	// version with `fyne.Do`, wrap the call.
+	a.Settings().SetTheme(NewAppTheme())
 	return errtrace.Ok(struct{}{})
 }
