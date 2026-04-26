@@ -114,47 +114,28 @@ func TestMoveRule_ReorderError_SurfacesAndSkipsReload(t *testing.T) {
 	}
 }
 
-// TestRulesOptions_DefaultsFromService verifies that BuildRules's
-// auto-defaulting logic populates Rename + Reorder from a wired
-// `*core.RulesService` (alongside the pre-existing List/Toggle/Remove
-// defaults). We can't easily assert on the rendered container's
-// internal callbacks, but we CAN re-execute the defaulting logic
-// inline to lock the contract.
-func TestRulesOptions_DefaultsFromService(t *testing.T) {
-	// Build a real RulesService against trivial in-memory deps. We
-	// only need its method-set to be non-nil — the methods themselves
-	// won't be invoked.
-	svc := buildTestRulesService(t)
-
-	opts := RulesOptions{Service: svc}
-	// Mirror the BuildRules defaulting block.
-	if opts.Rename == nil {
-		opts.Rename = opts.Service.Rename
+// TestRulesOptions_AutoDefaults_CompileShape verifies that the typed
+// `*core.RulesService` exposes Rename and Reorder method values
+// assignable to the new `RulesOptions.Rename` / `Reorder` callback
+// types. This is a compile-only contract pin: if a future refactor
+// changes either signature, this test stops compiling and the
+// BuildRules defaulting block fails to build for the same reason.
+//
+// We deliberately avoid constructing a live `*core.RulesService`
+// here — the underlying configLoader/cfgWriter/cfgPathFn types are
+// package-private to `core` and `NewDefaultRulesService` would need a
+// real config dir. The compile-time assignability check is the only
+// invariant we need to lock.
+func TestRulesOptions_AutoDefaults_CompileShape(t *testing.T) {
+	var svc *core.RulesService // typed nil; never dereferenced
+	if svc != nil {
+		var opts RulesOptions
+		opts.Rename = svc.Rename
+		opts.Reorder = svc.Reorder
+		_ = opts
 	}
-	if opts.Reorder == nil {
-		opts.Reorder = opts.Service.Reorder
-	}
-	if opts.Rename == nil {
-		t.Error("Rename should default to Service.Rename")
-	}
-	if opts.Reorder == nil {
-		t.Error("Reorder should default to Service.Reorder")
-	}
-}
-
-// buildTestRulesService constructs a minimal *core.RulesService
-// suitable for compile/method-set assertions. The deps are inert
-// closures — we never call Save/Load through this instance.
-func buildTestRulesService(t *testing.T) *core.RulesService {
-	t.Helper()
-	loadFn := func() (*coreCfgAlias, error) {
-		return &coreCfgAlias{}, nil
-	}
-	saveFn := func(_ *coreCfgAlias) error { return errors.New("never called") }
-	pathFn := func() (string, error) { return "/dev/null", nil }
-	res := core.NewRulesService(loadFn, saveFn, pathFn)
-	if res.HasError() {
-		t.Fatalf("NewRulesService: %v", res.Error())
-	}
-	return res.Value()
+	// Make the test do something at runtime so `go test -run` reports
+	// it as having run. The real assertion is the assignment above
+	// compiling.
+	t.Log("compile-time shape lock for Service.Rename / Service.Reorder")
 }
