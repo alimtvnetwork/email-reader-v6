@@ -144,6 +144,9 @@ const (
 	ErrEmailsListInvalidLimit Code = "ER-EML-22001"
 	ErrEmailsGetNotFound      Code = "ER-EML-22002"
 	ErrEmailsRefresherUnwired Code = "ER-EML-22003"
+	ErrEmailsLifecycleNotFound    Code = "ER-EML-22020"
+	ErrEmailsDeleteAlreadyDeleted Code = "ER-EML-22021"
+	ErrEmailsUndeleteNotDeleted   Code = "ER-EML-22022"
 
 	// Fallback — used by Err[T](nil) defensive path and as last resort.
 	ErrUnknown Code = "ER-UNKNOWN-21999"
