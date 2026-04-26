@@ -173,3 +173,18 @@ func TestOpenedUrlsList_AliasOriginAppendOrder(t *testing.T) {
 		t.Fatalf("arg order wrong: %v", args)
 	}
 }
+
+func TestPruneOpenedUrlsBatched_HasBoundedDelete(t *testing.T) {
+	if !strings.Contains(PruneOpenedUrlsBatched, "DELETE FROM OpenedUrls") {
+		t.Fatalf("missing DELETE: %q", PruneOpenedUrlsBatched)
+	}
+	if !strings.Contains(PruneOpenedUrlsBatched, "WHERE rowid IN") {
+		t.Fatalf("missing rowid sub-select bound: %q", PruneOpenedUrlsBatched)
+	}
+	if !strings.Contains(PruneOpenedUrlsBatched, "OpenedAt < ?") {
+		t.Fatalf("missing cutoff predicate: %q", PruneOpenedUrlsBatched)
+	}
+	if !strings.Contains(PruneOpenedUrlsBatched, "LIMIT ?") {
+		t.Fatalf("missing LIMIT (would deadlock the writer lock): %q", PruneOpenedUrlsBatched)
+	}
+}

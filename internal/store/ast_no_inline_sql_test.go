@@ -40,8 +40,6 @@ import (
 var pendingMigration = map[string]string{
 	// store.go: UpsertEmail INSERT + post-conflict SELECT, RecordOpenedUrlExt INSERT.
 	filepath.Join("internal", "store", "store.go"): "P1.9d",
-	// vacuum.go: PruneOpenedUrls DELETE+SELECT.
-	filepath.Join("internal", "store", "vacuum.go"): "P1.9c",
 }
 
 // scannedRoots is the set of repo-relative directories whose

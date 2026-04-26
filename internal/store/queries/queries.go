@@ -204,3 +204,15 @@ func OpenedUrlsList(in OpenedUrlsListInput) (string, []any) {
 	args = append(args, in.Limit)
 	return sb.String(), args
 }
+
+// ---------------- Maintenance ----------------
+
+// PruneOpenedUrlsBatched deletes OpenedUrls rows whose OpenedAt is
+// strictly older than the bound cutoff, in chunks of LIMIT rows. The
+// inner SELECT bounds the DELETE so SQLite can use the OpenedAt index
+// without holding the writer lock for an unbounded duration.
+//
+// Args bind order: cutoff (time), limit (int).
+const PruneOpenedUrlsBatched = `DELETE FROM OpenedUrls WHERE rowid IN (
+       SELECT rowid FROM OpenedUrls WHERE OpenedAt < ? LIMIT ?
+     )`
