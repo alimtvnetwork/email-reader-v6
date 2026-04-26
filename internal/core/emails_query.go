@@ -65,19 +65,15 @@ const (
 // `(*EmailsService).ListPage`. All fields are optional; the zero
 // value is "all aliases, all rows, default sort, no pagination".
 //
-// Field maturity (P4.6):
-//   - Alias, Search, Limit, Offset, SortBy, SinceAt, UntilAt — fully
-//     wired in this slice (sort + window post-filter in core).
-//   - OnlyUnread — accepted in the type for forward-compat, but no-op
-//     until `store.Email` exposes the IsRead column (M0010 added the
-//     SQL column but the Go struct still omits it; that struct
-//     extension is its own slice to keep blast radius small).
+// Field maturity (P4.6 + follow-up):
+//   - Alias, Search, Limit, Offset, SortBy, SinceAt, UntilAt, OnlyUnread —
+//     fully wired (sort + window + unread post-filter in core).
 //   - IncludeDeleted — no-op until P4.3 lands the `DeletedAt` column
 //     (matches the `EmailCounts.Deleted == 0` tripwire).
 type EmailQuery struct {
 	Alias          string       // empty = all accounts
 	Search         string       // case-insensitive substring on Subject + From
-	OnlyUnread     bool         // accepted; no-op until store.Email exposes IsRead
+	OnlyUnread     bool         // when true, drop rows with IsRead = true
 	IncludeDeleted bool         // no-op until P4.3 (DeletedAt column)
 	SinceAt        time.Time    // zero = no lower bound
 	UntilAt        time.Time    // zero = no upper bound
