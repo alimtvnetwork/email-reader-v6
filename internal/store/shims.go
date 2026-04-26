@@ -205,7 +205,7 @@ func (s *Store) CountDeletedEmails(ctx context.Context, alias string) (int, erro
 	return n, nil
 }
 
-
+// SetEmailDeletedAt sets `Emails.DeletedAt` for every (alias, uid) in
 // `uids`. Returns cumulative RowsAffected across all batches.
 //
 // **Polarity**: `deletedAt == nil` writes SQL NULL ("undelete"); a
