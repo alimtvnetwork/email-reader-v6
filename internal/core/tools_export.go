@@ -11,7 +11,6 @@ import (
 	"context"
 	"os"
 
-	"github.com/lovable/email-read/internal/config"
 	"github.com/lovable/email-read/internal/errtrace"
 	"github.com/lovable/email-read/internal/exporter"
 	"github.com/lovable/email-read/internal/store"
