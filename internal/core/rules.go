@@ -242,49 +242,6 @@ func (s *RulesService) Remove(name string) errtrace.Result[struct{}] {
 		WithContext("name", name))
 }
 
-// ============================================================
-// Deprecated package-level wrappers — preserved for back-compat
-// during the Phase 2 view migration. Removed in P2.8 once every
-// caller goes through an injected *RulesService.
-// ============================================================
-
-// Deprecated: use (*RulesService).Add. See NewRulesService.
-func AddRule(in RuleInput) errtrace.Result[*AddRuleResult] {
-	return mustDefaultRulesService().Add(in)
-}
-
-// Deprecated: use (*RulesService).List. See NewRulesService.
-func ListRules() errtrace.Result[[]config.Rule] {
-	return mustDefaultRulesService().List()
-}
-
-// Deprecated: use (*RulesService).Get. See NewRulesService.
-func GetRule(name string) errtrace.Result[config.Rule] {
-	return mustDefaultRulesService().Get(name)
-}
-
-// Deprecated: use (*RulesService).SetEnabled. See NewRulesService.
-func SetRuleEnabled(name string, enabled bool) errtrace.Result[struct{}] {
-	return mustDefaultRulesService().SetEnabled(name, enabled)
-}
-
-// Deprecated: use (*RulesService).Remove. See NewRulesService.
-func RemoveRule(name string) errtrace.Result[struct{}] {
-	return mustDefaultRulesService().Remove(name)
-}
-
-// mustDefaultRulesService builds a default-injected service backed by
-// the real config package. Constructor cannot fail — all three deps
-// are non-nil — so we panic on the impossible branch to keep wrapper
-// signatures clean. Removed with the wrappers in P2.8.
-func mustDefaultRulesService() *RulesService {
-	res := NewRulesService(config.Load, config.Save, config.Path)
-	if res.HasError() {
-		panic("core: default RulesService construction failed: " + res.Error().Error())
-	}
-	return res.Value()
-}
-
 // CountEnabledRules reports how many rules in the slice are enabled.
 // Used by watch/read to decide whether to seed a default open-any-url
 // rule. Pure helper — no service needed.

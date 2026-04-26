@@ -123,20 +123,3 @@ func (s *DashboardService) LoadStats(ctx context.Context, alias string) errtrace
 	}
 	return errtrace.Ok(stats)
 }
-
-// LoadDashboardStats is the legacy package-level entry point preserved
-// for back-compat during the Phase 2 view migration. Builds a
-// default-injected DashboardService per call (cheap — the struct is
-// stateless) using `config.Load` + the package-level `CountEmails`.
-//
-// Deprecated: construct a *DashboardService at app bootstrap and call
-// LoadStats on it. Wrapper will be removed in slice P2.8.
-func LoadDashboardStats(ctx context.Context, alias string) errtrace.Result[DashboardStats] {
-	svcRes := NewDashboardService(config.Load, CountEmails)
-	if svcRes.HasError() {
-		// Should be unreachable — both deps are non-nil package-level
-		// references — but propagate cleanly anyway.
-		return errtrace.Err[DashboardStats](svcRes.Error())
-	}
-	return svcRes.Value().LoadStats(ctx, alias)
-}
