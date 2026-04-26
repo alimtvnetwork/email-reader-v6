@@ -1,6 +1,6 @@
 # Workflow status
 
-Last updated: 2026-04-26 (UTC) — OpenedUrls retention sweeper landed: Settings knob `OpenUrlsRetentionDays` (default 90, range 0..3650), `store.PruneOpenedUrlsBefore`, pure scheduling helpers `RetentionCutoff` / `ShouldRunRetentionTick`, and CF-S-RET acceptance test.
+Last updated: 2026-04-26 (UTC) — Daily retention tick wired: `core.Maintenance` service runs `PruneOpenedUrlsBefore` on a goroutine, started by the UI runtime; pre-existing CF_A2 flake noted (passes 5/5 in isolation).
 
 ## Current milestone
 🎯 **Spec-21-app implementation Phase 2** — turning the spec/21-app deltas into shipped code. Spec authoring round (35 tasks) **closed**; tasklist archived to `mem://archive/02-spec-21-app-tasklist`.
