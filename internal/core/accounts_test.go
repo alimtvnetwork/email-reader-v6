@@ -45,7 +45,7 @@ func TestAddAccount_RequiresFields(t *testing.T) {
 		{Alias: " ", Email: " ", PlainPassword: "p"},      // whitespace-only
 	}
 	for i, in := range cases {
-		if _, err := AddAccount(in); err == nil {
+		if r := AddAccount(in); !r.HasError() {
 			t.Errorf("case %d: expected error for input %+v", i, in)
 		}
 	}
@@ -53,14 +53,15 @@ func TestAddAccount_RequiresFields(t *testing.T) {
 
 func TestAddAccount_PersistsAndDerivesDefaults(t *testing.T) {
 	withIsolatedConfig(t, func() {
-		res, err := AddAccount(AccountInput{
+		r := AddAccount(AccountInput{
 			Alias:         "test",
 			Email:         "user@gmail.com",
 			PlainPassword: "secret123",
 		})
-		if err != nil {
-			t.Fatalf("AddAccount: %v", err)
+		if r.HasError() {
+			t.Fatalf("AddAccount: %v", r.Error())
 		}
+		res := r.Value()
 		if res.Account.Alias != "test" || res.Account.Email != "user@gmail.com" {
 			t.Errorf("unexpected stored account: %+v", res.Account)
 		}
@@ -74,10 +75,11 @@ func TestAddAccount_PersistsAndDerivesDefaults(t *testing.T) {
 			t.Errorf("password was not encoded")
 		}
 		// Round-trip via List.
-		list, err := ListAccounts()
-		if err != nil {
-			t.Fatalf("ListAccounts: %v", err)
+		listR := ListAccounts()
+		if listR.HasError() {
+			t.Fatalf("ListAccounts: %v", listR.Error())
 		}
+		list := listR.Value()
 		if len(list) != 1 || list[0].Alias != "test" {
 			t.Errorf("ListAccounts returned %+v", list)
 		}
@@ -88,7 +90,7 @@ func TestAddAccount_StripsHiddenChars(t *testing.T) {
 	withIsolatedConfig(t, func() {
 		// U+200B zero-width space appended to the password.
 		dirty := "secret\u200B"
-		res, err := AddAccount(AccountInput{
+		r := AddAccount(AccountInput{
 			Alias:         "x",
 			Email:         "x@example.com",
 			PlainPassword: dirty,
@@ -96,9 +98,10 @@ func TestAddAccount_StripsHiddenChars(t *testing.T) {
 			ImapPort:      993,
 			UseTLS:        true,
 		})
-		if err != nil {
-			t.Fatalf("AddAccount: %v", err)
+		if r.HasError() {
+			t.Fatalf("AddAccount: %v", r.Error())
 		}
+		res := r.Value()
 		if res.HiddenCharsRem == 0 {
 			t.Errorf("expected hidden char count > 0, got 0")
 		}
@@ -114,7 +117,7 @@ func TestAddAccount_StripsHiddenChars(t *testing.T) {
 
 func TestAddAccount_RespectsExplicitFields(t *testing.T) {
 	withIsolatedConfig(t, func() {
-		res, err := AddAccount(AccountInput{
+		r := AddAccount(AccountInput{
 			Alias:          "y",
 			Email:          "y@example.com",
 			PlainPassword:  "p",
@@ -124,9 +127,10 @@ func TestAddAccount_RespectsExplicitFields(t *testing.T) {
 			UseTLSExplicit: true,
 			Mailbox:        "Archive",
 		})
-		if err != nil {
-			t.Fatalf("AddAccount: %v", err)
+		if r.HasError() {
+			t.Fatalf("AddAccount: %v", r.Error())
 		}
+		res := r.Value()
 		if res.Account.ImapHost != "imap.custom.tld" || res.Account.ImapPort != 143 ||
 			res.Account.UseTLS != false || res.Account.Mailbox != "Archive" {
 			t.Errorf("explicit fields not preserved: %+v", res.Account)
@@ -136,24 +140,24 @@ func TestAddAccount_RespectsExplicitFields(t *testing.T) {
 
 func TestGetAndRemoveAccount(t *testing.T) {
 	withIsolatedConfig(t, func() {
-		_, err := AddAccount(AccountInput{
+		addR := AddAccount(AccountInput{
 			Alias: "a", Email: "a@x.com", PlainPassword: "p",
 			ImapHost: "h", ImapPort: 993, UseTLS: true, UseTLSExplicit: true,
 		})
-		if err != nil {
-			t.Fatalf("AddAccount: %v", err)
+		if addR.HasError() {
+			t.Fatalf("AddAccount: %v", addR.Error())
 		}
-		got, err := GetAccount("a")
-		if err != nil || got.Alias != "a" {
-			t.Fatalf("GetAccount: %v, %+v", err, got)
+		gotR := GetAccount("a")
+		if gotR.HasError() || gotR.Value().Alias != "a" {
+			t.Fatalf("GetAccount: %v, %+v", gotR.Error(), gotR.Value())
 		}
-		if _, err := GetAccount("missing"); err == nil {
+		if missR := GetAccount("missing"); !missR.HasError() {
 			t.Error("expected error for missing alias")
 		}
-		if err := RemoveAccount("a"); err != nil {
-			t.Fatalf("RemoveAccount: %v", err)
+		if rmR := RemoveAccount("a"); rmR.HasError() {
+			t.Fatalf("RemoveAccount: %v", rmR.Error())
 		}
-		if err := RemoveAccount("a"); err == nil {
+		if rmR := RemoveAccount("a"); !rmR.HasError() {
 			t.Error("expected error removing missing alias")
 		}
 	})

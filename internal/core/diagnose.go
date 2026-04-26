@@ -44,7 +44,7 @@ type DiagnoseEvent struct {
 // first configured account is used. Each step is reported via emit so the
 // caller (CLI / UI) can render incrementally. emit may be nil.
 func Diagnose(alias string, emit func(DiagnoseEvent)) error {
-	cfg, acct, err := loadConfigAndAccount(alias, emit)
+	_, acct, err := loadConfigAndAccount(alias, emit)
 	if err != nil {
 		return err
 	}

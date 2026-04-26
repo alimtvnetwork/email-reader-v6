@@ -264,7 +264,7 @@ func handleBaseline(ctx context.Context, opts Options, logger *log.Logger, ws *s
 // persistMessage writes the raw .eml + DB row. Returns emailId, inserted,
 // and the saved file path. A save failure is logged but non-fatal; a DB
 // upsert failure is fatal for this message.
-func persistMessage(ctx context.Context, opts Options, logger *log.Logger, m mailclient.Message) (int64, bool, string, error) {
+func persistMessage(ctx context.Context, opts Options, logger *log.Logger, m *mailclient.Message) (int64, bool, string, error) {
 	path, saveErr := mailclient.SaveRaw(opts.Account.Alias, m)
 	if saveErr != nil {
 		logErrLines(logger, "✗ save failed:", saveErr)
@@ -317,7 +317,7 @@ func launchMatches(ctx context.Context, opts Options, logger *log.Logger, emailI
 
 // evaluateRules logs trace lines and launches matched URLs. Returns the
 // count launched (caller uses it to decide post-message cooldown).
-func evaluateRules(ctx context.Context, opts Options, logger *log.Logger, emailId int64, m mailclient.Message) int {
+func evaluateRules(ctx context.Context, opts Options, logger *log.Logger, emailId int64, m *mailclient.Message) int {
 	if opts.Engine == nil {
 		return 0
 	}
@@ -338,7 +338,7 @@ func evaluateRules(ctx context.Context, opts Options, logger *log.Logger, emailI
 // processMessage handles one fetched message: persist, evaluate rules,
 // launch URLs, advance ws cursor. Returns whether any URL was launched
 // (used to decide the post-message cooldown).
-func processMessage(ctx context.Context, opts Options, logger *log.Logger, ws *store.WatchState, m mailclient.Message) (openedAny bool, err error) {
+func processMessage(ctx context.Context, opts Options, logger *log.Logger, ws *store.WatchState, m *mailclient.Message) (openedAny bool, err error) {
 	alias := opts.Account.Alias
 	logger.Printf("")
 	logger.Printf("%s  ✉ [%s] new mail · uid=%d", ts(), alias, m.Uid)
@@ -365,7 +365,7 @@ func processMessage(ctx context.Context, opts Options, logger *log.Logger, ws *s
 	return urlsLaunched > 0, nil
 }
 
-func advanceCursor(ws *store.WatchState, m mailclient.Message) {
+func advanceCursor(ws *store.WatchState, m *mailclient.Message) {
 	if m.Uid > ws.LastUid {
 		ws.LastUid = m.Uid
 		ws.LastSubject = m.Subject
@@ -391,7 +391,7 @@ func finalizeBatch(ctx context.Context, opts Options, logger *log.Logger, ws sto
 
 // fetchAndCheckEmpty fetches messages > ws.LastUid and logs the empty-batch
 // case. Returns (msgs, true) when the caller should exit early with no work.
-func fetchAndCheckEmpty(opts Options, logger *log.Logger, mc *mailclient.Client, ws store.WatchState, stats mailclient.MailboxStats, start time.Time) ([]mailclient.Message, bool, error) {
+func fetchAndCheckEmpty(opts Options, logger *log.Logger, mc *mailclient.Client, ws store.WatchState, stats mailclient.MailboxStats, start time.Time) ([]*mailclient.Message, bool, error) {
 	alias, v := opts.Account.Alias, opts.Verbose
 	if v {
 		logger.Printf("%s  · [%s] fetch UID > %d (server uidNext=%d)", ts(), alias, ws.LastUid, stats.UidNext)
@@ -467,7 +467,7 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 // processBatch iterates the fetched messages, applying the inter-message
 // cooldown when the previous message launched a URL. Returns true when any
 // message in the batch launched a URL (caller uses for the cycle cooldown).
-func processBatch(ctx context.Context, opts Options, logger *log.Logger, ws *store.WatchState, msgs []mailclient.Message) (bool, error) {
+func processBatch(ctx context.Context, opts Options, logger *log.Logger, ws *store.WatchState, msgs []*mailclient.Message) (bool, error) {
 	openedAny, batchOpened := false, false
 	for i, m := range msgs {
 		if err := ctx.Err(); err != nil {
