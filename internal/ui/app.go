@@ -9,7 +9,9 @@
 package ui
 
 import (
+	"context"
 	"log"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -17,6 +19,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/lovable/email-read/internal/core"
+	"github.com/lovable/email-read/internal/ui/theme"
 	"github.com/lovable/email-read/internal/ui/views"
 )
 
