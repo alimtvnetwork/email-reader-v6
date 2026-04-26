@@ -14,14 +14,14 @@ import (
 // stored-bytes view, the sanitized view, and rune-dumps for both.
 // Hidden = true when sanitized != raw, i.e. there ARE invisible chars.
 type DoctorReport struct {
-	Alias        string
-	Email        string
-	StoredBytes  int          // length of raw decoded bytes (pre-sanitization)
-	RuneCount    int          // length of sanitized rune slice
-	Hidden       bool         // raw != sanitized → invisible chars present
-	DecodeError  string       // non-empty when DecodePassword failed
-	Sanitized    []DoctorRune // rune dump of the sanitized password
-	Raw          []DoctorRune // rune dump of the raw bytes (only when Hidden)
+	Alias       string
+	Email       string
+	StoredBytes int          // length of raw decoded bytes (pre-sanitization)
+	RuneCount   int          // length of sanitized rune slice
+	Hidden      bool         // raw != sanitized → invisible chars present
+	DecodeError string       // non-empty when DecodePassword failed
+	Sanitized   []DoctorRune // rune dump of the sanitized password
+	Raw         []DoctorRune // rune dump of the raw bytes (only when Hidden)
 }
 
 // DoctorRune is one entry in the rune-dump table: the visible glyph plus

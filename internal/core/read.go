@@ -37,18 +37,18 @@ const (
 // Kind are populated; everything else is the zero value.
 type ReadEvent struct {
 	Kind         ReadEventKind
-	Email        *EmailDetail   // ReadEventStart
-	RuleName     string         // SeededRule, RuleTrace, Opening, Opened, OpenFailed
-	RuleCount    int            // RulesLoaded
-	BrowserPath  string         // BrowserResolved
-	IncognitoArg string         // BrowserResolved
+	Email        *EmailDetail    // ReadEventStart
+	RuleName     string          // SeededRule, RuleTrace, Opening, Opened, OpenFailed
+	RuleCount    int             // RulesLoaded
+	BrowserPath  string          // BrowserResolved
+	IncognitoArg string          // BrowserResolved
 	Trace        rules.RuleTrace // RuleTrace
-	Url          string         // Opening, Opened, OpenFailed
-	Index        int            // Opening (0-based position in match list)
-	Total        int            // Opening (total match count)
-	CooldownFor  time.Duration  // Cooldown
-	Err          error          // OpenFailed
-	Note         string         // free-form supplementary text
+	Url          string          // Opening, Opened, OpenFailed
+	Index        int             // Opening (0-based position in match list)
+	Total        int             // Opening (total match count)
+	CooldownFor  time.Duration   // Cooldown
+	Err          error           // OpenFailed
+	Note         string          // free-form supplementary text
 }
 
 // ReadEmail re-runs the rule engine against a previously stored email and

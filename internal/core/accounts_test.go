@@ -39,10 +39,10 @@ func withIsolatedConfig(t *testing.T, fn func()) {
 
 func TestAddAccount_RequiresFields(t *testing.T) {
 	cases := []AccountInput{
-		{Alias: "a", PlainPassword: "p"},                  // missing email
-		{Email: "a@x", PlainPassword: "p"},                // missing alias
-		{Alias: "a", Email: "a@x"},                        // missing password
-		{Alias: " ", Email: " ", PlainPassword: "p"},      // whitespace-only
+		{Alias: "a", PlainPassword: "p"},             // missing email
+		{Email: "a@x", PlainPassword: "p"},           // missing alias
+		{Alias: "a", Email: "a@x"},                   // missing password
+		{Alias: " ", Email: " ", PlainPassword: "p"}, // whitespace-only
 	}
 	for i, in := range cases {
 		if r := AddAccount(in); !r.HasError() {
