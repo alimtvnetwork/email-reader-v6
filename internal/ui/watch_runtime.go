@@ -180,18 +180,38 @@ func maintenanceOptionsFor(ctx context.Context, rt *WatchRuntime) core.Maintenan
 		}
 		return store.ShouldVacuum(fl, pages), nil
 	}
+	snap := snapshotForMaintenance(ctx, rt.Settings)
 	return core.MaintenanceOptions{
-		Pruner:          rt.Store.PruneOpenedUrlsBefore,
-		Analyzer:        rt.Store.Analyze,
-		Vacuumer:        rt.Store.Vacuum,
-		VacuumGate:      vacuumGate,
-		WalCheckpointer: rt.Store.WalCheckpointTruncate,
-		Retention:       func() uint16 { return retentionFromSettings(ctx, rt.Settings) },
-		OnSweep:         logRetentionSweep,
-		OnAnalyze:       logAnalyzeRun,
-		OnVacuum:        logVacuumRun,
-		OnWalCheckpoint: logWalCheckpoint,
+		Pruner:             rt.Store.PruneOpenedUrlsBefore,
+		Analyzer:           rt.Store.Analyze,
+		Vacuumer:           rt.Store.Vacuum,
+		VacuumGate:         vacuumGate,
+		WalCheckpointer:    rt.Store.WalCheckpointTruncate,
+		Retention:          func() uint16 { return retentionFromSettings(ctx, rt.Settings) },
+		VacuumWeekday:      snap.WeeklyVacuumOn,
+		VacuumHourLocal:    int(snap.WeeklyVacuumHourLocal),
+		WalCheckpointHours: int(snap.WalCheckpointHours),
+		OnSweep:            logRetentionSweep,
+		OnAnalyze:          logAnalyzeRun,
+		OnVacuum:           logVacuumRun,
+		OnWalCheckpoint:    logWalCheckpoint,
 	}
+}
+
+// snapshotForMaintenance returns the live Settings snapshot. Errors fall
+// back to DefaultSettingsInput-shaped defaults so the maintenance loop
+// always has sane scheduling knobs.
+func snapshotForMaintenance(ctx context.Context, s *core.Settings) core.SettingsSnapshot {
+	r := s.Get(ctx)
+	if r.HasError() {
+		d := core.DefaultSettingsInput()
+		return core.SettingsSnapshot{
+			WeeklyVacuumOn:        d.WeeklyVacuumOn,
+			WeeklyVacuumHourLocal: d.WeeklyVacuumHourLocal,
+			WalCheckpointHours:    d.WalCheckpointHours,
+		}
+	}
+	return r.Value()
 }
 
 // retentionFromSettings reads the live snapshot's retention knob.
