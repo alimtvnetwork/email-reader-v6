@@ -133,11 +133,11 @@ func newExportCsvCmd() *cobra.Command {
 }
 
 func runExportCsv(ctx context.Context) error {
-	path, err := core.ExportCSV(ctx)
-	if err != nil {
-		return err
+	r := core.ExportCSV(ctx)
+	if r.HasError() {
+		return r.PropagateError()
 	}
-	fmt.Printf("Exported to %s\n", path)
+	fmt.Printf("Exported to %s\n", r.Value())
 	return nil
 }
 

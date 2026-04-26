@@ -20,10 +20,11 @@ func TestExportCSV(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	path, err := ExportCSV(context.Background())
-	if err != nil {
-		t.Fatalf("ExportCSV: %v", err)
+	r := ExportCSV(context.Background())
+	if r.HasError() {
+		t.Fatalf("ExportCSV: %v", r.Error())
 	}
+	path := r.Value()
 	if !strings.HasPrefix(path, filepath.Join(tmp, "data")) {
 		t.Fatalf("expected path under %s/data, got %s", tmp, path)
 	}
