@@ -139,6 +139,9 @@ blocks:
       - const: ErrRuleRenameNoop
         code: "ER-RUL-21306"
         description: Rename called with newName equal to oldName (no-op rejected; caller bug).
+      - const: ErrRuleReorderMismatch
+        code: "ER-RUL-21307"
+        description: Reorder input is not a permutation of current rule names (missing, extra, or duplicate names).
 
   - name: Watcher
     prefix: ER-WCH
