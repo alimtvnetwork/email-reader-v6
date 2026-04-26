@@ -34,7 +34,18 @@ func NewAppTheme() fyne.Theme { return &AppTheme{} }
 // — explicit ThemeDark/ThemeLight pin the palette regardless of OS pref,
 // matching spec §4 (paletteFor).
 func (AppTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color.Color {
-	pal := paletteFor(resolvedMode(variant))
+	mode := resolvedMode(variant)
+	// Selection is special-cased: spec §2 wants ColorPrimary at alpha
+	// 0.30 so the selection band tints the underlying surface instead
+	// of opaquely covering it. AlphaBlend reads the active mode, so we
+	// pin it via a brief Apply round-trip if Fyne's variant disagrees
+	// — cheaper path: build the NRGBA inline from the resolved palette
+	// to avoid mutating global state during a render.
+	if name == fynetheme.ColorNameSelection {
+		base := paletteFor(mode)[ColorPrimary]
+		return color.NRGBA{R: base.R, G: base.G, B: base.B, A: scaleAlpha(base.A, 0.30)}
+	}
+	pal := paletteFor(mode)
 	if tok, ok := fyneColorRoute[name]; ok {
 		return pal[tok]
 	}
@@ -109,11 +120,8 @@ var fyneColorRoute = map[fyne.ThemeColorName]ColorName{
 	fynetheme.ColorNameSuccess:         ColorSuccess,
 	fynetheme.ColorNameWarning:         ColorWarning,
 	fynetheme.ColorNameSeparator:       ColorBorder,
-	// Selection: spec wants ColorPrimary at alpha 0.30 — alpha-mixing
-	// requires a wrapped color value, deferred until the elevation/alpha
-	// helper lands. For now use the solid Primary so selection is at
-	// least theme-aware (better than Fyne's hard-coded blue).
-	fynetheme.ColorNameSelection: ColorPrimary,
+	// Selection is intentionally absent: it's special-cased in Color()
+	// to apply the §2 alpha-0.30 blend on ColorPrimary via scaleAlpha.
 }
 
 // fyneSizeRoute is the §3/§4 routing table: each Fyne built-in size
