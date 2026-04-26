@@ -18,6 +18,7 @@ import (
 type Account struct {
 	Alias       string `json:"alias"`
 	Email       string `json:"email"`
+	DisplayName string `json:"displayName,omitempty"` // optional human label (e.g. "Work — Sales")
 	PasswordB64 string `json:"passwordB64"`
 	ImapHost    string `json:"imapHost"`
 	ImapPort    int    `json:"imapPort"`

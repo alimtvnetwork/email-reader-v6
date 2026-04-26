@@ -16,28 +16,30 @@ import (
 // widgets — coercion to int / bool happens in ValidateAccountForm so
 // every error surfaces in one pass.
 type AccountFormInput struct {
-	Alias    string
-	Email    string
-	Password string
-	Host     string // optional — auto-suggested from email when blank
-	Port     string // optional — defaults to 993
-	UseTLS   bool
-	Mailbox  string // optional — defaults to "INBOX"
+	Alias       string
+	Email       string
+	DisplayName string // optional human label
+	Password    string
+	Host        string // optional — auto-suggested from email when blank
+	Port        string // optional — defaults to 993
+	UseTLS      bool
+	Mailbox     string // optional — defaults to "INBOX"
 }
 
 // AccountFormResult holds the cleaned values ready to feed into
 // core.AddAccount, plus a list of human-readable validation errors. When
 // Errors is non-empty, Valid is false and the caller should NOT submit.
 type AccountFormResult struct {
-	Valid    bool
-	Errors   []string
-	Alias    string
-	Email    string
-	Password string
-	Host     string
-	Port     int
-	UseTLS   bool
-	Mailbox  string
+	Valid       bool
+	Errors      []string
+	Alias       string
+	Email       string
+	DisplayName string
+	Password    string
+	Host        string
+	Port        int
+	UseTLS      bool
+	Mailbox     string
 }
 
 // ValidateAccountForm trims input, fills sensible defaults from imapdef
@@ -46,12 +48,13 @@ type AccountFormResult struct {
 // handles that downstream) — we only check it's non-empty.
 func ValidateAccountForm(in AccountFormInput) AccountFormResult {
 	out := AccountFormResult{
-		Alias:    strings.TrimSpace(in.Alias),
-		Email:    strings.TrimSpace(in.Email),
-		Password: in.Password,
-		Host:     strings.TrimSpace(in.Host),
-		UseTLS:   in.UseTLS,
-		Mailbox:  strings.TrimSpace(in.Mailbox),
+		Alias:       strings.TrimSpace(in.Alias),
+		Email:       strings.TrimSpace(in.Email),
+		DisplayName: strings.TrimSpace(in.DisplayName),
+		Password:    in.Password,
+		Host:        strings.TrimSpace(in.Host),
+		UseTLS:      in.UseTLS,
+		Mailbox:     strings.TrimSpace(in.Mailbox),
 	}
 	var errs []string
 
