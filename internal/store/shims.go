@@ -311,19 +311,22 @@ func (s *Store) QueryAccountHealth(ctx context.Context) ([]StoreAccountHealthRow
 	out := []StoreAccountHealthRow{}
 	for rows.Next() {
 		var (
-			alias              string
-			lastPollText       sql.NullString
-			lastErrorText      sql.NullString
-			emailsStored       int
-			unreadCount        int
+			alias               string
+			lastPollText        sql.NullString
+			lastErrorText       sql.NullString
+			emailsStored        int
+			unreadCount         int
+			consecutiveFailures int
 		)
-		if err := rows.Scan(&alias, &lastPollText, &lastErrorText, &emailsStored, &unreadCount); err != nil {
+		if err := rows.Scan(&alias, &lastPollText, &lastErrorText,
+			&emailsStored, &unreadCount, &consecutiveFailures); err != nil {
 			return nil, errtrace.Wrap(err, "QueryAccountHealth.Scan")
 		}
 		row := StoreAccountHealthRow{
-			Alias:        alias,
-			EmailsStored: emailsStored,
-			UnreadCount:  unreadCount,
+			Alias:               alias,
+			EmailsStored:        emailsStored,
+			UnreadCount:         unreadCount,
+			ConsecutiveFailures: consecutiveFailures,
 		}
 		if lastPollText.Valid && lastPollText.String != "" {
 			t, perr := parseSqliteRFC3339(lastPollText.String)
