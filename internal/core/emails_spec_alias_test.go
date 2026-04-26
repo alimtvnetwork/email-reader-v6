@@ -35,10 +35,10 @@ func TestEmails_AliasResolvesToEmailsService(t *testing.T) {
 func TestNewEmails_ReturnsWiredService(t *testing.T) {
 	// Contract 2: spec-canonical constructor name resolves.
 	res := NewEmails()
-	svc, err := res.Unwrap()
-	if err != nil {
-		t.Fatalf("NewEmails: unexpected err: %v", err)
+	if res.HasError() {
+		t.Fatalf("NewEmails: unexpected err: %v", res.Error())
 	}
+	svc := res.Value()
 	if svc == nil {
 		t.Fatal("NewEmails: returned nil *Emails")
 	}
