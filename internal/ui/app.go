@@ -46,6 +46,11 @@ func Run() {
 	w.SetContent(BuildShell(LoadAliases()))
 	w.Resize(fyne.NewSize(1000, 680))
 	w.CenterOnScreen()
+	defer func() {
+		if rt := watchRuntimeSingleton; rt != nil {
+			rt.Close()
+		}
+	}()
 	w.ShowAndRun()
 }
 
