@@ -23,8 +23,11 @@ import (
 
 // emailColumns is the canonical column list for any SELECT against the
 // Emails table. Centralised so a future ALTER TABLE only needs one edit.
+// `IsRead` (added by M0010) is included so the Go-side `store.Email`
+// struct field of the same name populates on every read path; this in
+// turn unblocks the `core.EmailQuery.OnlyUnread` filter (P4.6 follow-up).
 const emailColumns = `Id, Alias, MessageId, Uid, FromAddr, ToAddr, CcAddr, Subject,
-       BodyText, BodyHtml, ReceivedAt, FilePath`
+       BodyText, BodyHtml, ReceivedAt, FilePath, IsRead`
 
 // EmailByUid selects a single email row by (Alias, Uid). Static query.
 const EmailByUid = `SELECT ` + emailColumns + ` FROM Emails WHERE Alias = ? AND Uid = ?`
