@@ -30,7 +30,7 @@ import (
 
 	"github.com/lovable/email-read/internal/config"
 	"github.com/lovable/email-read/internal/core"
-	"github.com/lovable/email-read/pkg/errtrace"
+	"github.com/lovable/email-read/internal/errtrace"
 )
 
 // Services is the typed dependency bundle threaded through `viewFor`.
