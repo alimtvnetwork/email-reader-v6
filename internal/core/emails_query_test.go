@@ -10,7 +10,7 @@
 //   - SinceUntilWindow              → drops out-of-range rows
 //   - PaginationSlicesItems         → Limit/Offset window correct,
 //                                     NextOffset matches lo+len(page)
-//   - TotalIgnoresLimit             → Total = full filtered count
+//   - PaginationOffsetOverflow      → graceful clamp to Total
 //   - DeferredFlags_AreNoOps        → OnlyUnread/IncludeDeleted do
 //                                     not drop rows in this slice
 //                                     (tripwire — flips when the
@@ -39,21 +39,34 @@ func mkRow(uid uint32, alias, subj string, recv time.Time) store.Email {
 	}
 }
 
+// newTestSvcWithRows builds an EmailsService whose store hands back
+// the given rows on ListEmails. Returns the fake too for assertions.
+func newTestSvcWithRows(t *testing.T, rows []store.Email) (*EmailsService, *fakeEmailsStore) {
+	t.Helper()
+	fake := &fakeEmailsStore{listRows: rows}
+	opener, _ := makeOpener(fake, nil)
+	res := NewEmailsService(opener)
+	if res.HasError() {
+		t.Fatalf("NewEmailsService: %v", res.Error())
+	}
+	return res.Value(), fake
+}
+
 func TestEmailsService_ListPage_HappyPath_DefaultSort(t *testing.T) {
 	t0 := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
+	// Store returns newest-first per its ORDER BY contract.
 	rows := []store.Email{
 		mkRow(3, "a", "Newest", t0.Add(2*time.Hour)),
 		mkRow(2, "a", "Middle", t0.Add(1*time.Hour)),
 		mkRow(1, "a", "Oldest", t0),
 	}
-	fake := &fakeEmailsStore{listRows: rows}
-	opener, _ := makeOpener(fake, nil)
-	s, _ := NewEmailsService(opener).Unwrap()
+	s, _ := newTestSvcWithRows(t, rows)
 
-	got, err := s.ListPage(context.Background(), EmailQuery{Alias: "a"}).Unwrap()
-	if err != nil {
-		t.Fatalf("unexpected err: %v", err)
+	res := s.ListPage(context.Background(), EmailQuery{Alias: "a"})
+	if res.HasError() {
+		t.Fatalf("unexpected err: %v", res.Error())
 	}
+	got := res.Value()
 	if got.Total != 3 || len(got.Items) != 3 || got.NextOffset != 3 {
 		t.Fatalf("page = %+v, want Total=3 len=3 NextOffset=3", got)
 	}
@@ -68,13 +81,15 @@ func TestEmailsService_ListPage_SortReceivedAsc(t *testing.T) {
 		mkRow(3, "a", "Newest", t0.Add(2*time.Hour)),
 		mkRow(1, "a", "Oldest", t0),
 	}
-	fake := &fakeEmailsStore{listRows: rows}
-	opener, _ := makeOpener(fake, nil)
-	s, _ := NewEmailsService(opener).Unwrap()
+	s, _ := newTestSvcWithRows(t, rows)
 
-	got, _ := s.ListPage(context.Background(), EmailQuery{
+	res := s.ListPage(context.Background(), EmailQuery{
 		Alias: "a", SortBy: EmailSortReceivedAsc,
-	}).Unwrap()
+	})
+	if res.HasError() {
+		t.Fatalf("err: %v", res.Error())
+	}
+	got := res.Value()
 	if got.Items[0].Subject != "Oldest" {
 		t.Errorf("asc sort failed: items[0]=%q want Oldest", got.Items[0].Subject)
 	}
@@ -87,17 +102,18 @@ func TestEmailsService_ListPage_SortSubjectAsc_CaseFolded(t *testing.T) {
 		mkRow(2, "a", "Apple", t0),
 		mkRow(3, "a", "cherry", t0),
 	}
-	fake := &fakeEmailsStore{listRows: rows}
-	opener, _ := makeOpener(fake, nil)
-	s, _ := NewEmailsService(opener).Unwrap()
+	s, _ := newTestSvcWithRows(t, rows)
 
-	got, _ := s.ListPage(context.Background(), EmailQuery{
+	res := s.ListPage(context.Background(), EmailQuery{
 		Alias: "a", SortBy: EmailSortSubjectAsc,
-	}).Unwrap()
+	})
+	if res.HasError() {
+		t.Fatalf("err: %v", res.Error())
+	}
 	want := []string{"Apple", "banana", "cherry"}
 	for i, w := range want {
-		if !strings.EqualFold(got.Items[i].Subject, w) {
-			t.Errorf("items[%d]=%q want %q", i, got.Items[i].Subject, w)
+		if !strings.EqualFold(res.Value().Items[i].Subject, w) {
+			t.Errorf("items[%d]=%q want %q", i, res.Value().Items[i].Subject, w)
 		}
 	}
 }
@@ -109,13 +125,15 @@ func TestEmailsService_ListPage_SinceUntilWindow(t *testing.T) {
 		mkRow(2, "a", "inside", t0.Add(time.Hour)),
 		mkRow(3, "a", "after", t0.Add(5*time.Hour)),
 	}
-	fake := &fakeEmailsStore{listRows: rows}
-	opener, _ := makeOpener(fake, nil)
-	s, _ := NewEmailsService(opener).Unwrap()
+	s, _ := newTestSvcWithRows(t, rows)
 
-	got, _ := s.ListPage(context.Background(), EmailQuery{
+	res := s.ListPage(context.Background(), EmailQuery{
 		Alias: "a", SinceAt: t0, UntilAt: t0.Add(2 * time.Hour),
-	}).Unwrap()
+	})
+	if res.HasError() {
+		t.Fatalf("err: %v", res.Error())
+	}
+	got := res.Value()
 	if got.Total != 1 || got.Items[0].Subject != "inside" {
 		t.Fatalf("window filter wrong: %+v", got)
 	}
@@ -125,15 +143,18 @@ func TestEmailsService_ListPage_PaginationSlicesItems(t *testing.T) {
 	t0 := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
 	rows := make([]store.Email, 0, 10)
 	for i := 0; i < 10; i++ {
-		rows = append(rows, mkRow(uint32(10-i), "a", "s", t0.Add(time.Duration(10-i)*time.Hour)))
+		rows = append(rows, mkRow(uint32(10-i), "a", "s",
+			t0.Add(time.Duration(10-i)*time.Hour)))
 	}
-	fake := &fakeEmailsStore{listRows: rows}
-	opener, _ := makeOpener(fake, nil)
-	s, _ := NewEmailsService(opener).Unwrap()
+	s, _ := newTestSvcWithRows(t, rows)
 
-	got, _ := s.ListPage(context.Background(), EmailQuery{
+	res := s.ListPage(context.Background(), EmailQuery{
 		Alias: "a", Limit: 3, Offset: 4,
-	}).Unwrap()
+	})
+	if res.HasError() {
+		t.Fatalf("err: %v", res.Error())
+	}
+	got := res.Value()
 	if got.Total != 10 {
 		t.Errorf("Total=%d want 10 (must ignore Limit)", got.Total)
 	}
@@ -146,15 +167,16 @@ func TestEmailsService_ListPage_PaginationSlicesItems(t *testing.T) {
 }
 
 func TestEmailsService_ListPage_PaginationOffsetOverflow(t *testing.T) {
-	fake := &fakeEmailsStore{listRows: []store.Email{
-		mkRow(1, "a", "only", time.Now()),
-	}}
-	opener, _ := makeOpener(fake, nil)
-	s, _ := NewEmailsService(opener).Unwrap()
+	rows := []store.Email{mkRow(1, "a", "only", time.Now())}
+	s, _ := newTestSvcWithRows(t, rows)
 
-	got, _ := s.ListPage(context.Background(), EmailQuery{
+	res := s.ListPage(context.Background(), EmailQuery{
 		Alias: "a", Offset: 999, Limit: 10,
-	}).Unwrap()
+	})
+	if res.HasError() {
+		t.Fatalf("err: %v", res.Error())
+	}
+	got := res.Value()
 	if got.Total != 1 || len(got.Items) != 0 || got.NextOffset != 1 {
 		t.Fatalf("overflow page = %+v, want Total=1 len=0 NextOffset=1", got)
 	}
@@ -165,31 +187,35 @@ func TestEmailsService_ListPage_PaginationOffsetOverflow(t *testing.T) {
 // branches into real filters.
 func TestEmailsService_ListPage_DeferredFlags_AreNoOps(t *testing.T) {
 	rows := []store.Email{mkRow(1, "a", "s", time.Now())}
-	fake := &fakeEmailsStore{listRows: rows}
-	opener, _ := makeOpener(fake, nil)
-	s, _ := NewEmailsService(opener).Unwrap()
+	s, _ := newTestSvcWithRows(t, rows)
 
-	got, _ := s.ListPage(context.Background(), EmailQuery{
+	res := s.ListPage(context.Background(), EmailQuery{
 		Alias: "a", OnlyUnread: true, IncludeDeleted: true,
-	}).Unwrap()
-	if got.Total != 1 {
+	})
+	if res.HasError() {
+		t.Fatalf("err: %v", res.Error())
+	}
+	if res.Value().Total != 1 {
 		t.Fatalf("OnlyUnread/IncludeDeleted dropped rows in P4.6 (Total=%d). "+
 			"Either the deferred slices landed (good — wire real filters and "+
-			"replace this tripwire) or a regression slipped in.", got.Total)
+			"replace this tripwire) or a regression slipped in.", res.Value().Total)
 	}
 }
 
 func TestEmailsService_ListPage_PropagatesOpenError(t *testing.T) {
 	openErr := errors.New("disk gone")
 	opener, _ := makeOpener(nil, openErr)
-	s, _ := NewEmailsService(opener).Unwrap()
-
-	_, err := s.ListPage(context.Background(), EmailQuery{}).Unwrap()
-	if err == nil || !errors.Is(err, openErr) {
-		t.Fatalf("err = %v, want wraps openErr", err)
+	svcRes := NewEmailsService(opener)
+	if svcRes.HasError() {
+		t.Fatalf("NewEmailsService: %v", svcRes.Error())
 	}
-	var coded *errtrace.CodedError
-	if !errors.As(err, &coded) || coded.Code != errtrace.ErrDbOpen {
+
+	res := svcRes.Value().ListPage(context.Background(), EmailQuery{})
+	if !res.HasError() {
+		t.Fatal("want error, got nil")
+	}
+	var coded *errtrace.Coded
+	if !errors.As(res.Error(), &coded) || coded.Code != errtrace.ErrDbOpen {
 		t.Errorf("code = %v, want ErrDbOpen", coded)
 	}
 }
@@ -198,14 +224,29 @@ func TestEmailsService_ListPage_PropagatesQueryError(t *testing.T) {
 	qErr := errors.New("query boom")
 	fake := &fakeEmailsStore{listErr: qErr}
 	opener, _ := makeOpener(fake, nil)
-	s, _ := NewEmailsService(opener).Unwrap()
+	svcRes := NewEmailsService(opener)
+	if svcRes.HasError() {
+		t.Fatalf("NewEmailsService: %v", svcRes.Error())
+	}
 
-	_, err := s.ListPage(context.Background(), EmailQuery{Alias: "primary"}).Unwrap()
-	var coded *errtrace.CodedError
-	if !errors.As(err, &coded) || coded.Code != errtrace.ErrDbQueryEmail {
+	res := svcRes.Value().ListPage(context.Background(),
+		EmailQuery{Alias: "primary"})
+	if !res.HasError() {
+		t.Fatal("want error, got nil")
+	}
+	var coded *errtrace.Coded
+	if !errors.As(res.Error(), &coded) || coded.Code != errtrace.ErrDbQueryEmail {
 		t.Fatalf("code = %v, want ErrDbQueryEmail", coded)
 	}
-	if got, _ := coded.Context["alias"].(string); got != "primary" {
-		t.Errorf("alias ctx = %q, want primary", got)
+	// Context is []ContextField — scan for the alias key.
+	var aliasOK bool
+	for _, f := range coded.Context {
+		if f.Key == "alias" && f.Value == "primary" {
+			aliasOK = true
+			break
+		}
+	}
+	if !aliasOK {
+		t.Errorf("alias ctx missing or wrong: %+v", coded.Context)
 	}
 }
