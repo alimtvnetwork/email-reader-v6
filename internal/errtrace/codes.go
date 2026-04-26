@@ -88,6 +88,20 @@ const (
 	ErrUiViewRender     Code = "ER-UI-21904"
 	ErrUiClipboard      Code = "ER-UI-21905"
 
+	// ER-SET (Settings) — block 21770–21789
+	ErrSettingsConstruct        Code = "ER-SET-21770"
+	ErrSettingsPollSeconds      Code = "ER-SET-21771"
+	ErrSettingsTheme            Code = "ER-SET-21772"
+	ErrSettingsUrlScheme        Code = "ER-SET-21773"
+	ErrSettingsChromePath       Code = "ER-SET-21774"
+	ErrSettingsIncognitoArg     Code = "ER-SET-21775"
+	ErrSettingsLocalhostUrls    Code = "ER-SET-21776"
+	ErrSettingsCompositeRule    Code = "ER-SET-21777"
+	ErrSettingsPersist          Code = "ER-SET-21778"
+	ErrSettingsConcurrentEdit   Code = "ER-SET-21779"
+	ErrSettingsDetectChromeStat Code = "ER-SET-21780"
+	ErrSettingsEventDropped     Code = "ER-SET-21781"
+
 	// Fallback — used by Err[T](nil) defensive path and as last resort.
 	ErrUnknown Code = "ER-UNKNOWN-21999"
 )
