@@ -475,4 +475,55 @@ The current `internal/core/accounts.go` exposes package-level `AddAccount`, `Lis
 
 ---
 
+## N. Symbol Map (AC → Go symbol)
+
+Authoritative bridge between `97-acceptance-criteria.md` IDs and the production Go identifiers an AI implementer must touch. **Status legend:** ✅ shipped on `main` · ⏳ planned · 🧪 test-only · 🟡 partial.
+
+### N.1 Service surface
+
+| AC IDs               | Go symbol                                                                            | File                                  | Status |
+|----------------------|--------------------------------------------------------------------------------------|---------------------------------------|:------:|
+| F-01, T-02           | `core.Accounts` + `NewAccounts(config.Manager, store.Store, Clock) *Accounts`        | `internal/core/accounts.go`           |   🟡   |
+| F-02                 | `(*Accounts).List(ctx) errtrace.Result[[]AccountView]` *(strips PasswordB64)*        | `internal/core/accounts.go`           |   🟡   |
+| F-04                 | `(*Accounts).Get(ctx, alias) errtrace.Result[AccountView]`                           | `internal/core/accounts.go`           |   ✅   |
+| F-06, F-07           | `(*Accounts).Add(ctx, AccountInput) errtrace.Result[AddAccountResult]`               | `internal/core/accounts.go`           |   ✅   |
+| F-08                 | `(*Accounts).Update(ctx, alias, AccountInput) errtrace.Result[AccountView]`          | `internal/core/account_update.go`     |   ✅   |
+| F-11                 | `(*Accounts).Remove(ctx, alias) errtrace.Result[Unit]`                               | `internal/core/accounts.go`           |   ✅   |
+| F-13, F-14, F-15     | `(*Accounts).TestConnection(ctx, alias) errtrace.Result[TestConnReport]` *(read-only)* | `internal/core/test_connection.go`  |   ✅   |
+| L-01..L-09           | `core.AccountEvent` (`Added` / `Updated` / `Removed`) + `core.SubscribeAccountEvents` | `internal/core/account_events.go`    |   ✅   |
+
+### N.2 Projection types
+
+| AC IDs              | Go symbol                                              | File                          | Status |
+|---------------------|--------------------------------------------------------|-------------------------------|:------:|
+| F-02, F-04          | `core.AccountView`                                     | `internal/core/accounts.go`   |   🟡   |
+| F-06                | `core.AccountInput`, `core.AddAccountResult`           | `internal/core/accounts.go`   |   ✅   |
+| F-13                | `core.TestConnReport`                                  | `internal/core/test_connection.go` |   ✅ |
+
+### N.3 Config / persistence
+
+| AC IDs        | Go symbol                                                              | File                                    | Status |
+|---------------|------------------------------------------------------------------------|-----------------------------------------|:------:|
+| F-06, F-11, S-04 | `config.WithWriteLock(func(*Config) error) error` *(atomic mutate)*  | `internal/config/config.go`             |   ✅   |
+| S-01..S-07    | `core.cleanPassword`, `core.validateAndSanitize` *(PII guards)*        | `internal/core/accounts.go`             |   ✅   |
+
+### N.4 Errors & logging
+
+| AC IDs        | Go symbol                                                              | File                                    | Status |
+|---------------|------------------------------------------------------------------------|-----------------------------------------|:------:|
+| E-01..E-10    | Codes 21500..21599 per §8 (e.g. `ErrAccountAliasTaken`, `ErrAccountNotFound`, `ErrTestConnectionAuthFailed`) | `internal/errtrace/codes_gen.go` | ⏳ |
+| G-01..G-08    | `accountsSlog` (`component=accounts`) + `FormatAccount*` helpers       | `internal/ui/accounts_log.go`           |   ⏳   |
+| S-05, X-01..X-07 | Password redaction enforced by `Test_LogScan_NoOriginalUrlLeak` pattern | `internal/core/accounts_log_scan_test.go` | ⏳ |
+
+### N.5 Test contract
+
+| AC IDs        | Test symbol                                                          | File                                            | Status |
+|---------------|----------------------------------------------------------------------|-------------------------------------------------|:------:|
+| T-01, T-02    | `TestAccounts_*` (full §7 test list)                                 | `internal/core/accounts_test.go`                |   🟡   |
+| T-04          | `TestCF_A1`, `TestCF_A2_RaceFree`                                    | `internal/core/cf_acceptance_*.go`              |   ✅   |
+| T-05          | `BenchmarkAccountsList_50Accounts`                                   | `internal/core/accounts_bench_test.go`          |   ⏳   |
+| T-08          | `TestAccounts_TestConnection_ReadOnly`                               | `internal/core/test_connection_test.go`         |   ✅   |
+
+---
+
 **End of `04-accounts/01-backend.md`**
