@@ -96,3 +96,24 @@ func (s *Services) dashboardEmailsCounter() func(ctx context.Context, alias stri
 		return errtrace.Ok(0)
 	}
 }
+
+// AttachRefresher injects the production `core.Refresher` into the
+// shared `EmailsService` once the `WatchRuntime` is built. This is
+// the bootstrap completion of the P4.4 seam: `Refresh(ctx, alias)`
+// becomes a working call rather than the documented "no refresher
+// wired" error.
+//
+// Safe to call with a nil receiver, nil Emails, or nil refresher —
+// each is logged as a no-op so a partial bootstrap (e.g. store-open
+// failure prevented WatchRuntime from building) cannot crash the
+// shell. Idempotent: a second call simply replaces the wired
+// refresher, matching the semantics of `WithRefresher`.
+func (s *Services) AttachRefresher(refresher core.Refresher) {
+	if s == nil || s.Emails == nil {
+		return
+	}
+	if refresher == nil {
+		return
+	}
+	s.Emails.WithRefresher(refresher)
+}

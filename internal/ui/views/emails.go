@@ -50,15 +50,74 @@ func BuildEmails(opts EmailsOptions) fyne.CanvasObject {
 			fmt.Errorf("emails service not wired (no Service or List/Get overrides injected)"))
 	}
 
+	// Body is a swappable container so the Refresh button can
+	// re-render the list/detail tree in place without rebuilding the
+	// outer layout (which would also drop the toolbar focus).
+	body := container.NewStack()
+	render := func() {
+		body.Objects = []fyne.CanvasObject{buildEmailsBody(opts)}
+		body.Refresh()
+	}
+	render()
+
+	toolbar := buildEmailsToolbar(opts, render)
+	if toolbar == nil {
+		return container.NewBorder(
+			container.NewVBox(heading, widget.NewSeparator()),
+			nil, nil, nil, body,
+		)
+	}
+	return container.NewBorder(
+		container.NewVBox(heading, toolbar, widget.NewSeparator()),
+		nil, nil, nil, body,
+	)
+}
+
+// buildEmailsBody runs the per-render data fetch and returns the
+// rows-or-error widget. Extracted from BuildEmails so the Refresh
+// button (buildEmailsToolbar) can swap it in place without touching
+// the surrounding chrome (heading + toolbar). Body variants pass
+// `nil` for the inner heading because the outer Border already
+// renders it — passing a real heading here would double-stack it
+// after every Refresh click.
+func buildEmailsBody(opts EmailsOptions) fyne.CanvasObject {
 	rows, err := loadEmailRows(opts)
 	if err != nil {
-		return emailsErrorView(heading, err)
+		return emailsErrorBody(err)
 	}
 	if len(rows) == 0 {
-		return emailsEmptyRows(heading, opts.Alias)
+		return emailsEmptyRowsBody(opts.Alias)
 	}
+	return buildEmailsBrowserBody(opts, rows)
+}
 
-	return buildEmailsBrowser(heading, opts, rows)
+// buildEmailsToolbar returns the "🔄 Refresh" action row — but only
+// when the wired EmailsService can actually do the work (a Refresher
+// was injected via WithRefresher at bootstrap; see app.go NavEmails
+// arm). Returns nil in degraded modes so the toolbar simply doesn't
+// render rather than displaying a button that always errors.
+//
+// The button uses a 30s timeout: a single IMAP poll cycle (connect,
+// SELECT, fetch new UIDs, persist, evaluate rules) typically
+// finishes in <2s but can spike on cold connections or large new-
+// message batches. 30s matches the `Run` loop's per-cycle budget.
+func buildEmailsToolbar(opts EmailsOptions, onRefresh func()) fyne.CanvasObject {
+	if opts.Service == nil {
+		return nil
+	}
+	status := widget.NewLabel("")
+	btn := widget.NewButton("🔄 Refresh", func() {
+		status.SetText("Refreshing…")
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if res := opts.Service.Refresh(ctx, opts.Alias); res.HasError() {
+			status.SetText("⚠ Refresh failed: " + res.Error().Error())
+			return
+		}
+		status.SetText("")
+		onRefresh()
+	})
+	return container.NewHBox(btn, status)
 }
 
 // applyEmailsDefaults fills test-override seams from the injected
@@ -133,6 +192,43 @@ func buildEmailsBrowser(heading fyne.CanvasObject, opts EmailsOptions, rows []co
 		container.NewVBox(heading, widget.NewSeparator()),
 		status, nil, nil, split,
 	)
+}
+
+// emailsErrorBody renders the load-failure warning WITHOUT a heading
+// row — used by the per-render `buildEmailsBody` swap path where the
+// heading is owned by the outer Border.
+func emailsErrorBody(err error) fyne.CanvasObject {
+	warn := widget.NewLabel("⚠ Failed to load emails: " + err.Error())
+	warn.Wrapping = fyne.TextWrapWord
+	return container.NewVBox(warn)
+}
+
+// emailsEmptyRowsBody renders the empty-state WITHOUT a heading row.
+// Mirrors `emailsEmptyRows` minus the heading + separator since the
+// outer Border already provides that chrome.
+func emailsEmptyRowsBody(alias string) fyne.CanvasObject {
+	empty := widget.NewLabel(fmt.Sprintf("No emails stored yet for %q. Run a watch or one-shot fetch first.", alias))
+	empty.Wrapping = fyne.TextWrapWord
+	return container.NewVBox(empty)
+}
+
+// buildEmailsBrowserBody composes the split-pane list + detail
+// browser WITHOUT a leading heading row. Used by the per-render swap
+// path. Identical to `buildEmailsBrowser` minus the heading-bearing
+// Border `top` argument.
+func buildEmailsBrowserBody(opts EmailsOptions, rows []core.EmailSummary) fyne.CanvasObject {
+	status := widget.NewLabel("Loading…")
+	status.Wrapping = fyne.TextWrapWord
+	detailBox := container.NewVBox(widget.NewLabel("Select an email on the left."))
+	detailScroll := container.NewVScroll(detailBox)
+
+	list := newEmailList(rows)
+	list.OnSelected = makeEmailSelectHandler(opts, rows, detailBox, detailScroll, status)
+
+	status.SetText(fmt.Sprintf("%d email(s) for %s.", len(rows), opts.Alias))
+	split := container.NewHSplit(list, detailScroll)
+	split.SetOffset(0.35)
+	return container.NewBorder(nil, status, nil, nil, split)
 }
 
 // newEmailList builds the email summary list widget.

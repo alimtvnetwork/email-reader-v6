@@ -242,6 +242,14 @@ func viewFor(item NavItem, state *AppState, services *Services, gotoNav func(Nav
 		}
 		return views.BuildDashboard(dashOpts)
 	case NavEmails:
+		// Late-bind the production `core.Refresher` to the shared
+		// EmailsService. Done here (rather than in BuildServices)
+		// because the watcher runtime is built lazily on first
+		// access — by the time NavEmails is rendered the registry
+		// either exists or has logged its build error. Idempotent.
+		if rt := WatchRuntimeOrNil(); rt != nil && rt.Refresher != nil {
+			services.AttachRefresher(rt.Refresher)
+		}
 		return views.BuildEmails(views.EmailsOptions{
 			Alias:   state.Alias(),
 			Service: services.Emails,
