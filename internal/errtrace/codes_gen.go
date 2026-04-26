@@ -120,6 +120,7 @@ var RegisteredCodes = map[Code]CodeMeta{
 	ErrUiFormValidation:         {Const: "ErrUiFormValidation", Block: "UI", Prefix: "ER-UI", Description: "A user-entered form field failed inline validation."},
 	ErrUiViewRender:             {Const: "ErrUiViewRender", Block: "UI", Prefix: "ER-UI", Description: "A view's render path returned an error (unrecoverable for that frame)."},
 	ErrUiClipboard:              {Const: "ErrUiClipboard", Block: "UI", Prefix: "ER-UI", Description: "Read/write to the system clipboard failed."},
+	ErrRulesServiceUnwired:      {Const: "ErrRulesServiceUnwired", Block: "UI", Prefix: "ER-UI", Description: "ui.Services.Rename/Reorder called before bootstrap wired a *core.RulesService (degraded shell)."},
 	ErrUnknown:                  {Const: "ErrUnknown", Block: "Unknown", Prefix: "ER-UNKNOWN", Description: "Sentinel — should never appear in healthy logs."},
 	ErrWatcherStart:             {Const: "ErrWatcherStart", Block: "Watcher", Prefix: "ER-WCH", Description: "Watcher.Start failed before the first poll."},
 	ErrWatcherPollCycle:         {Const: "ErrWatcherPollCycle", Block: "Watcher", Prefix: "ER-WCH", Description: "A single poll cycle errored (transient, retried)."},
