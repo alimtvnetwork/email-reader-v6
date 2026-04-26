@@ -141,7 +141,11 @@ func runRulesList() error {
 }
 
 func runRulesToggle(name string, enabled bool) error {
-	if r := core.SetRuleEnabled(name, enabled); r.HasError() {
+	svc, err := rulesService()
+	if err != nil {
+		return err
+	}
+	if r := svc.SetEnabled(name, enabled); r.HasError() {
 		return r.PropagateError()
 	}
 	state := "disabled"
