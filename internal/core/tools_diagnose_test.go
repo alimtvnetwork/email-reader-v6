@@ -168,20 +168,20 @@ func TestBuildOpenedUrlsQuery(t *testing.T) {
 			t.Errorf("%s: want %d args, got %d (%v)", c.name, c.wantArgs, len(args), args)
 		}
 		for _, sub := range c.wantSubs {
-			if !contains(q, sub) {
+			if !openedUrlsQueryContains(q, sub) {
 				t.Errorf("%s: query missing %q in %s", c.name, sub, q)
 			}
 		}
 	}
 }
 
-func contains(haystack, needle string) bool {
-	return len(needle) == 0 || (len(haystack) >= len(needle) && stringIndex(haystack, needle) >= 0)
+func openedUrlsQueryContains(haystack, needle string) bool {
+	return len(needle) == 0 || (len(haystack) >= len(needle) && openedUrlsQueryIndex(haystack, needle) >= 0)
 }
 
-// stringIndex is a trivial substring search to keep this test free of
-// the strings package import noise.
-func stringIndex(h, n string) int {
+// openedUrlsQueryIndex is a trivial substring search to keep this test
+// free of the strings package import noise.
+func openedUrlsQueryIndex(h, n string) int {
 	for i := 0; i+len(n) <= len(h); i++ {
 		if h[i:i+len(n)] == n {
 			return i
