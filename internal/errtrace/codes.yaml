@@ -280,6 +280,9 @@ blocks:
       - const: ErrUiClipboard
         code: "ER-UI-21905"
         description: Read/write to the system clipboard failed.
+      - const: ErrRulesServiceUnwired
+        code: "ER-UI-21906"
+        description: ui.Services.Rename/Reorder called before bootstrap wired a *core.RulesService (degraded shell).
 
   - name: Settings
     prefix: ER-SET
