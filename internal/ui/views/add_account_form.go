@@ -53,8 +53,9 @@ func BuildAddAccountForm(opts AddAccountFormOptions) fyne.CanvasObject {
 	e := newAccountFormEntries()
 	status := newStatusLabel()
 	autodiscover := newAutodiscoverButton(e, status)
-	form := buildAccountForm(e, autodiscover)
-	clear := func() { resetAccountEntries(e) }
+	revealPw := newPasswordRevealButton(e.password)
+	form := buildAccountForm(e, autodiscover, revealPw)
+	clear := func() { resetAccountEntries(e); revealPw.SetText("Show"); e.password.Password = true; e.password.Refresh() }
 	submit := newAccountSubmitButton(opts, e, status, clear)
 	clearBtn := widget.NewButton("Clear", func() { clear(); status.SetText("") })
 	actions := container.NewHBox(submit, clearBtn)
