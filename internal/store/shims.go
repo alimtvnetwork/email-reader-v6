@@ -55,10 +55,7 @@ type EmailExportFilter struct {
 	Until time.Time
 }
 
-// emailExportColumns is the explicit PascalCase column list shared by
-// QueryEmailExportRows and CountEmails. No `SELECT *` (AC-DB-D-04 spirit).
-const emailExportColumns = `Id, Alias, MessageId, Uid, FromAddr, ToAddr, CcAddr,
-                              Subject, BodyText, BodyHtml, ReceivedAt, FilePath, CreatedAt`
+// (emailExportColumns moved to internal/store/queries; see P1.8.)
 
 // QueryEmailExportRows streams the Emails table filtered per spec.
 // Caller is responsible for `defer rows.Close()`.
