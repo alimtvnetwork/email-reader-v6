@@ -23,18 +23,21 @@ import (
 )
 
 // AddAccountFormOptions wires the form to its side effects. Save defaults
-// to core.AddAccount; tests inject a stub. OnSaved is called after a
-// successful save so the shell can refresh the sidebar account picker.
+// to core.AddAccount and TestConn defaults to core.TestAccountConnection;
+// tests inject stubs. OnSaved is called after a successful save so the
+// shell can refresh the sidebar account picker.
 type AddAccountFormOptions struct {
-	Save    func(in core.AccountInput) errtrace.Result[*core.AddAccountResult]
-	OnSaved func()
+	Save     func(in core.AccountInput) errtrace.Result[*core.AddAccountResult]
+	TestConn func(in core.AccountInput) errtrace.Result[core.TestConnectionResult]
+	OnSaved  func()
 }
 
-// accountFormEntries holds the seven Fyne widgets that make up the Add
-// Account form. Grouping them keeps BuildAddAccountForm under the
-// 15-statement limit (AC-PROJ-20) by hiding a long sequence of NewEntry /
-// NewCheck calls behind one helper.
+// accountFormEntries holds the Fyne widgets that make up the Add Account
+// form. Grouping them keeps BuildAddAccountForm under the 15-statement
+// limit (AC-PROJ-20) by hiding a long sequence of NewEntry / NewCheck
+// calls behind one helper.
 type accountFormEntries struct {
+	provider    *widget.Select
 	alias       *widget.Entry
 	email       *widget.Entry
 	displayName *widget.Entry
@@ -50,15 +53,26 @@ func BuildAddAccountForm(opts AddAccountFormOptions) fyne.CanvasObject {
 	if opts.Save == nil {
 		opts.Save = core.AddAccount
 	}
+	if opts.TestConn == nil {
+		opts.TestConn = func(in core.AccountInput) errtrace.Result[core.TestConnectionResult] {
+			return core.TestAccountConnection(in, 0)
+		}
+	}
 	e := newAccountFormEntries()
 	status := newStatusLabel()
 	autodiscover := newAutodiscoverButton(e, status)
 	revealPw := newPasswordRevealButton(e.password)
 	form := buildAccountForm(e, autodiscover, revealPw)
-	clear := func() { resetAccountEntries(e); revealPw.SetText("Show"); e.password.Password = true; e.password.Refresh() }
+	clear := func() {
+		resetAccountEntries(e)
+		revealPw.SetText("Show")
+		e.password.Password = true
+		e.password.Refresh()
+	}
 	submit := newAccountSubmitButton(opts, e, status, clear)
+	testBtn := newTestConnectionButton(opts, e, status)
 	clearBtn := widget.NewButton("Clear", func() { clear(); status.SetText("") })
-	actions := container.NewHBox(submit, clearBtn)
+	actions := container.NewHBox(submit, testBtn, clearBtn)
 	return container.NewPadded(container.NewVBox(form, widget.NewSeparator(), actions, status))
 }
 
