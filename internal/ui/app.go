@@ -38,11 +38,50 @@ func Run() {
 	if r := theme.ApplyToFyne(loadInitialThemeMode()); r.HasError() {
 		log.Printf("ui: theme apply: %v (continuing with ThemeDark)", r.Error())
 	}
+	ctx, cancelLive := context.WithCancel(context.Background())
+	defer cancelLive()
+	startThemeLiveConsumer(ctx)
 	w := a.NewWindow("email-read · v" + AppVersion)
 	w.SetContent(BuildShell(LoadAliases()))
 	w.Resize(fyne.NewSize(1000, 680))
 	w.CenterOnScreen()
 	w.ShowAndRun()
+}
+
+// startThemeLiveConsumer subscribes to core.Settings and re-applies the
+// theme on every Save / Reset event. Closes the round-trip on Delta #3 +
+// Delta #4: a Save in the Settings UI repaints the running app without
+// requiring restart. Safe no-op when Settings cannot construct (e.g. no
+// config yet) — the bootstrap theme stays in effect.
+//
+// Spec: spec/21-app/02-features/07-settings/01-backend.md §9 (Subscribe)
+//   + spec/24-app-design-system-and-ui/02-theme-implementation.md §5.
+func startThemeLiveConsumer(ctx context.Context) {
+	s := core.NewSettings(time.Now)
+	if s.HasError() {
+		log.Printf("ui: theme live consumer: settings init: %v (skipping)", s.Error())
+		return
+	}
+	events, _ := s.Value().Subscribe(ctx)
+	go forwardThemeEvents(events)
+}
+
+// forwardThemeEvents drains Settings events and re-applies the theme on
+// every change. Channel close (via ctx cancel) terminates the goroutine.
+// A no-op when the mode is unchanged — ApplyToFyne is cheap but SetTheme
+// triggers a full repaint, so we skip when not needed.
+func forwardThemeEvents(events <-chan core.SettingsEvent) {
+	var last core.ThemeMode = -1 // sentinel so the first event always applies
+	for ev := range events {
+		mode := ev.Snapshot.Theme
+		if mode == last {
+			continue
+		}
+		last = mode
+		if r := theme.ApplyToFyne(mode); r.HasError() {
+			log.Printf("ui: theme live apply: %v", r.Error())
+		}
+	}
 }
 
 // loadInitialThemeMode reads the persisted Settings.Theme. On any error
