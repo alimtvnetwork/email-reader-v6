@@ -178,3 +178,67 @@ func TestNewTools_ConfigValidation(t *testing.T) {
 		t.Fatal("expected error for tiny max-length")
 	}
 }
+
+// TestOpenUrl_PopulatesDelta1ExtFields locks the contract that Delta #1
+// fields (Alias / Origin / OriginalUrl / IsDeduped / IsIncognito /
+// TraceId) flow from OpenUrlSpec → recordAuditExt → OpenedUrlInsert.
+func TestOpenUrl_PopulatesDelta1ExtFields(t *testing.T) {
+	b := &fakeBrowser{}
+	s := newFakeStore()
+	tools := mustTools(t, b, s)
+	r := tools.OpenUrl(context.Background(), OpenUrlSpec{
+		Url: "https://example.com/?token=abc", Origin: OriginRule,
+		Alias: "work", RuleName: "rule-A", EmailId: 42,
+	})
+	if r.HasError() {
+		t.Fatalf("OpenUrl: %v", r.Error())
+	}
+	got := r.Value()
+	if got.TraceId == "" || len(got.TraceId) != 24 {
+		t.Fatalf("TraceId malformed: %q", got.TraceId)
+	}
+	if len(s.extInserts) != 1 {
+		t.Fatalf("want 1 Ext insert, got %d", len(s.extInserts))
+	}
+	in := s.extInserts[0]
+	if in.Alias != "work" || in.Origin != "rule" || in.RuleName != "rule-A" {
+		t.Fatalf("Ext fields wrong: %+v", in)
+	}
+	if !in.IsIncognito {
+		t.Fatal("IsIncognito must be true (OpenUrl always launches incognito)")
+	}
+	if in.IsDeduped {
+		t.Fatal("first launch must not be marked deduped")
+	}
+	if in.OriginalUrl == "" {
+		t.Fatal("OriginalUrl must be populated when redaction changed the URL")
+	}
+	if in.TraceId != got.TraceId {
+		t.Fatalf("TraceId on report (%q) != insert (%q)", got.TraceId, in.TraceId)
+	}
+}
+
+// TestOpenUrl_DedupHitMarkedAndAudited proves the dedup branch still
+// records an audit row but with IsDeduped=true so the Recent list can
+// surface suppressed launches.
+func TestOpenUrl_DedupHitMarkedAndAudited(t *testing.T) {
+	b := &fakeBrowser{}
+	s := newFakeStore()
+	tools := mustTools(t, b, s)
+	spec := OpenUrlSpec{Url: "https://example.com/p", Alias: "a", EmailId: 7}
+	if r := tools.OpenUrl(context.Background(), spec); r.HasError() {
+		t.Fatalf("first OpenUrl: %v", r.Error())
+	}
+	if r := tools.OpenUrl(context.Background(), spec); r.HasError() {
+		t.Fatalf("second OpenUrl: %v", r.Error())
+	} else if !r.Value().Deduped {
+		t.Fatal("second call must be deduped")
+	}
+	if len(s.extInserts) != 2 {
+		t.Fatalf("want 2 audit rows (1 launch + 1 dedup), got %d", len(s.extInserts))
+	}
+	if s.extInserts[0].IsDeduped || !s.extInserts[1].IsDeduped {
+		t.Fatalf("dedup flags wrong: [0].IsDeduped=%v [1].IsDeduped=%v",
+			s.extInserts[0].IsDeduped, s.extInserts[1].IsDeduped)
+	}
+}
