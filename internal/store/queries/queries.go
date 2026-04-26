@@ -71,6 +71,25 @@ const EmailsCountUnreadAll = `SELECT COUNT(1) FROM Emails WHERE IsRead = 0`
 // query — see EmailsCountUnreadAll for rationale.
 const EmailsCountUnreadByAlias = `SELECT COUNT(1) FROM Emails WHERE Alias = ? AND IsRead = 0`
 
+// EmailsCountDeletedAll counts every Emails row whose `DeletedAt` is
+// non-NULL (Phase 4 P4.3 soft-delete). Static query. Used by
+// `(*Emails).Counts(alias="")` to populate `EmailCounts.Deleted`.
+//
+// **Why `IS NOT NULL` (not `> 0`)** — m0012 chose the
+// "NULL == not-deleted" convention specifically so this predicate is
+// SARGable against a partial / composite index on `DeletedAt`. A `> 0`
+// predicate would also work for our timestamp values but would lock
+// us out of `WHERE DeletedAt IS NULL` partial-index recipes if we
+// later add one for the inverse hot path. See m0013 for the index.
+//
+// Spec: `spec/21-app/02-features/02-emails/01-backend.md` §2.6 / §3.5
+// (`Counts` method, third COUNT projection onto `EmailCounts.Deleted`).
+const EmailsCountDeletedAll = `SELECT COUNT(1) FROM Emails WHERE DeletedAt IS NOT NULL`
+
+// EmailsCountDeletedByAlias counts soft-deleted rows for one alias.
+// Static query — see EmailsCountDeletedAll for rationale.
+const EmailsCountDeletedByAlias = `SELECT COUNT(1) FROM Emails WHERE Alias = ? AND DeletedAt IS NOT NULL`
+
 // EmailsListInput captures the optional filter + pagination knobs for
 // composing the EmailsList query. Mirrors store.EmailQuery — kept as a
 // separate type so the queries package has no upward dependency on store.
