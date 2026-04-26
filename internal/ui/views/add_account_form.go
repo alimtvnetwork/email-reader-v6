@@ -19,13 +19,14 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/lovable/email-read/internal/core"
+	"github.com/lovable/email-read/internal/errtrace"
 )
 
 // AddAccountFormOptions wires the form to its side effects. Save defaults
 // to core.AddAccount; tests inject a stub. OnSaved is called after a
 // successful save so the shell can refresh the sidebar account picker.
 type AddAccountFormOptions struct {
-	Save    func(in core.AccountInput) (*core.AddAccountResult, error)
+	Save    func(in core.AccountInput) errtrace.Result[*core.AddAccountResult]
 	OnSaved func()
 }
 
@@ -136,12 +137,12 @@ func newAccountSubmitButton(opts AddAccountFormOptions, e *accountFormEntries, s
 			status.SetText("⚠ " + strings.Join(v.Errors, " · "))
 			return
 		}
-		res, err := opts.Save(accountInputFromValid(v))
-		if err != nil {
-			status.SetText("⚠ Save failed: " + err.Error())
+		r := opts.Save(accountInputFromValid(v))
+		if r.HasError() {
+			status.SetText("⚠ Save failed: " + r.Error().Error())
 			return
 		}
-		status.SetText(formatAccountSavedMessage(res))
+		status.SetText(formatAccountSavedMessage(r.Value()))
 		clear()
 		if opts.OnSaved != nil {
 			opts.OnSaved()
