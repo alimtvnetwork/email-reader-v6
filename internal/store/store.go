@@ -213,9 +213,7 @@ func (s *Store) UpsertEmail(ctx context.Context, e *Email) (int64, bool, error) 
 func (s *Store) GetWatchState(ctx context.Context, alias string) (WatchState, error) {
 	var ws WatchState
 	var received sql.NullTime
-	err := s.DB.QueryRowContext(ctx, `
-		SELECT Alias, LastUid, LastSubject, LastReceivedAt, UpdatedAt
-		FROM WatchState WHERE Alias = ?`, alias,
+	err := s.DB.QueryRowContext(ctx, queries.WatchStateGet, alias,
 	).Scan(&ws.Alias, &ws.LastUid, &ws.LastSubject, &received, &ws.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return WatchState{Alias: alias}, nil
@@ -231,16 +229,7 @@ func (s *Store) GetWatchState(ctx context.Context, alias string) (WatchState, er
 
 // UpsertWatchState writes/updates the alias' last-seen position.
 func (s *Store) UpsertWatchState(ctx context.Context, ws WatchState) error {
-	const upsertWatchStateQuery = `
-		INSERT INTO WatchState (Alias, LastUid, LastSubject, LastReceivedAt, UpdatedAt)
-		VALUES (?, ?, ?, ?, ` + sqliteRFC3339NowExpr + `)
-		ON CONFLICT(Alias) DO UPDATE SET
-			LastUid        = excluded.LastUid,
-			LastSubject    = excluded.LastSubject,
-			LastReceivedAt = excluded.LastReceivedAt,
-			UpdatedAt      = ` + sqliteRFC3339NowExpr + `
-	`
-	_, err := s.DB.ExecContext(ctx, upsertWatchStateQuery,
+	_, err := s.DB.ExecContext(ctx, queries.WatchStateUpsert(sqliteRFC3339NowExpr),
 		ws.Alias, ws.LastUid, ws.LastSubject, formatRFC3339UTC(ws.LastReceivedAt),
 	)
 	if err != nil {
@@ -303,10 +292,7 @@ func boolToInt(b bool) int {
 // HasOpenedUrl reports whether the (emailId, url) pair has already been opened.
 func (s *Store) HasOpenedUrl(ctx context.Context, emailId int64, url string) (bool, error) {
 	var n int
-	err := s.DB.QueryRowContext(ctx,
-		`SELECT COUNT(1) FROM OpenedUrls WHERE EmailId = ? AND Url = ?`,
-		emailId, url,
-	).Scan(&n)
+	err := s.DB.QueryRowContext(ctx, queries.HasOpenedUrl, emailId, url).Scan(&n)
 	if err != nil {
 		return false, errtrace.Wrap(err, "has opened url")
 	}

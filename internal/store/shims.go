@@ -27,7 +27,6 @@ package store
 import (
 	"context"
 	"database/sql"
-	"strings"
 	"time"
 
 	"github.com/lovable/email-read/internal/errtrace"
@@ -95,37 +94,17 @@ type OpenedUrlListFilter struct {
 	Limit  int
 }
 
-// openedUrlAuditColumns is the explicit Delta-#1 column list. Order
-// must match `core.scanOpenedUrlRows`.
-const openedUrlAuditColumns = `Id, EmailId, Alias, RuleName, Origin, Url,
-                                 OriginalUrl, IsDeduped, IsIncognito, TraceId, OpenedAt`
+// (openedUrlAuditColumns + buildOpenedUrlsQuery moved to internal/store/queries; see P1.9.)
 
 // QueryOpenedUrls streams the OpenedUrls audit table filtered per spec.
 // Caller is responsible for `defer rows.Close()`.
 func (s *Store) QueryOpenedUrls(ctx context.Context, f OpenedUrlListFilter) (RowsScanner, error) {
-	q, args := buildOpenedUrlsQuery(f)
+	q, args := queries.OpenedUrlsList(queries.OpenedUrlsListInput{
+		Before: f.Before, Alias: f.Alias, Origin: f.Origin, Limit: f.Limit,
+	})
 	rows, err := s.DB.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, errtrace.Wrap(err, "QueryOpenedUrls")
 	}
 	return rows, nil
-}
-
-func buildOpenedUrlsQuery(f OpenedUrlListFilter) (string, []any) {
-	var sb strings.Builder
-	sb.WriteString(`SELECT `)
-	sb.WriteString(openedUrlAuditColumns)
-	sb.WriteString(` FROM OpenedUrls WHERE OpenedAt < ?`)
-	args := []any{f.Before}
-	if f.Alias != "" {
-		sb.WriteString(" AND Alias = ?")
-		args = append(args, f.Alias)
-	}
-	if f.Origin != "" {
-		sb.WriteString(" AND Origin = ?")
-		args = append(args, f.Origin)
-	}
-	sb.WriteString(" ORDER BY OpenedAt DESC, Id DESC LIMIT ?")
-	args = append(args, f.Limit)
-	return sb.String(), args
 }

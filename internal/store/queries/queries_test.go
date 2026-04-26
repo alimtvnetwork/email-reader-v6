@@ -123,3 +123,53 @@ func TestEmailExport_AllFilters_ArgOrder(t *testing.T) {
 		t.Fatalf("wrong arg order: %v", args)
 	}
 }
+
+func TestWatchStateGet_Static(t *testing.T) {
+	if !strings.Contains(WatchStateGet, "FROM WatchState WHERE Alias = ?") {
+		t.Fatalf("WatchStateGet wrong: %q", WatchStateGet)
+	}
+}
+
+func TestWatchStateUpsert_HonorsNowExpr(t *testing.T) {
+	q := WatchStateUpsert("CURRENT_TIMESTAMP")
+	if !strings.Contains(q, "INSERT INTO WatchState") {
+		t.Fatalf("missing insert: %q", q)
+	}
+	if strings.Count(q, "CURRENT_TIMESTAMP") != 2 {
+		t.Fatalf("expected nowExpr injected twice (insert + on conflict), got %q", q)
+	}
+	if !strings.Contains(q, "ON CONFLICT(Alias) DO UPDATE") {
+		t.Fatalf("missing upsert clause: %q", q)
+	}
+}
+
+func TestHasOpenedUrl_Static(t *testing.T) {
+	if !strings.Contains(HasOpenedUrl, "WHERE EmailId = ? AND Url = ?") {
+		t.Fatalf("HasOpenedUrl wrong: %q", HasOpenedUrl)
+	}
+}
+
+func TestOpenedUrlsList_Baseline(t *testing.T) {
+	now := time.Now()
+	q, args := OpenedUrlsList(OpenedUrlsListInput{Before: now, Limit: 50})
+	if !strings.Contains(q, "OpenedAt < ?") || !strings.Contains(q, "LIMIT ?") {
+		t.Fatalf("missing baseline clauses: %q", q)
+	}
+	if len(args) != 2 || args[0] != now || args[1] != 50 {
+		t.Fatalf("baseline args wrong: %v", args)
+	}
+}
+
+func TestOpenedUrlsList_AliasOriginAppendOrder(t *testing.T) {
+	now := time.Now()
+	q, args := OpenedUrlsList(OpenedUrlsListInput{
+		Before: now, Alias: "w", Origin: "manual", Limit: 25,
+	})
+	if !strings.Contains(q, "AND Alias = ?") || !strings.Contains(q, "AND Origin = ?") {
+		t.Fatalf("missing alias/origin clauses: %q", q)
+	}
+	// args order: before, alias, origin, limit
+	if len(args) != 4 || args[1] != "w" || args[2] != "manual" || args[3] != 25 {
+		t.Fatalf("arg order wrong: %v", args)
+	}
+}
