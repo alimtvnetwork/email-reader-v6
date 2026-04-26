@@ -78,7 +78,12 @@ func BuildAddAccountForm(opts AddAccountFormOptions) fyne.CanvasObject {
 
 // newAccountFormEntries constructs the entry widgets with their
 // placeholders. Returning a struct keeps BuildAddAccountForm flat.
+// The Provider Select is populated from PresetLabels() and starts on the
+// "Custom (manual)" sentinel so existing keyboard-only users see no
+// behaviour change until they pick a preset.
 func newAccountFormEntries() *accountFormEntries {
+	provider := widget.NewSelect(PresetLabels(), nil)
+	provider.SetSelected(PresetLabels()[0])
 	alias := widget.NewEntry()
 	alias.SetPlaceHolder("e.g. work-gmail")
 	email := widget.NewEntry()
@@ -95,7 +100,23 @@ func newAccountFormEntries() *accountFormEntries {
 	useTLS.SetChecked(true)
 	mailbox := widget.NewEntry()
 	mailbox.SetPlaceHolder("INBOX")
-	return &accountFormEntries{alias, email, displayName, password, host, port, useTLS, mailbox}
+	e := &accountFormEntries{provider, alias, email, displayName, password, host, port, useTLS, mailbox}
+	provider.OnChanged = func(label string) { applyPresetToEntries(label, e) }
+	return e
+}
+
+// applyPresetToEntries pushes a preset's host/port/TLS into the matching
+// entries. The "Custom (manual)" sentinel is a no-op so users keep
+// whatever they typed. Pure-ish helper (touches widgets only) — the
+// preset table itself is tested in account_presets_test.go.
+func applyPresetToEntries(label string, e *accountFormEntries) {
+	p, ok := FindPreset(label)
+	if !ok || IsCustomPreset(p) {
+		return
+	}
+	e.host.SetText(p.Host)
+	e.port.SetText(strconv.Itoa(p.Port))
+	e.useTLS.SetChecked(p.UseTLS)
 }
 
 // newPasswordRevealButton toggles the password Entry between hidden
@@ -141,9 +162,12 @@ func newAutodiscoverButton(e *accountFormEntries, status *widget.Label) *widget.
 
 // buildAccountForm composes the widget.Form rows from the entries. The
 // password row gets a trailing "Show/Hide" button so users can verify
-// what they typed without committing it to clipboard.
+// what they typed without committing it to clipboard. The Provider row
+// goes first so picking a preset auto-fills host/port/TLS before the
+// user reaches them.
 func buildAccountForm(e *accountFormEntries, autodiscover, revealPw *widget.Button) *widget.Form {
 	return widget.NewForm(
+		widget.NewFormItem("Provider", e.provider),
 		widget.NewFormItem("Alias", e.alias),
 		widget.NewFormItem("Display name", e.displayName),
 		widget.NewFormItem("Email", e.email),
@@ -157,6 +181,7 @@ func buildAccountForm(e *accountFormEntries, autodiscover, revealPw *widget.Butt
 
 // resetAccountEntries clears every input back to its initial state.
 func resetAccountEntries(e *accountFormEntries) {
+	e.provider.SetSelected(PresetLabels()[0])
 	e.alias.SetText("")
 	e.email.SetText("")
 	e.displayName.SetText("")
