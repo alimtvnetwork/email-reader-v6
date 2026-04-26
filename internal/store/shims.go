@@ -162,3 +162,24 @@ func (s *Store) SetEmailRead(ctx context.Context, alias string, uids []uint32, r
 	return total, nil
 }
 
+// CountUnreadEmails returns the number of Emails rows with `IsRead =
+// 0` matching the alias (or all when alias == ""). Mirrors the
+// `CountEmails` shape so `(*core.Emails).Counts` can issue two
+// independent COUNT queries and assemble an `EmailCounts` projection
+// without any SUM(CASE) round-trip.
+//
+// Spec: spec/21-app/02-features/02-emails/01-backend.md §3.5.
+func (s *Store) CountUnreadEmails(ctx context.Context, alias string) (int, error) {
+	var n int
+	var err error
+	if alias == "" {
+		err = s.DB.QueryRowContext(ctx, queries.EmailsCountUnreadAll).Scan(&n)
+	} else {
+		err = s.DB.QueryRowContext(ctx, queries.EmailsCountUnreadByAlias, alias).Scan(&n)
+	}
+	if err != nil {
+		return 0, errtrace.Wrap(err, "CountUnreadEmails")
+	}
+	return n, nil
+}
+
