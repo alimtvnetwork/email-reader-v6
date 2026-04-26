@@ -36,11 +36,8 @@ import (
 
 // pendingMigration enumerates files that legitimately still contain
 // inline SQL pending later Phase-1 slices. Entries MUST be removed as
-// the named slice lands.
-var pendingMigration = map[string]string{
-	// store.go: UpsertEmail INSERT + post-conflict SELECT, RecordOpenedUrlExt INSERT.
-	filepath.Join("internal", "store", "store.go"): "P1.9d",
-}
+// the named slice lands. Empty ⇒ Phase-1 SQL centralisation complete.
+var pendingMigration = map[string]string{}
 
 // scannedRoots is the set of repo-relative directories whose
 // non-test .go files are scanned by the guard. internal/store/queries
