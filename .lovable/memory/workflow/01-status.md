@@ -88,12 +88,10 @@ Behaviour-equivalents may already exist in `internal/store/store_test.go` / `int
 ## Next logical step for the next AI session
 Top sandbox-runnable candidates (no schema work, no external infra, ranked by isolation):
 
-(a) **AC-DB-53 `Test_DateTime_FormatUtc`** — Open a temp DB, insert one row in each of `Email`/`WatchState`/`OpenedUrls`, SELECT back the datetime columns, regex-match against RFC 3339 UTC (`/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/`). Pure store-package test using existing fixture helpers. Smallest behavioural test.
+(a) **AC-DB-54 `Test_BooleanPositive`** — Iterate `PRAGMA table_info` over every table; reject any column whose name starts with `Is`/`Has` and whose default is `1` (i.e. positive condition encoded as "0 means yes"). Pure store-package test, smallest scope.
 
-(b) **AC-DB-54 `Test_BooleanPositive`** — Iterate `PRAGMA table_info` over every table; reject any column whose name starts with `Is`/`Has` and whose default is `1` (i.e. positive condition encoded as "0 means yes"). Pure store-package test.
+(b) **AC-DB-55 `Test_LogScan_NoOriginalUrlLeak`** — capture all `slog`/`log` output during a representative `Tools.OpenUrl` call; regex-assert the `OriginalUrl` value (pre-redaction) never appears at INFO+ level. Needs a custom slog handler harness.
 
-(c) **AC-DB-52 `Test_AST_CoreUsesStoreOnly`** — AST scan of `internal/core/*` import lists asserting no direct `database/sql` or driver imports. Same idiom as #35 (`parser.ImportsOnly`); one file. **However** this would surface today's `Store.DB *sql.DB` exposed-field leak (the gap noted in #36) without fixing it — recommend pairing this guard with a typed-method shim slice (e.g., `Store.QueryEmailExportRows(ctx, query, args…)`) so the guard ships green.
+(c) **AC-DB-52 `Test_AST_CoreUsesStoreOnly`** — AST scan of `internal/core/*` import lists asserting no direct `database/sql` or driver imports. Same idiom as #35 (`parser.ImportsOnly`); one file. **However** this would surface today's `Store.DB *sql.DB` exposed-field leak (the gap noted in #36) without fixing it — pair with a typed-method shim slice (e.g., `Store.QueryEmailExportRows(ctx, query, args…)`) so the guard ships green.
 
-(d) **AC-DB-55 `Test_LogScan_NoOriginalUrlLeak`** — capture all `slog`/`log` output during a representative `Tools.OpenUrl` call; regex-assert the `OriginalUrl` value (pre-redaction) never appears at INFO+ level. Needs a custom slog handler harness.
-
-Recommended order for the next `next` slice: **(a) AC-DB-53** — smallest behavioural slice, exercises real schema, no refactoring required. AC-DB-52 is more architecturally interesting but should land after the typed-method shim work or the guard will fail on day one. Items #1-#5 in section B still need user-side, infra, or upstream-schema work.
+Recommended order for the next `next` slice: **(a) AC-DB-54** — smallest behavioural slice, no refactoring required. Items #1-#5 in section B still need user-side, infra, or upstream-schema work.
