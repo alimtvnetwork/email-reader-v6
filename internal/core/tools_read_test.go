@@ -13,11 +13,11 @@ import (
 )
 
 type fakeReadClient struct {
-	stats   mailclient.MailboxStats
-	hdrs    []mailclient.HeaderSummary
-	selErr  error
+	stats    mailclient.MailboxStats
+	hdrs     []mailclient.HeaderSummary
+	selErr   error
 	fetchErr error
-	closed  bool
+	closed   bool
 }
 
 func (f *fakeReadClient) SelectInbox() (mailclient.MailboxStats, error) {
