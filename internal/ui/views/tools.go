@@ -37,8 +37,8 @@ func BuildTools(opts ToolsOptions) fyne.CanvasObject {
 		})),
 		container.NewTabItem("Doctor", BuildDoctorTab()),
 		container.NewTabItem("Diagnose", BuildDiagnoseTab()),
-		container.NewTabItem("Read", placeholderTab("One-shot fetch form lands with core.Tools (06-tools/01-backend.md).")),
-		container.NewTabItem("Export CSV", placeholderTab("CSV export form lands with core.Tools (06-tools/01-backend.md).")),
+		container.NewTabItem("Read", BuildReadTab()),
+		container.NewTabItem("Export CSV", BuildExportTab()),
 		container.NewTabItem("OpenUrl", BuildOpenUrlTab()),
 	)
 	tabs.SetTabLocation(container.TabLocationTop)
