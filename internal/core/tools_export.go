@@ -217,69 +217,6 @@ func writeFilteredRows(rows store.RowsScanner, w *csv.Writer, total int, progres
 	return written, nil
 }
 
-// queryFilteredEmails composes the SELECT for slice 2. Bind parameters
-// are appended in lock-step with the WHERE clauses to keep it injection
-// safe.
-func queryFilteredEmails(ctx context.Context, st *store.Store, spec ExportSpec) (*sql.Rows, error) {
-	q, args := buildExportQuery(spec)
-	rows, err := st.DB.QueryContext(ctx, q, args...)
-	if err != nil {
-		return nil, errtrace.Wrap(err, "query emails")
-	}
-	return rows, nil
-}
-
-// buildExportQuery returns the streaming SELECT + bound args for the
-// supplied spec. Exported-by-test only: package-private.
-func buildExportQuery(spec ExportSpec) (string, []any) {
-	var sb strings.Builder
-	sb.WriteString(`SELECT Id, Alias, MessageId, Uid, FromAddr, ToAddr, CcAddr,
-	                       Subject, BodyText, BodyHtml, ReceivedAt, FilePath, CreatedAt
-	                FROM Emails`)
-	where, args := whereForExport(spec)
-	if where != "" {
-		sb.WriteString(" WHERE ")
-		sb.WriteString(where)
-	}
-	sb.WriteString(" ORDER BY Id ASC")
-	return sb.String(), args
-}
-
-func whereForExport(spec ExportSpec) (string, []any) {
-	var clauses []string
-	var args []any
-	if spec.Alias != "" {
-		clauses = append(clauses, "Alias = ?")
-		args = append(args, spec.Alias)
-	}
-	if !spec.Since.IsZero() {
-		clauses = append(clauses, "ReceivedAt >= ?")
-		args = append(args, spec.Since.UTC())
-	}
-	if !spec.Until.IsZero() {
-		clauses = append(clauses, "ReceivedAt < ?")
-		args = append(args, spec.Until.UTC())
-	}
-	return strings.Join(clauses, " AND "), args
-}
-
-// countEmails returns the row count matching the spec's filters. An
-// empty spec counts the entire table (used by the slice-1 path).
-func countEmails(ctx context.Context, st *store.Store, spec ExportSpec) (int, error) {
-	var sb strings.Builder
-	sb.WriteString(`SELECT COUNT(*) FROM Emails`)
-	where, args := whereForExport(spec)
-	if where != "" {
-		sb.WriteString(" WHERE ")
-		sb.WriteString(where)
-	}
-	row := st.DB.QueryRowContext(ctx, sb.String(), args...)
-	var n int
-	if err := row.Scan(&n); err != nil {
-		return 0, err
-	}
-	return n, nil
-}
 
 func preflightExport(spec ExportSpec) error {
 	if !spec.Since.IsZero() && !spec.Until.IsZero() && !spec.Until.After(spec.Since) {
