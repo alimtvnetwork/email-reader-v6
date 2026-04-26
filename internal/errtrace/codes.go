@@ -58,6 +58,7 @@ const (
 	ErrWatchNotRunning       Code = "ER-WCH-21407"
 	ErrWatchAliasRequired    Code = "ER-WCH-21410"
 	ErrWatchSubscribeClosed  Code = "ER-WCH-21411"
+	ErrWatchAccountNotFound  Code = "ER-WCH-21412"
 
 	// ER-BRW (Browser) — block 21500–21599
 	ErrBrowserLaunch        Code = "ER-BRW-21501"
