@@ -13,11 +13,12 @@ import (
 
 	"github.com/lovable/email-read/internal/config"
 	"github.com/lovable/email-read/internal/core"
+	"github.com/lovable/email-read/internal/errtrace"
 	"github.com/lovable/email-read/internal/store"
 )
 
 type AccountsOptions struct {
-	List       func() ([]config.Account, error)
+	List       func() errtrace.Result[[]config.Account]
 	WatchState func(ctx context.Context, alias string) (store.WatchState, error)
 }
 
@@ -37,14 +38,15 @@ func BuildAccounts(opts AccountsOptions) fyne.CanvasObject {
 	body := container.NewVBox()
 
 	reload := func() {
-		accts, err := opts.List()
-		if err != nil {
+		r := opts.List()
+		if r.HasError() {
 			body.Objects = []fyne.CanvasObject{
-				widget.NewLabel("⚠ Failed to load accounts: " + err.Error()),
+				widget.NewLabel("⚠ Failed to load accounts: " + r.Error().Error()),
 			}
 			body.Refresh()
 			return
 		}
+		accts := r.Value()
 		if len(accts) == 0 {
 			body.Objects = []fyne.CanvasObject{
 				widget.NewLabel("No accounts configured. Add one from Tools → Add account."),

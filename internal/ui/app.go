@@ -37,11 +37,12 @@ func Run() {
 // LoadAliases pulls the configured account aliases from core. Failures are
 // logged (non-fatal) so the UI still opens with an empty picker.
 func LoadAliases() []string {
-	accts, err := core.ListAccounts()
-	if err != nil {
-		log.Printf("ui: load accounts: %v", err)
+	r := core.ListAccounts()
+	if r.HasError() {
+		log.Printf("ui: load accounts: %v", r.Error())
 		return nil
 	}
+	accts := r.Value()
 	out := make([]string, 0, len(accts))
 	for _, a := range accts {
 		out = append(out, a.Alias)
