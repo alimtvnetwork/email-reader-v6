@@ -100,19 +100,15 @@ func TestAST_NoInlineSQL(t *testing.T) {
 					return true
 				}
 				body := unquoteLoose(lit.Value)
-				trimmed := strings.TrimLeft(body, " \t\r\n")
-				upper := strings.ToUpper(trimmed)
-				for _, start := range sqlStarters {
-					if strings.HasPrefix(upper, start) {
-						pos := fset.Position(lit.Pos())
-						offences = append(offences, offence{
-							file:   rel,
-							line:   pos.Line,
-							sample: firstLine(trimmed),
-						})
-						break
-					}
+				if !looksLikeSQL(body) {
+					return true
 				}
+				pos := fset.Position(lit.Pos())
+				offences = append(offences, offence{
+					file:   rel,
+					line:   pos.Line,
+					sample: firstLine(strings.TrimLeft(body, " \t\r\n")),
+				})
 				return true
 			})
 			return nil
