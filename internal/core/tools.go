@@ -126,6 +126,7 @@ type OpenUrlReport struct {
 	BrowserBinary string
 	Deduped       bool
 	IsIncognito   bool
+	TraceId       string // 24-char hex; identifies this launch in audit + logs
 }
 
 // OpenUrl is the only authorised browser-launch path. Validates →
@@ -135,10 +136,14 @@ func (t *Tools) OpenUrl(ctx context.Context, spec OpenUrlSpec) errtrace.Result[O
 		return errtrace.Err[OpenUrlReport](err)
 	}
 	canonical, original := redactUrl(spec.Url)
+	traceId := newTraceId()
 	if dup, err := t.checkDedup(ctx, spec, canonical); err != nil {
 		return errtrace.Err[OpenUrlReport](err)
 	} else if dup {
-		return errtrace.Ok(OpenUrlReport{Url: canonical, OriginalUrl: original, Deduped: true, IsIncognito: true})
+		// Audit the dedup hit too — Delta #1 surfaces IsDeduped=true so the
+		// Recent list shows suppressed launches. Best-effort, swallowed.
+		t.recordAuditExt(ctx, spec, canonical, original, traceId, true)
+		return errtrace.Ok(OpenUrlReport{Url: canonical, OriginalUrl: original, Deduped: true, IsIncognito: true, TraceId: traceId})
 	}
 	binary, err := t.browser.Path()
 	if err != nil {
@@ -147,8 +152,20 @@ func (t *Tools) OpenUrl(ctx context.Context, spec OpenUrlSpec) errtrace.Result[O
 	if err := t.browser.Open(canonical); err != nil {
 		return errtrace.Err[OpenUrlReport](errtrace.WrapCode(err, errtrace.ErrToolsOpenUrlLaunchFailed, "browser.Open"))
 	}
-	t.recordAudit(ctx, spec, canonical)
-	return errtrace.Ok(OpenUrlReport{Url: canonical, OriginalUrl: original, BrowserBinary: binary, IsIncognito: true})
+	t.recordAuditExt(ctx, spec, canonical, original, traceId, false)
+	return errtrace.Ok(OpenUrlReport{Url: canonical, OriginalUrl: original, BrowserBinary: binary, IsIncognito: true, TraceId: traceId})
+}
+
+// newTraceId returns a 24-char lowercase hex identifier (12 random
+// bytes). Crypto-grade randomness — never collides in practice; if the
+// kernel RNG fails we fall back to a deterministic time stamp so the
+// audit row still has a non-empty TraceId.
+func newTraceId() string {
+	var b [12]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return fmt.Sprintf("ts-%016x", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(b[:])
 }
 
 // validateUrl runs the §5.1 pipeline; first failure short-circuits.
