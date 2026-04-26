@@ -238,7 +238,7 @@ func (s *Store) UpsertWatchState(ctx context.Context, ws WatchState) error {
 			LastUid        = excluded.LastUid,
 			LastSubject    = excluded.LastSubject,
 			LastReceivedAt = excluded.LastReceivedAt,
-			UpdatedAt      = `+sqliteRFC3339NowExpr+`,
+			UpdatedAt      = `+sqliteRFC3339NowExpr+``,
 		ws.Alias, ws.LastUid, ws.LastSubject, formatRFC3339UTC(ws.LastReceivedAt),
 	)
 	if err != nil {
