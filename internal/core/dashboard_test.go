@@ -2,12 +2,12 @@
 //
 //   - Constructor rejects nil dependencies with ErrCoreInvalidArgument
 //     (catches lazy "let nil-deref panic at first use" bugs).
-//   - LoadStats faithfully aggregates injected counts (no surprise
+//   - Summary faithfully aggregates injected counts (no surprise
 //     extra DB calls, alias scope honoured, etc.).
 //   - Error envelope on cfg/store failures matches the pre-refactor
 //     contract: ErrConfigOpen for cfg load, ErrDbQueryEmail for
 //     emails count, with scope/alias context preserved.
-//   (Phase 2.8b: the legacy package-level `LoadDashboardStats`
+//   (Phase 2.8b: the legacy package-level `LoadDashboardStats` and method `LoadStats`
 //    wrapper has been deleted; all callers now go through
 //    *DashboardService directly.)
 //
@@ -52,7 +52,7 @@ func TestNewDashboardService_RejectsNilDeps(t *testing.T) {
 	}
 }
 
-func TestDashboardService_LoadStats_AggregatesCounts(t *testing.T) {
+func TestDashboardService_Summary_AggregatesCounts(t *testing.T) {
 	cfg := &config.Config{
 		Accounts: []config.Account{{Alias: "a"}, {Alias: "b"}},
 		Rules: []config.Rule{
@@ -79,7 +79,7 @@ func TestDashboardService_LoadStats_AggregatesCounts(t *testing.T) {
 
 	t.Run("global_only_when_alias_empty", func(t *testing.T) {
 		calls = nil
-		res := svc.LoadStats(context.Background(), "")
+		res := svc.Summary(context.Background(), "")
 		if res.HasError() {
 			t.Fatalf("unexpected error: %v", res.Error())
 		}
@@ -95,7 +95,7 @@ func TestDashboardService_LoadStats_AggregatesCounts(t *testing.T) {
 
 	t.Run("scoped_when_alias_set", func(t *testing.T) {
 		calls = nil
-		res := svc.LoadStats(context.Background(), "a")
+		res := svc.Summary(context.Background(), "a")
 		if res.HasError() {
 			t.Fatalf("unexpected error: %v", res.Error())
 		}
@@ -109,12 +109,12 @@ func TestDashboardService_LoadStats_AggregatesCounts(t *testing.T) {
 	})
 }
 
-func TestDashboardService_LoadStats_PropagatesCfgError(t *testing.T) {
+func TestDashboardService_Summary_PropagatesCfgError(t *testing.T) {
 	wantInner := errors.New("cfg.json: permission denied")
 	loader := func() (*config.Config, error) { return nil, wantInner }
 	svc := mustService(t, loader, fakeCounter(nil))
 
-	res := svc.LoadStats(context.Background(), "")
+	res := svc.Summary(context.Background(), "")
 	if !res.HasError() {
 		t.Fatal("expected cfg load failure to surface")
 	}
@@ -126,7 +126,7 @@ func TestDashboardService_LoadStats_PropagatesCfgError(t *testing.T) {
 	}
 }
 
-func TestDashboardService_LoadStats_PropagatesCountError(t *testing.T) {
+func TestDashboardService_Summary_PropagatesCountError(t *testing.T) {
 	cfg := &config.Config{}
 	wantInner := errors.New("disk full")
 	counter := func(ctx context.Context, alias string) errtrace.Result[int] {
@@ -134,7 +134,7 @@ func TestDashboardService_LoadStats_PropagatesCountError(t *testing.T) {
 	}
 	svc := mustService(t, fakeLoader(cfg), counter)
 
-	res := svc.LoadStats(context.Background(), "")
+	res := svc.Summary(context.Background(), "")
 	if !res.HasError() {
 		t.Fatal("expected count failure to surface")
 	}

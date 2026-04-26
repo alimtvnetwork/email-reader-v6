@@ -1,24 +1,23 @@
 // dashboard.go — pure-Go dashboard stat aggregation.
 //
-// **Phase 2.2 refactor.** This file used to expose a single
-// package-level `LoadDashboardStats` that reached for `config.Load()`
-// (a process-global) and called the `CountEmails` package func
-// (also reaching for the default store). That made dashboard logic
-// untestable without spinning up a real config file and a real
-// SQLite DB.
+// **Phase 3.5 rip-and-replace.** The legacy `LoadDashboardStats`
+// package function and its transitional `(*DashboardService).LoadStats`
+// method have both been deleted. The single canonical entry point is
+// now `(*DashboardService).Summary(ctx, alias)`, named to match
+// `spec/21-app/02-features/01-dashboard`. This eliminates the parallel
+// API surface that violated the roadmap's "rip-and-replace, no
+// parallel APIs" rule.
 //
-// The new shape mirrors the existing `core.Tools` template
+// The shape mirrors the existing `core.Tools` template
 // (`tools.go:76-112`):
 //
 //   - `DashboardService` struct holds the two injected dependencies
 //     (cfg loader, emails counter) plus zero hidden state.
 //   - `NewDashboardService` is the explicit constructor; both
 //     dependencies are required (nil → ErrCoreInvalidArgument).
-//   - `LoadStats` is the typed method that replaces the old
-//     `LoadDashboardStats` package func.
-//   - The package-level `LoadDashboardStats` stays as a deprecated
-//     thin wrapper that builds a default-injected service per call.
-//     Wrapper goes away in P2.8 once the UI is fully wired.
+//   - `Summary` is the typed method exposed to UI and CLI. It returns
+//     `DashboardSummary` (a type alias for `DashboardStats`, kept for
+//     callers still using the older name without conversion).
 //
 // Lives in core (no Fyne) so the CLI can render a "status" command
 // without pulling in the UI tree.
@@ -57,7 +56,7 @@ type emailsCounter func(ctx context.Context, alias string) errtrace.Result[int]
 
 // DashboardService aggregates per-load dashboard stats from injected
 // config + emails-store dependencies. The struct itself is stateless
-// — no caches, no mutexes — so concurrent LoadStats calls are safe.
+// — no caches, no mutexes — so concurrent Summary calls are safe.
 type DashboardService struct {
 	loadCfg     configLoader
 	countEmails emailsCounter
@@ -82,21 +81,22 @@ func NewDashboardService(loadCfg configLoader, countEmails emailsCounter) errtra
 	})
 }
 
-// LoadStats reads config + emails store and returns aggregate counts.
+// Summary reads config + emails store and returns aggregate counts.
 // Alias may be empty; when set, EmailsForAlias is populated as well.
 //
-// Error envelope mirrors the pre-refactor LoadDashboardStats: config
-// failures wrap as ErrConfigOpen, store failures wrap as ErrDbQueryEmail
-// with scope/alias context. Behaviour is byte-equivalent to the old
-// package-level func; the only change is dependency source.
-func (s *DashboardService) LoadStats(ctx context.Context, alias string) errtrace.Result[DashboardStats] {
+// Error envelope: config failures wrap as ErrConfigOpen, store
+// failures wrap as ErrDbQueryEmail with scope/alias context.
+//
+// Returns `DashboardSummary` (= type alias for `DashboardStats`) so
+// callers can use either name without conversion.
+func (s *DashboardService) Summary(ctx context.Context, alias string) errtrace.Result[DashboardSummary] {
 	cfg, err := s.loadCfg()
 	if err != nil {
-		return errtrace.Err[DashboardStats](
-			errtrace.WrapCode(err, errtrace.ErrConfigOpen, "core.DashboardService.LoadStats"),
+		return errtrace.Err[DashboardSummary](
+			errtrace.WrapCode(err, errtrace.ErrConfigOpen, "core.DashboardService.Summary"),
 		)
 	}
-	stats := DashboardStats{
+	stats := DashboardSummary{
 		Accounts:     len(cfg.Accounts),
 		RulesTotal:   len(cfg.Rules),
 		RulesEnabled: CountEnabledRules(cfg.Rules),
@@ -104,8 +104,8 @@ func (s *DashboardService) LoadStats(ctx context.Context, alias string) errtrace
 	}
 	totalRes := s.countEmails(ctx, "")
 	if totalRes.HasError() {
-		return errtrace.Err[DashboardStats](
-			errtrace.WrapCode(totalRes.Error(), errtrace.ErrDbQueryEmail, "core.DashboardService.LoadStats").
+		return errtrace.Err[DashboardSummary](
+			errtrace.WrapCode(totalRes.Error(), errtrace.ErrDbQueryEmail, "core.DashboardService.Summary").
 				WithContext("scope", "total"),
 		)
 	}
@@ -113,8 +113,8 @@ func (s *DashboardService) LoadStats(ctx context.Context, alias string) errtrace
 	if alias != "" {
 		nRes := s.countEmails(ctx, alias)
 		if nRes.HasError() {
-			return errtrace.Err[DashboardStats](
-				errtrace.WrapCode(nRes.Error(), errtrace.ErrDbQueryEmail, "core.DashboardService.LoadStats").
+			return errtrace.Err[DashboardSummary](
+				errtrace.WrapCode(nRes.Error(), errtrace.ErrDbQueryEmail, "core.DashboardService.Summary").
 					WithContext("scope", "alias").
 					WithContext("alias", alias),
 			)
