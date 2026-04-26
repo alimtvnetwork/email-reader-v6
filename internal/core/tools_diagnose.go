@@ -147,30 +147,33 @@ func replayEvents(evs []DiagnoseEvent, emit func(DiagnoseEvent)) {
 
 // ----- RecentOpenedUrls ---------------------------------------------------
 
-// OpenedUrlListSpec filters the audit-list query.
+// OpenedUrlListSpec filters the audit-list query. Alias / Origin became
+// active filters in Delta #1 (PascalCase OpenedUrls migration).
 type OpenedUrlListSpec struct {
-	Alias  string        // accepted but ignored until schema migration (Delta #1)
-	Origin OpenUrlOrigin // accepted but ignored until schema migration
+	Alias  string        // empty → all aliases
+	Origin OpenUrlOrigin // empty → all origins
 	Limit  int           // 1..1000; default 100
 	Before time.Time     // pagination cursor; zero = now
 }
 
-// OpenedUrlRow is one historical launch. Fields not present in the v1
-// schema are zero-valued; callers must tolerate empty Alias/Origin.
+// OpenedUrlRow is one historical launch. Fields populated by Delta #1
+// are zero-valued for legacy rows that predate the migration.
 type OpenedUrlRow struct {
-	Id       int64
-	EmailId  int64
-	RuleName string
-	Url      string
-	OpenedAt time.Time
+	Id          int64
+	EmailId     int64
+	Alias       string
+	RuleName    string
+	Origin      OpenUrlOrigin
+	Url         string
+	OriginalUrl string
+	IsDeduped   bool
+	IsIncognito bool
+	TraceId     string
+	OpenedAt    time.Time
 }
 
-// (Reader/iterator interfaces inlined into queryOpenedUrls; using
-// *store.Store.DB directly keeps this file dependency-free of *sql.Rows
-// abstractions while still being testable via scanOpenedUrlRows.)
-
-// RecentOpenedUrls returns the most-recent audit rows. v1 reads the live
-// 4-column schema; Alias/Origin filters are inert until Delta #1 lands.
+// RecentOpenedUrls returns the most-recent audit rows. Honours the
+// Alias and Origin filters activated by Delta #1.
 func (t *Tools) RecentOpenedUrls(ctx context.Context, spec OpenedUrlListSpec) errtrace.Result[[]OpenedUrlRow] {
 	if err := validateOpenedUrlListSpec(&spec); err != nil {
 		return errtrace.Err[[]OpenedUrlRow](err)
@@ -193,16 +196,15 @@ func validateOpenedUrlListSpec(spec *OpenedUrlListSpec) error {
 	if spec.Before.IsZero() {
 		spec.Before = time.Now()
 	}
+	if spec.Origin != "" && spec.Origin != OriginManual && spec.Origin != OriginRule && spec.Origin != OriginCli {
+		return errtrace.NewCoded(errtrace.ErrToolsInvalidArgument, "Origin must be empty or one of {manual,rule,cli}")
+	}
 	return nil
 }
 
 func queryOpenedUrls(ctx context.Context, st *store.Store, spec OpenedUrlListSpec) errtrace.Result[[]OpenedUrlRow] {
-	const q = `SELECT Id, EmailId, RuleName, Url, OpenedAt
-	             FROM OpenedUrls
-	            WHERE OpenedAt < ?
-	         ORDER BY OpenedAt DESC, Id DESC
-	            LIMIT ?`
-	rows, err := st.DB.QueryContext(ctx, q, spec.Before, spec.Limit)
+	q, args := buildOpenedUrlsQuery(spec)
+	rows, err := st.DB.QueryContext(ctx, q, args...)
 	if err != nil {
 		return errtrace.Err[[]OpenedUrlRow](errtrace.WrapCode(err, errtrace.ErrToolsInvalidArgument, "QueryContext"))
 	}
@@ -214,6 +216,29 @@ func queryOpenedUrls(ctx context.Context, st *store.Store, spec OpenedUrlListSpe
 	return errtrace.Ok(out)
 }
 
+// buildOpenedUrlsQuery composes the SELECT + bound args for the live
+// Delta-#1 schema. Alias and Origin clauses are appended only when set,
+// keeping the SQL planner-friendly for the common "no filter" case.
+func buildOpenedUrlsQuery(spec OpenedUrlListSpec) (string, []any) {
+	var sb strings.Builder
+	sb.WriteString(`SELECT Id, EmailId, Alias, RuleName, Origin, Url,
+	                       OriginalUrl, IsDeduped, IsIncognito, TraceId, OpenedAt
+	                  FROM OpenedUrls
+	                 WHERE OpenedAt < ?`)
+	args := []any{spec.Before}
+	if spec.Alias != "" {
+		sb.WriteString(" AND Alias = ?")
+		args = append(args, spec.Alias)
+	}
+	if spec.Origin != "" {
+		sb.WriteString(" AND Origin = ?")
+		args = append(args, string(spec.Origin))
+	}
+	sb.WriteString(" ORDER BY OpenedAt DESC, Id DESC LIMIT ?")
+	args = append(args, spec.Limit)
+	return sb.String(), args
+}
+
 func scanOpenedUrlRows(rows interface {
 	Next() bool
 	Scan(dest ...any) error
@@ -222,10 +247,18 @@ func scanOpenedUrlRows(rows interface {
 ) ([]OpenedUrlRow, error) {
 	var out []OpenedUrlRow
 	for rows.Next() {
-		var r OpenedUrlRow
-		if err := rows.Scan(&r.Id, &r.EmailId, &r.RuleName, &r.Url, &r.OpenedAt); err != nil {
+		var (
+			r                                  OpenedUrlRow
+			origin                             string
+			isDeduped, isIncognito             int
+		)
+		if err := rows.Scan(&r.Id, &r.EmailId, &r.Alias, &r.RuleName, &origin,
+			&r.Url, &r.OriginalUrl, &isDeduped, &isIncognito, &r.TraceId, &r.OpenedAt); err != nil {
 			return nil, err
 		}
+		r.Origin = OpenUrlOrigin(origin)
+		r.IsDeduped = isDeduped != 0
+		r.IsIncognito = isIncognito != 0
 		out = append(out, r)
 	}
 	return out, rows.Err()
