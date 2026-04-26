@@ -1,6 +1,6 @@
 # Workflow status
 
-Last updated: 2026-04-26 (UTC) — Three slices landed in one session: #27 NotFound.tsx fn-length cleanup; #28 Watch backoff jitter (CF-W-BACKOFF) — `NextPollDelay(base, streak, jitter)` + `nextDelay` wired into `runLoop`, with `pollState.consecutiveErrors` reset on every `EventPollOK`; #29 ANALYZE-after-N-deletes — `store.Analyze` + `ShouldAnalyze`, plus a cumulative tally + `Analyzer` seam in `core.Maintenance` with new `OnAnalyze` observer surfaced via `FormatAnalyzeRun`. All 16 packages still green under `-race -count=2`.
+Last updated: 2026-04-26 (UTC) — Slice #30 landed: weekly VACUUM + 6-hourly `wal_checkpoint(TRUNCATE)`. `internal/store/vacuum.go` gained `Vacuum`/`FreelistRatio`/`ShouldVacuum`/`WalCheckpointTruncate`. `internal/core/schedule.go` introduces pure `ShouldRunWalCheckpoint` + `ShouldRunWeeklyVacuum`. `core.MaintenanceOptions` gained `Vacuumer`/`VacuumGate`/`WalCheckpointer` seams + `OnVacuum`/`OnWalCheckpoint` observers; `runTick` now fans out to retention-sweep, wal-checkpoint, and weekly-vacuum. `internal/ui/maintenance_log.go` adds `FormatVacuumRun` + `FormatWalCheckpoint` (format pinned). All 16 packages green under `-race -count=2`. Spec/23-app-database/04 §2 now fully implemented (only the per-decision prune split remains, blocked on the `Decision` column landing).
 
 ## Current milestone
 🎯 **Spec-21-app implementation Phase 2** — turning the spec/21-app deltas into shipped code. Spec authoring round (35 tasks) **closed**; tasklist archived to `mem://archive/02-spec-21-app-tasklist`.
