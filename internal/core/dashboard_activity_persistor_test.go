@@ -4,10 +4,13 @@ package core
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/lovable/email-read/internal/errtrace"
 	"github.com/lovable/email-read/internal/eventbus"
 	"github.com/lovable/email-read/internal/store"
 )
