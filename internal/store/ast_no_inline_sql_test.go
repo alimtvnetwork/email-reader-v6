@@ -73,6 +73,13 @@ func TestAST_NoInlineSQL(t *testing.T) {
 				if filepath.Clean(path) == filepath.Join(root, "internal", "store", "queries") {
 					return fs.SkipDir
 				}
+				// Skip the migration harness: `internal/store/migrate/` legitimately
+				// owns its bookkeeping `_SchemaVersion` DDL/DML, and individual
+				// `m000N_*.go` files (P1.11+) are themselves SQL constants by design.
+				// The queries-package boundary doesn't apply to schema migrations.
+				if filepath.Clean(path) == filepath.Join(root, "internal", "store", "migrate") {
+					return fs.SkipDir
+				}
 				return nil
 			}
 			if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
