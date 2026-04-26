@@ -39,24 +39,24 @@ func LoadDashboardStats(ctx context.Context, alias string) errtrace.Result[Dashb
 		RulesEnabled: CountEnabledRules(cfg.Rules),
 		Alias:        alias,
 	}
-	total, err := CountEmails(ctx, "")
-	if err != nil {
+	totalRes := CountEmails(ctx, "")
+	if totalRes.HasError() {
 		return errtrace.Err[DashboardStats](
-			errtrace.WrapCode(err, errtrace.ErrDbQueryEmail, "core.LoadDashboardStats").
+			errtrace.WrapCode(totalRes.Error(), errtrace.ErrDbQueryEmail, "core.LoadDashboardStats").
 				WithContext("scope", "total"),
 		)
 	}
-	stats.EmailsTotal = total
+	stats.EmailsTotal = totalRes.Value()
 	if alias != "" {
-		n, err := CountEmails(ctx, alias)
-		if err != nil {
+		nRes := CountEmails(ctx, alias)
+		if nRes.HasError() {
 			return errtrace.Err[DashboardStats](
-				errtrace.WrapCode(err, errtrace.ErrDbQueryEmail, "core.LoadDashboardStats").
+				errtrace.WrapCode(nRes.Error(), errtrace.ErrDbQueryEmail, "core.LoadDashboardStats").
 					WithContext("scope", "alias").
 					WithContext("alias", alias),
 			)
 		}
-		stats.EmailsForAlias = n
+		stats.EmailsForAlias = nRes.Value()
 	}
 	return errtrace.Ok(stats)
 }
