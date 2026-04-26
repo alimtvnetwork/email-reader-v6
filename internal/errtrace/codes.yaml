@@ -1,0 +1,375 @@
+# codes.yaml — single source of truth for errtrace error codes.
+#
+# This file is read by `internal/errtrace/codegen/main.go` (P1.2) to
+# emit `codes_gen.go`, which exports a `RegisteredCodes` map used by
+# the registry test (P1.4) and the AST guard (P1.5) to ensure no code
+# string is ever introduced as a bare literal.
+#
+# **Adding a new code:**
+#   1. Add the row here (under the right block, in numeric order).
+#   2. Add the matching `const` line in `codes.go` (kept in sync by
+#      P1.4's registry test — divergence FAILS that test).
+#   3. Add the registry entry in spec/21-app/06-error-registry.md.
+#   4. Run `nix run nixpkgs#go -- run ./internal/errtrace/codegen` to
+#      regenerate `codes_gen.go`.
+#
+# **Schema:**
+#   blocks:
+#     - name:        human-readable block name (e.g. "Config")
+#       prefix:      ER-XXX prefix used in code strings
+#       range:       [low, high]   — numeric range owned by this block
+#                                    (informational; codegen doesn't enforce)
+#       description: one-line summary of what failures this block covers
+#       codes:
+#         - const:       Go identifier (e.g. ErrConfigOpen)
+#           code:        full string value (e.g. "ER-CFG-21001")
+#           description: short summary of when this fires
+#
+# Order within a block matches `codes.go` declaration order so
+# diff-review of the two files is trivial.
+
+blocks:
+  - name: Config
+    prefix: ER-CFG
+    range: [21000, 21099]
+    description: Loading, decoding, validating, or persisting the user config file.
+    codes:
+      - const: ErrConfigOpen
+        code: "ER-CFG-21001"
+        description: Could not open the config file (missing, permission denied, etc.).
+      - const: ErrConfigDecode
+        code: "ER-CFG-21002"
+        description: Config file present but YAML/TOML parsing failed.
+      - const: ErrConfigEncode
+        code: "ER-CFG-21003"
+        description: Failed to serialise config back to disk.
+      - const: ErrConfigValidate
+        code: "ER-CFG-21004"
+        description: Config decoded but a field violates schema rules.
+      - const: ErrConfigPasswordCrypt
+        code: "ER-CFG-21005"
+        description: Encrypt/decrypt step on stored account password failed.
+      - const: ErrConfigAccountDup
+        code: "ER-CFG-21006"
+        description: Two accounts share the same alias (must be unique).
+      - const: ErrConfigAccountMissing
+        code: "ER-CFG-21007"
+        description: Lookup for an alias returned no matching account.
+
+  - name: Store
+    prefix: ER-DB
+    range: [21100, 21199]
+    description: SQLite store layer (open, migrate, CRUD).
+    codes:
+      - const: ErrDbOpen
+        code: "ER-DB-21101"
+        description: sql.Open or initial PRAGMA setup failed.
+      - const: ErrDbMigrate
+        code: "ER-DB-21102"
+        description: Schema migration step failed.
+      - const: ErrDbInsertEmail
+        code: "ER-DB-21103"
+        description: UpsertEmail / InsertEmail write failed.
+      - const: ErrDbQueryEmail
+        code: "ER-DB-21104"
+        description: SELECT against the Emails table failed.
+      - const: ErrDbInsertUrl
+        code: "ER-DB-21105"
+        description: OpenedUrls write failed.
+      - const: ErrDbQueryUrl
+        code: "ER-DB-21106"
+        description: SELECT against OpenedUrls failed.
+      - const: ErrDbWatchState
+        code: "ER-DB-21107"
+        description: WatchState read/write failed.
+
+  - name: Mail
+    prefix: ER-MAIL
+    range: [21200, 21299]
+    description: IMAP client (dial, login, fetch, idle).
+    codes:
+      - const: ErrMailDial
+        code: "ER-MAIL-21201"
+        description: TCP/TLS dial to the IMAP server failed.
+      - const: ErrMailLogin
+        code: "ER-MAIL-21202"
+        description: AUTHENTICATE / LOGIN command rejected.
+      - const: ErrMailFetchUid
+        code: "ER-MAIL-21203"
+        description: UID FETCH command failed or returned malformed data.
+      - const: ErrMailParseEnvelope
+        code: "ER-MAIL-21204"
+        description: Could not parse the envelope of a fetched message.
+      - const: ErrMailWriteEml
+        code: "ER-MAIL-21205"
+        description: Writing the .eml payload to disk failed.
+      - const: ErrMailLogout
+        code: "ER-MAIL-21206"
+        description: LOGOUT command failed (non-fatal but logged).
+      - const: ErrMailTLSHandshake
+        code: "ER-MAIL-21207"
+        description: TLS handshake against the IMAP endpoint failed.
+      - const: ErrMailTimeout
+        code: "ER-MAIL-21208"
+        description: Per-command IMAP deadline exceeded.
+      - const: ErrMailIdleUnsupported
+        code: "ER-MAIL-21209"
+        description: Server advertised no IDLE capability; falling back to polling.
+
+  - name: Rules
+    prefix: ER-RUL
+    range: [21300, 21399]
+    description: Rule engine (compile, match, persist).
+    codes:
+      - const: ErrRulePatternInvalid
+        code: "ER-RUL-21301"
+        description: Rule pattern failed to compile (invalid regex/glob).
+      - const: ErrRuleNotFound
+        code: "ER-RUL-21302"
+        description: Lookup by id/name returned no matching rule.
+      - const: ErrRuleDuplicate
+        code: "ER-RUL-21303"
+        description: Attempted to insert a rule with a name that already exists.
+      - const: ErrRuleEvaluate
+        code: "ER-RUL-21304"
+        description: Runtime error during rule evaluation against an email.
+      - const: ErrRuleSeedDefault
+        code: "ER-RUL-21305"
+        description: Seeding the default rule-set on first run failed.
+
+  - name: Watcher
+    prefix: ER-WCH
+    range: [21400, 21499]
+    description: Watch loop lifecycle and per-poll errors.
+    codes:
+      - const: ErrWatcherStart
+        code: "ER-WCH-21401"
+        description: Watcher.Start failed before the first poll.
+      - const: ErrWatcherPollCycle
+        code: "ER-WCH-21402"
+        description: A single poll cycle errored (transient, retried).
+      - const: ErrWatcherProcessEmail
+        code: "ER-WCH-21403"
+        description: Per-email rule/action processing failed.
+      - const: ErrWatcherEventPublish
+        code: "ER-WCH-21404"
+        description: Publishing a WatchEvent to the bus failed.
+      - const: ErrWatcherShutdown
+        code: "ER-WCH-21405"
+        description: Watcher.Stop failed to drain cleanly.
+      - const: ErrWatchAlreadyStarted
+        code: "ER-WCH-21406"
+        description: Watch.Start called while a watch is already running.
+      - const: ErrWatchNotRunning
+        code: "ER-WCH-21407"
+        description: Watch.Stop called with no active watch.
+      - const: ErrWatchAliasRequired
+        code: "ER-WCH-21410"
+        description: Watch operation requires a non-empty alias argument.
+      - const: ErrWatchSubscribeClosed
+        code: "ER-WCH-21411"
+        description: Subscriber channel closed mid-stream.
+      - const: ErrWatchAccountNotFound
+        code: "ER-WCH-21412"
+        description: Watch alias does not match any configured account.
+
+  - name: Browser
+    prefix: ER-BRW
+    range: [21500, 21599]
+    description: External browser launching for opened URLs.
+    codes:
+      - const: ErrBrowserLaunch
+        code: "ER-BRW-21501"
+        description: exec.Cmd.Start of the browser binary failed.
+      - const: ErrBrowserNotFound
+        code: "ER-BRW-21502"
+        description: Configured browser binary was not on PATH.
+      - const: ErrBrowserDedupHit
+        code: "ER-BRW-21503"
+        description: URL was suppressed by the dedup window (sentinel, not a true error).
+      - const: ErrBrowserUrlInvalid
+        code: "ER-BRW-21504"
+        description: Target URL failed pre-launch validation.
+      - const: ErrBrowserIncognitoFlag
+        code: "ER-BRW-21505"
+        description: Incognito flag for the configured browser is unknown.
+
+  - name: Exporter
+    prefix: ER-EXP
+    range: [21600, 21699]
+    description: CSV / JSON exporters.
+    codes:
+      - const: ErrExportOpenFile
+        code: "ER-EXP-21601"
+        description: Could not create the output file.
+      - const: ErrExportWriteRow
+        code: "ER-EXP-21602"
+        description: Failed to encode/write a row to the export stream.
+      - const: ErrExportFlush
+        code: "ER-EXP-21603"
+        description: Final flush/Close on the export stream failed.
+      - const: ErrExportNoData
+        code: "ER-EXP-21604"
+        description: Export query returned zero rows (advisory).
+
+  - name: Core
+    prefix: ER-COR
+    range: [21700, 21799]
+    description: Cross-cutting core service errors.
+    codes:
+      - const: ErrCoreInvalidArgument
+        code: "ER-COR-21701"
+        description: Caller passed an argument outside the documented range.
+      - const: ErrCoreNotImplemented
+        code: "ER-COR-21702"
+        description: Code path is reserved for a future slice but not yet implemented.
+      - const: ErrCoreContextCancelled
+        code: "ER-COR-21703"
+        description: Operation aborted because ctx.Done() fired.
+      - const: ErrCorePathOutsideData
+        code: "ER-COR-21704"
+        description: A file path resolved outside the application's data directory.
+      - const: ErrCoreClockSkew
+        code: "ER-COR-21705"
+        description: Detected wall-clock time moved backwards unexpectedly.
+
+  - name: CLI
+    prefix: ER-CLI
+    range: [21800, 21899]
+    description: Cobra command surface (flag parsing, prompts).
+    codes:
+      - const: ErrCliUsage
+        code: "ER-CLI-21801"
+        description: Generic usage error (unknown subcommand, missing positional arg).
+      - const: ErrCliFlagConflict
+        code: "ER-CLI-21802"
+        description: Two mutually exclusive flags were both supplied.
+      - const: ErrCliMissingRequiredArg
+        code: "ER-CLI-21803"
+        description: A required flag/positional argument was omitted.
+      - const: ErrCliInteractiveAborted
+        code: "ER-CLI-21804"
+        description: User pressed Ctrl-C / EOF mid-prompt.
+
+  - name: UI
+    prefix: ER-UI
+    range: [21900, 21999]
+    description: Fyne UI rendering and persisted view state.
+    codes:
+      - const: ErrUiThemeUnknownToken
+        code: "ER-UI-21900"
+        description: Theme code requested a token name that doesn't exist.
+      - const: ErrUiStateLoad
+        code: "ER-UI-21901"
+        description: Failed to read persisted view state from disk.
+      - const: ErrUiStateSave
+        code: "ER-UI-21902"
+        description: Failed to write persisted view state to disk.
+      - const: ErrUiFormValidation
+        code: "ER-UI-21903"
+        description: A user-entered form field failed inline validation.
+      - const: ErrUiViewRender
+        code: "ER-UI-21904"
+        description: A view's render path returned an error (unrecoverable for that frame).
+      - const: ErrUiClipboard
+        code: "ER-UI-21905"
+        description: Read/write to the system clipboard failed.
+
+  - name: Settings
+    prefix: ER-SET
+    range: [21770, 21789]
+    description: Settings service validation + persistence (sub-block of COR for historical reasons; tracked separately).
+    codes:
+      - const: ErrSettingsConstruct
+        code: "ER-SET-21770"
+        description: NewSettingsService construction failed (missing dependency).
+      - const: ErrSettingsPollSeconds
+        code: "ER-SET-21771"
+        description: PollSeconds value outside the allowed range.
+      - const: ErrSettingsTheme
+        code: "ER-SET-21772"
+        description: Theme value not one of the allowed palette identifiers.
+      - const: ErrSettingsUrlScheme
+        code: "ER-SET-21773"
+        description: URL scheme rule rejects the candidate.
+      - const: ErrSettingsChromePath
+        code: "ER-SET-21774"
+        description: Configured Chrome/Chromium path is not executable.
+      - const: ErrSettingsIncognitoArg
+        code: "ER-SET-21775"
+        description: Incognito CLI argument template is malformed.
+      - const: ErrSettingsLocalhostUrls
+        code: "ER-SET-21776"
+        description: localhost URL setting violates the gate rule.
+      - const: ErrSettingsCompositeRule
+        code: "ER-SET-21777"
+        description: A composite settings rule (multiple fields) failed validation.
+      - const: ErrSettingsPersist
+        code: "ER-SET-21778"
+        description: Persisting settings to disk failed.
+      - const: ErrSettingsConcurrentEdit
+        code: "ER-SET-21779"
+        description: Detected a stale revision token on save (concurrent edit).
+      - const: ErrSettingsDetectChromeStat
+        code: "ER-SET-21780"
+        description: os.Stat probe of the candidate Chrome binary failed.
+      - const: ErrSettingsEventDropped
+        code: "ER-SET-21781"
+        description: Settings change event could not be published (bus full).
+      - const: ErrSettingsRetentionDays
+        code: "ER-SET-21782"
+        description: RetentionDays value outside the allowed range.
+      - const: ErrSettingsDensity
+        code: "ER-SET-21783"
+        description: UI density value not one of the allowed identifiers.
+
+  - name: Tools
+    prefix: ER-TLS
+    range: [21750, 21769]
+    description: Tools service (read, diagnose, export, open-url).
+    codes:
+      - const: ErrToolsInvalidArgument
+        code: "ER-TLS-21750"
+        description: Generic invalid argument to a tool subcommand.
+      - const: ErrToolsReadFetchFailed
+        code: "ER-TLS-21751"
+        description: Tools.Read could not fetch the requested email.
+      - const: ErrToolsDiagnoseAborted
+        code: "ER-TLS-21752"
+        description: Tools.Diagnose aborted before completing checks.
+      - const: ErrToolsExportPathExists
+        code: "ER-TLS-21753"
+        description: Tools.Export refused to overwrite an existing path.
+      - const: ErrToolsOpenUrlEmpty
+        code: "ER-TLS-21760"
+        description: open-url called with empty URL string.
+      - const: ErrToolsOpenUrlTooLong
+        code: "ER-TLS-21761"
+        description: URL exceeds maximum length cap.
+      - const: ErrToolsOpenUrlMalformed
+        code: "ER-TLS-21762"
+        description: URL failed url.Parse (syntax error).
+      - const: ErrToolsOpenUrlScheme
+        code: "ER-TLS-21763"
+        description: URL scheme not in the allowed set.
+      - const: ErrToolsOpenUrlLocalhost
+        code: "ER-TLS-21764"
+        description: URL points to localhost and the localhost gate is closed.
+      - const: ErrToolsOpenUrlPrivateIp
+        code: "ER-TLS-21765"
+        description: URL resolves to a private IP and the private-IP gate is closed.
+      - const: ErrToolsOpenUrlNoBrowser
+        code: "ER-TLS-21766"
+        description: No browser is configured for the URL scheme.
+      - const: ErrToolsOpenUrlLaunchFailed
+        code: "ER-TLS-21767"
+        description: Browser launch returned a non-zero exit before the URL opened.
+
+  - name: Unknown
+    prefix: ER-UNKNOWN
+    range: [21999, 21999]
+    description: Last-resort fallback used by defensive paths (e.g. Err[T](nil)).
+    codes:
+      - const: ErrUnknown
+        code: "ER-UNKNOWN-21999"
+        description: Sentinel — should never appear in healthy logs.
