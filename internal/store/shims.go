@@ -27,6 +27,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/lovable/email-read/internal/errtrace"
