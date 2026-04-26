@@ -101,7 +101,7 @@ func TestNewRulesService_RejectsNilDeps(t *testing.T) {
 }
 
 func TestRulesService_Add_RequiresNameAndUrl(t *testing.T) {
-	svc := newSvc(t, memCfg(&config.Config{}))
+	svc := newSvcMem(t, &config.Config{})
 	res := svc.Add(RuleInput{Name: "", UrlRegex: "x"})
 	mustCoded(t, res.Error(), errtrace.ErrCoreInvalidArgument)
 
@@ -110,7 +110,7 @@ func TestRulesService_Add_RequiresNameAndUrl(t *testing.T) {
 }
 
 func TestRulesService_Add_RejectsBadRegex(t *testing.T) {
-	svc := newSvc(t, memCfg(&config.Config{}))
+	svc := newSvcMem(t, &config.Config{})
 	res := svc.Add(RuleInput{Name: "n", UrlRegex: "ok", FromRegex: "[unclosed"})
 	c := mustCoded(t, res.Error(), errtrace.ErrRulePatternInvalid)
 	if got, ok := ctxValue(c, "field"); !ok || got != "fromRegex" {
@@ -178,7 +178,7 @@ func TestRulesService_Add_PropagatesLoadAndSaveErrors(t *testing.T) {
 
 func TestRulesService_List_ReturnsDefensiveCopy(t *testing.T) {
 	cfg := &config.Config{Rules: []config.Rule{{Name: "r1", UrlRegex: "u", Enabled: true}}}
-	svc := newSvc(t, memCfg(cfg))
+	svc := newSvcMem(t, cfg)
 	res := svc.List()
 	if res.HasError() {
 		t.Fatal(res.Error())
@@ -192,7 +192,7 @@ func TestRulesService_List_ReturnsDefensiveCopy(t *testing.T) {
 }
 
 func TestRulesService_Get_NotFound(t *testing.T) {
-	svc := newSvc(t, memCfg(&config.Config{}))
+	svc := newSvcMem(t, &config.Config{})
 	res := svc.Get("missing")
 	mustCoded(t, res.Error(), errtrace.ErrRuleNotFound)
 }
