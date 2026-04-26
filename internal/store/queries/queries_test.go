@@ -3,6 +3,7 @@ package queries
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestEmailByUid_Static(t *testing.T) {
