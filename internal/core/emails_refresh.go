@@ -90,7 +90,7 @@ func (s *EmailsService) WithRefresher(r Refresher) *EmailsService {
 //
 // Spec: §2.5. Error envelope:
 //   - empty alias               → ErrWatchAliasRequired
-//   - no refresher injected     → ErrCoreInvalidArgument (config bug)
+//   - no refresher injected     → ErrEmailsRefresherUnwired (bootstrap gap)
 //   - context already cancelled → ErrCoreInvalidArgument + alias ctx
 //   - watcher returns error     → ErrWatcherPollCycle + alias ctx
 func (s *EmailsService) Refresh(ctx context.Context, alias string) errtrace.Result[Unit] {
@@ -101,7 +101,7 @@ func (s *EmailsService) Refresh(ctx context.Context, alias string) errtrace.Resu
 	}
 	if s.refresher == nil {
 		return errtrace.Err[Unit](errtrace.NewCoded(
-			errtrace.ErrCoreInvalidArgument,
+			errtrace.ErrEmailsRefresherUnwired,
 			"core.EmailsService.Refresh: no Refresher injected; "+
 				"call (*EmailsService).WithRefresher at bootstrap").
 			WithContext("alias", alias))
