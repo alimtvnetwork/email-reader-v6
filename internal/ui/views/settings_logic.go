@@ -90,23 +90,35 @@ func ParseWeekdayLabel(label string) int {
 	return 0
 }
 
-// DensityLabelFor maps an internal density code (theme.Density's int form)
-// to the Select label. We accept an int rather than the theme.Density type
-// to keep this file fyne-free.
+// DensityLabelFor maps a core.Density value (its int form) to the Select
+// label. We accept an int rather than the core.Density type so this file
+// stays import-light. core.DensityComfortable=1, core.DensityCompact=2.
+// Any other value (including the legacy 0 zero-value) → Comfortable.
 func DensityLabelFor(d int) string {
-	if d == 1 {
+	if d == int(core.DensityCompact) {
 		return string(DensityChoiceCompact)
 	}
 	return string(DensityChoiceComfortable)
 }
 
-// ParseDensityChoice returns the int form (matches theme.Density) for a
-// label. Unknown labels default to Comfortable (0).
+// ParseDensityChoice returns the core.Density int form for a Select label.
+// Unknown labels default to Comfortable.
 func ParseDensityChoice(label string) int {
 	if label == string(DensityChoiceCompact) {
-		return 1
+		return int(core.DensityCompact)
 	}
-	return 0
+	return int(core.DensityComfortable)
+}
+
+// CoreDensityToThemeDensity translates a core.Density int form
+// (Comfortable=1, Compact=2) into the theme.Density int form
+// (Comfortable=0, Compact=1) consumed by theme.SetDensity. Pure so it's
+// testable under -tags nofyne.
+func CoreDensityToThemeDensity(coreDensity int) int {
+	if coreDensity == int(core.DensityCompact) {
+		return 1 // theme.DensityCompact
+	}
+	return 0 // theme.DensityComfortable
 }
 
 // MaintenanceFields bundles the four §5 knobs to keep ProjectSettingsInput
