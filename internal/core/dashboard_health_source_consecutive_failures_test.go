@@ -32,8 +32,8 @@ func TestNewStoreAccountHealthSource_PropagatesConsecutiveFailures(t *testing.T)
 		t.Fatal("NewStoreAccountHealthSource returned nil for a real store")
 	}
 	res := src(ctx)
-	if res.IsErr() {
-		t.Fatalf("source: %v", res.Err())
+	if res.HasError() {
+		t.Fatalf("source: %v", res.Error())
 	}
 	rows := res.Value()
 	if len(rows) != 1 {
