@@ -27,21 +27,13 @@ var (
 )
 
 // normalizeInput trims whitespace, lower-cases schemes, dedupes + sorts them,
-// and trims the BrowserOverride strings. It does NOT validate.
+// and trims the BrowserOverride strings. It does NOT validate and does NOT
+// substitute defaults — that responsibility lives with DefaultSettingsInput
+// and the caller.
 func normalizeInput(in SettingsInput) SettingsInput {
 	in.BrowserOverride.ChromePath = strings.TrimSpace(in.BrowserOverride.ChromePath)
 	in.BrowserOverride.IncognitoArg = strings.TrimSpace(in.BrowserOverride.IncognitoArg)
 	in.OpenUrlAllowedSchemes = canonSchemes(in.OpenUrlAllowedSchemes)
-	if in.PollSeconds == 0 {
-		// 0 is the zero-value sentinel — treat as "not set" and apply default.
-		in.PollSeconds = 3
-	}
-	if in.Theme == 0 {
-		in.Theme = ThemeDark
-	}
-	if len(in.OpenUrlAllowedSchemes) == 0 {
-		in.OpenUrlAllowedSchemes = []string{"https"}
-	}
 	return in
 }
 
