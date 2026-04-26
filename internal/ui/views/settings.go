@@ -168,15 +168,20 @@ func newSettingsPaths(snap core.SettingsSnapshot) fyne.CanvasObject {
 }
 
 // readSettingsInput validates + projects widget state into a SettingsInput.
-// Returns a friendly error for the status line when poll seconds are out
-// of range or non-numeric. Delegates pure logic to ParsePollSeconds /
-// ProjectSettingsInput so the headless test suite can exercise both.
+// Returns a friendly error for the status line when poll seconds or
+// retention days are out of range or non-numeric. Delegates pure logic to
+// ParsePollSeconds / ParseRetentionDays / ProjectSettingsInput so the
+// headless test suite can exercise both.
 func readSettingsInput(w *settingsWidgets) (core.SettingsInput, error) {
 	poll, err := ParsePollSeconds(w.pollEntry.Text)
 	if err != nil {
 		return core.SettingsInput{}, err
 	}
-	return ProjectSettingsInput(w.themeSelect.Selected, poll, w.chromeEntry.Text, w.initial), nil
+	retention, err := ParseRetentionDays(w.retentionEntry.Text)
+	if err != nil {
+		return core.SettingsInput{}, err
+	}
+	return ProjectSettingsInput(w.themeSelect.Selected, poll, w.chromeEntry.Text, retention, w.initial), nil
 }
 
 // repopulateWidgets refreshes the form after a Reset so the user sees the
@@ -186,4 +191,5 @@ func repopulateWidgets(w *settingsWidgets, snap core.SettingsSnapshot) {
 	w.themeSelect.SetSelected(snap.Theme.String())
 	w.pollEntry.SetText(strconv.Itoa(int(snap.PollSeconds)))
 	w.chromeEntry.SetText(snap.BrowserOverride.ChromePath)
+	w.retentionEntry.SetText(strconv.Itoa(int(snap.OpenUrlsRetentionDays)))
 }
