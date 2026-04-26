@@ -17,21 +17,23 @@ package store
 import (
 	"go/parser"
 	"go/token"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
 
-// caller-disallowed import paths. database/sql + every driver covered
-// by `driverImportPaths` (defined in ast_driver_import_limit_test.go).
-func disallowedDbImportsForCallers() map[string]struct{} {
-	out := map[string]struct{}{
-		"database/sql":        {},
-		"database/sql/driver": {},
+// disallowedDbImportsForCallers builds the deny-list: `database/sql`,
+// its driver subpackage, plus every concrete driver enumerated by
+// `driverImportPaths` (defined in ast_driver_import_limit_test.go).
+func disallowedDbImportsForCallers() map[string]bool {
+	out := map[string]bool{
+		"database/sql":        true,
+		"database/sql/driver": true,
 	}
-	for _, p := range driverImportPaths() {
-		out[p] = struct{}{}
+	for p := range driverImportPaths {
+		out[p] = true
 	}
 	return out
 }
@@ -64,21 +66,15 @@ func Test_AST_CoreUsesStoreOnly(t *testing.T) {
 		if _, err := os.Stat(dir); err != nil {
 			t.Fatalf("scan dir missing: %s (%v)", dir, err)
 		}
-		err := filepath.WalkDir(dir, func(path string, d os.DirEntry, walkErr error) error {
+		err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, walkErr error) error {
 			if walkErr != nil {
 				return walkErr
 			}
 			if d.IsDir() {
-				if skipUninterestingDir(d.Name()) {
-					return filepath.SkipDir
-				}
-				return nil
+				return skipUninterestingDir(d.Name())
 			}
-			if !strings.HasSuffix(path, ".go") {
+			if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
 				return nil
-			}
-			if strings.HasSuffix(path, "_test.go") {
-				return nil // tests may use database/sql for harness work
 			}
 			f, err := parser.ParseFile(fset, path, nil, parser.ImportsOnly)
 			if err != nil {
@@ -86,9 +82,9 @@ func Test_AST_CoreUsesStoreOnly(t *testing.T) {
 			}
 			for _, imp := range f.Imports {
 				p := strings.Trim(imp.Path.Value, `"`)
-				if _, hit := deny[p]; hit {
+				if deny[p] {
 					rel, _ := filepath.Rel(root, path)
-					bad = append(bad, violation{File: rel, Import: p})
+					bad = append(bad, violation{File: filepath.ToSlash(rel), Import: p})
 				}
 			}
 			return nil
