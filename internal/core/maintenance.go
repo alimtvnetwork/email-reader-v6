@@ -38,6 +38,19 @@ type Pruner func(ctx context.Context, cutoff time.Time) (int64, error)
 // is never reset (which is harmless — Pruner still runs).
 type Analyzer func(ctx context.Context) error
 
+// Vacuumer is the seam over store.Vacuum. Returns reclaimed bytes (may
+// be negative on the rare grow case; callers log either way).
+type Vacuumer func(ctx context.Context) (reclaimedBytes int64, err error)
+
+// VacuumGate is the optional pre-check seam mirroring store.ShouldVacuum:
+// when non-nil and returning false, Vacuumer is skipped. The Maintenance
+// loop still bumps lastVacuumRun so we don't re-check inside the same slot.
+type VacuumGate func(ctx context.Context) (shouldRun bool, err error)
+
+// WalCheckpointer is the seam over store.WalCheckpointTruncate. Returns
+// the number of WAL frames present before the truncation (observability).
+type WalCheckpointer func(ctx context.Context) (pages int64, err error)
+
 // AnalyzeThresholdRows is the cumulative-delete count above which the
 // Maintenance loop fires Analyzer and resets the counter. Mirrors
 // store.AnalyzeThreshold (kept here as a separate const so the core
@@ -63,6 +76,21 @@ type MaintenanceOptions struct {
 	// AnalyzeThresholdRows; the counter then resets to zero. Spec
 	// 23-app-database/04 §2.
 	Analyzer Analyzer
+	// Vacuumer is optional. When non-nil, runs once per WeeklyVacuum
+	// slot (default Sunday 03:00 local). Spec 23-app-database/04 §2 row 5.
+	Vacuumer Vacuumer
+	// VacuumGate, when non-nil, runs before Vacuumer; returning false
+	// skips the VACUUM (e.g. free-list < 5%). Spec §4.
+	VacuumGate VacuumGate
+	// WalCheckpointer is optional. When non-nil, runs every
+	// WalCheckpointHours (default 6). Spec §2 row 4.
+	WalCheckpointer WalCheckpointer
+	// VacuumWeekday defaults to time.Sunday.
+	VacuumWeekday time.Weekday
+	// VacuumHourLocal defaults to 3 (03:00 local).
+	VacuumHourLocal int
+	// WalCheckpointHours defaults to 6.
+	WalCheckpointHours int
 	// Now defaults to time.Now.
 	Now func() time.Time
 	// TickInterval defaults to 1 minute. The retention tick fires at
@@ -78,6 +106,13 @@ type MaintenanceOptions struct {
 	// Receives the cumulative-delete count that triggered it and the
 	// Analyzer's error (nil on success). Used by tests + structured logs.
 	OnAnalyze func(triggeredAt int64, err error)
+	// OnVacuum is an optional observer fired after every Vacuumer
+	// invocation (skipped runs do NOT fire it). reclaimedBytes mirrors
+	// the store.Vacuum return value.
+	OnVacuum func(reclaimedBytes int64, err error)
+	// OnWalCheckpoint is an optional observer fired after every
+	// WalCheckpointer invocation. pages = WAL frames before truncation.
+	OnWalCheckpoint func(pages int64, err error)
 }
 
 // Maintenance is the goroutine handle. Construct via NewMaintenance,
@@ -107,6 +142,16 @@ func NewMaintenance(opts MaintenanceOptions) errtrace.Result[*Maintenance] {
 	if opts.RetentionIntervalHours <= 0 {
 		opts.RetentionIntervalHours = 24
 	}
+	if opts.WalCheckpointHours <= 0 {
+		opts.WalCheckpointHours = 6
+	}
+	// Spec/23-app-database/04 §5: WeeklyVacuumHourLocal default 3, range 0..23.
+	// Treat "<= 0" as unset to match the zero-value-friendly Options pattern;
+	// out-of-range high values clamp to 3.
+	if opts.VacuumHourLocal <= 0 || opts.VacuumHourLocal > 23 {
+		opts.VacuumHourLocal = 3
+	}
+	// time.Sunday is the zero value of time.Weekday, so no defaulting needed.
 	return errtrace.Ok(&Maintenance{opts: opts})
 }
 
@@ -146,22 +191,39 @@ func (m *Maintenance) Stop(timeout time.Duration) {
 	}
 }
 
-// run is the goroutine body. Wakes every TickInterval and asks
-// ShouldRunRetentionTick whether to sweep. lastRun is goroutine-local.
+// run is the goroutine body. Wakes every TickInterval and dispatches
+// to maybeSweep / maybeWalCheckpoint / maybeVacuum. Each `last*` is
+// goroutine-local so no mutex is needed.
 func (m *Maintenance) run(ctx context.Context, done chan struct{}) {
 	defer close(done)
 	ticker := time.NewTicker(m.opts.TickInterval)
 	defer ticker.Stop()
-	var lastRun time.Time
-	var cumDeletes int64
+	var st maintTickState
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			lastRun, cumDeletes = m.maybeSweep(ctx, lastRun, cumDeletes)
+			st = m.runTick(ctx, st)
 		}
 	}
+}
+
+// maintTickState bundles the per-loop timestamps + cumulative tally that
+// flow through every tick. Bundling lets runTick stay under the 15-stmt
+// linter cap while threading state through three sub-jobs.
+type maintTickState struct {
+	lastSweep, lastWal, lastVacuum time.Time
+	cumDeletes                     int64
+}
+
+// runTick fans the tick out to all three jobs. Each helper returns its
+// updated timestamp; cumDeletes is owned by maybeSweep.
+func (m *Maintenance) runTick(ctx context.Context, st maintTickState) maintTickState {
+	st.lastSweep, st.cumDeletes = m.maybeSweep(ctx, st.lastSweep, st.cumDeletes)
+	st.lastWal = m.maybeWalCheckpoint(ctx, st.lastWal)
+	st.lastVacuum = m.maybeVacuum(ctx, st.lastVacuum)
+	return st
 }
 
 // maybeSweep performs one tick's worth of work: evaluates the helper,
@@ -204,4 +266,56 @@ func (m *Maintenance) maybeAnalyze(ctx context.Context, cum int64) int64 {
 		return cum // keep the tally so the next sweep retries
 	}
 	return 0
+}
+
+// maybeWalCheckpoint runs the WAL checkpoint when the cadence is due.
+// Returns the next "lastRun" timestamp; on error the timestamp does NOT
+// advance so the next tick retries (consistent with maybeSweep).
+func (m *Maintenance) maybeWalCheckpoint(ctx context.Context, lastRun time.Time) time.Time {
+	if m.opts.WalCheckpointer == nil {
+		return lastRun
+	}
+	now := m.opts.Now()
+	if !ShouldRunWalCheckpoint(lastRun, now, m.opts.WalCheckpointHours) {
+		return lastRun
+	}
+	pages, err := m.opts.WalCheckpointer(ctx)
+	if m.opts.OnWalCheckpoint != nil {
+		m.opts.OnWalCheckpoint(pages, err)
+	}
+	if err != nil {
+		return lastRun
+	}
+	return now
+}
+
+// maybeVacuum runs the weekly VACUUM job. The VacuumGate (free-list
+// guard, spec §4) is consulted first; if it returns false we still bump
+// lastRun so we don't re-check inside the same hour-slot. Errors keep
+// lastRun stale so the next tick retries within the slot.
+func (m *Maintenance) maybeVacuum(ctx context.Context, lastRun time.Time) time.Time {
+	if m.opts.Vacuumer == nil {
+		return lastRun
+	}
+	now := m.opts.Now()
+	if !ShouldRunWeeklyVacuum(lastRun, now, m.opts.VacuumWeekday, m.opts.VacuumHourLocal) {
+		return lastRun
+	}
+	if m.opts.VacuumGate != nil {
+		ok, err := m.opts.VacuumGate(ctx)
+		if err != nil {
+			return lastRun // gate failed → retry next tick
+		}
+		if !ok {
+			return now // skip vacuum but don't keep re-asking this slot
+		}
+	}
+	reclaimed, err := m.opts.Vacuumer(ctx)
+	if m.opts.OnVacuum != nil {
+		m.opts.OnVacuum(reclaimed, err)
+	}
+	if err != nil {
+		return lastRun
+	}
+	return now
 }

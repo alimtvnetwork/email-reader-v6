@@ -63,3 +63,42 @@ func FormatAnalyzeRun(triggeredAt int64, err error) string {
 func logAnalyzeRun(triggeredAt int64, err error) {
 	log.Print(FormatAnalyzeRun(triggeredAt, err))
 }
+
+// FormatVacuumRun returns the canonical log line for one VACUUM. The
+// reclaimed-bytes count is informative; a negative value (rare:
+// SQLite grew the file) is preserved verbatim for honesty. Format
+// pinned by maintenance_log_test.go.
+func FormatVacuumRun(reclaimedBytes int64, err error) string {
+	if err != nil {
+		return fmt.Sprintf(
+			"ui: maintenance: vacuum: reclaimed_bytes=%d error=%v",
+			reclaimedBytes, err)
+	}
+	return fmt.Sprintf(
+		"ui: maintenance: vacuum: reclaimed_bytes=%d ok",
+		reclaimedBytes)
+}
+
+// logVacuumRun is the production OnVacuum callback.
+func logVacuumRun(reclaimedBytes int64, err error) {
+	log.Print(FormatVacuumRun(reclaimedBytes, err))
+}
+
+// FormatWalCheckpoint returns the canonical log line for one
+// `wal_checkpoint(TRUNCATE)`. `pages` is the WAL frame count present
+// before the truncation (per SQLite docs).
+func FormatWalCheckpoint(pages int64, err error) string {
+	if err != nil {
+		return fmt.Sprintf(
+			"ui: maintenance: wal_checkpoint: pages=%d error=%v",
+			pages, err)
+	}
+	return fmt.Sprintf(
+		"ui: maintenance: wal_checkpoint: pages=%d ok",
+		pages)
+}
+
+// logWalCheckpoint is the production OnWalCheckpoint callback.
+func logWalCheckpoint(pages int64, err error) {
+	log.Print(FormatWalCheckpoint(pages, err))
+}

@@ -154,13 +154,7 @@ func startMaintenance(ctx context.Context, rt *WatchRuntime) {
 	if rt.Settings == nil || rt.Store == nil {
 		return
 	}
-	res := core.NewMaintenance(core.MaintenanceOptions{
-		Pruner:    rt.Store.PruneOpenedUrlsBefore,
-		Analyzer:  rt.Store.Analyze,
-		Retention: func() uint16 { return retentionFromSettings(ctx, rt.Settings) },
-		OnSweep:   logRetentionSweep,
-		OnAnalyze: logAnalyzeRun,
-	})
+	res := core.NewMaintenance(maintenanceOptionsFor(ctx, rt))
 	if res.HasError() {
 		log.Printf("ui: watch runtime: maintenance init: %v", res.Error())
 		return
@@ -171,6 +165,33 @@ func startMaintenance(ctx context.Context, rt *WatchRuntime) {
 		rt.Maintenance.Stop(2 * time.Second)
 		return nil
 	})
+}
+
+// maintenanceOptionsFor wires every store seam — prune, analyze,
+// vacuum, vacuum-gate, wal-checkpoint — and the matching log
+// observers. Split out of startMaintenance to stay under the
+// 15-statement linter cap and to keep all maintenance plumbing in one
+// place. Spec/23-app-database/04 §2.
+func maintenanceOptionsFor(ctx context.Context, rt *WatchRuntime) core.MaintenanceOptions {
+	vacuumGate := func(ctx context.Context) (bool, error) {
+		fl, pages, err := rt.Store.FreelistRatio(ctx)
+		if err != nil {
+			return false, err
+		}
+		return store.ShouldVacuum(fl, pages), nil
+	}
+	return core.MaintenanceOptions{
+		Pruner:          rt.Store.PruneOpenedUrlsBefore,
+		Analyzer:        rt.Store.Analyze,
+		Vacuumer:        rt.Store.Vacuum,
+		VacuumGate:      vacuumGate,
+		WalCheckpointer: rt.Store.WalCheckpointTruncate,
+		Retention:       func() uint16 { return retentionFromSettings(ctx, rt.Settings) },
+		OnSweep:         logRetentionSweep,
+		OnAnalyze:       logAnalyzeRun,
+		OnVacuum:        logVacuumRun,
+		OnWalCheckpoint: logWalCheckpoint,
+	}
 }
 
 // retentionFromSettings reads the live snapshot's retention knob.
