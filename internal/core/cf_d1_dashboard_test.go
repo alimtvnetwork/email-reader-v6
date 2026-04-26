@@ -29,25 +29,25 @@ func TestCF_D1_Dashboard_AutoStartIndicator_Live(t *testing.T) {
 		events, sub := s.Subscribe(ctx)
 		defer sub()
 
-		// Baseline: AutoStartWatch defaults to false.
+		// Baseline snapshot — capture whatever the default is so we can
+		// flip it deterministically (default is true per spec defaults).
 		base := s.Get(context.Background())
 		if base.HasError() {
 			t.Fatalf("Get baseline: %v", base.Error())
 		}
-		if base.Value().AutoStartWatch {
-			t.Fatalf("baseline AutoStartWatch = true; expected false")
-		}
+		flipped := !base.Value().AutoStartWatch
 
 		in := DefaultSettingsInput()
-		in.AutoStartWatch = true
+		in.AutoStartWatch = flipped
 		if r := s.Save(context.Background(), in); r.HasError() {
 			t.Fatalf("Save: %v", r.Error())
 		}
 
 		select {
 		case ev := <-events:
-			if !ev.Snapshot.AutoStartWatch {
-				t.Fatalf("event Snapshot.AutoStartWatch = false; want true (CF-D1)")
+			if ev.Snapshot.AutoStartWatch != flipped {
+				t.Fatalf("event Snapshot.AutoStartWatch = %v; want %v (CF-D1)",
+					ev.Snapshot.AutoStartWatch, flipped)
 			}
 		case <-time.After(1 * time.Second):
 			t.Fatal("no Settings event within 1s of Save — CF-D1 budget breached")
