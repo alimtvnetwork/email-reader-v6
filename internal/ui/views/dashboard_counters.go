@@ -12,13 +12,13 @@ package views
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/lovable/email-read/internal/watcher"
 )
 
-// DashboardCounterEvent describes one bus event the dashboard accepts.
-// Returns false if the event should be ignored (alias mismatch when a
-// specific alias is selected). Empty selectedAlias = "all aliases" — the
+// DashboardAcceptsEvent reports whether a bus event should feed the
+// dashboard's counters. Empty selectedAlias = "all aliases" — the
 // dashboard is the only surface that opts into cross-alias aggregation.
 func DashboardAcceptsEvent(ev watcher.Event, selectedAlias string) bool {
 	if selectedAlias == "" {
@@ -47,4 +47,26 @@ func FormatDashboardCounterScope(s DashboardCounterScope) string {
 		return "Live counters — all aliases"
 	}
 	return "Live counters — alias=" + s.Alias
+}
+
+// ShouldRefreshDashboardOnEvent decides whether a watcher event should
+// trigger a reload of the static "Emails stored" tile. Only EventNewMail
+// bumps the persisted count, so every other kind short-circuits. We
+// also debounce: bursts of new mail (e.g., a 50-message backfill) must
+// not trigger 50 SQL aggregates — one refresh per `minInterval` is
+// enough because LoadDashboardStats is a fresh COUNT(*) anyway.
+//
+// Returns (shouldRefresh, newLastRefresh). The caller persists
+// newLastRefresh and gates the actual refresh() invocation on the bool.
+//
+// Spec: spec/21-app/02-features/01-dashboard/02-frontend.md — "Emails
+// stored auto-bumps within ~1s of NewMail without manual refresh".
+func ShouldRefreshDashboardOnEvent(ev watcher.Event, last time.Time, now time.Time, minInterval time.Duration) (bool, time.Time) {
+	if ev.Kind != watcher.EventNewMail {
+		return false, last
+	}
+	if minInterval > 0 && !last.IsZero() && now.Sub(last) < minInterval {
+		return false, last
+	}
+	return true, now
 }

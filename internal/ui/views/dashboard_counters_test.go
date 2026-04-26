@@ -4,6 +4,7 @@ package views
 
 import (
 	"testing"
+	"time"
 
 	"github.com/lovable/email-read/internal/watcher"
 )
@@ -47,5 +48,44 @@ func TestFormatDashboardCounterScope(t *testing.T) {
 	}
 	if got := FormatDashboardCounterScope(DashboardCounterScope{Alias: "work"}); got != "Live counters — alias=work" {
 		t.Errorf("alias scope: %q", got)
+	}
+}
+
+func TestShouldRefreshDashboardOnEvent(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0).UTC()
+	debounce := 750 * time.Millisecond
+	newMail := watcher.Event{Kind: watcher.EventNewMail, Alias: "work"}
+
+	cases := []struct {
+		name        string
+		ev          watcher.Event
+		last        time.Time
+		now         time.Time
+		minInterval time.Duration
+		wantRefresh bool
+		wantLastEq  string // "now" or "last"
+	}{
+		{"new mail first time fires", newMail, time.Time{}, now, debounce, true, "now"},
+		{"new mail within debounce skipped", newMail, now.Add(-200 * time.Millisecond), now, debounce, false, "last"},
+		{"new mail just past debounce fires", newMail, now.Add(-800 * time.Millisecond), now, debounce, true, "now"},
+		{"poll_ok never fires", watcher.Event{Kind: watcher.EventPollOK, Alias: "work"}, time.Time{}, now, debounce, false, "last"},
+		{"rule_match never fires", watcher.Event{Kind: watcher.EventRuleMatch, Alias: "work"}, time.Time{}, now, debounce, false, "last"},
+		{"heartbeat never fires", watcher.Event{Kind: watcher.EventHeartbeat, Alias: "work"}, now.Add(-10 * time.Second), now, debounce, false, "last"},
+		{"zero debounce always fires for new mail", newMail, now.Add(-1 * time.Millisecond), now, 0, true, "now"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			ok, next := ShouldRefreshDashboardOnEvent(c.ev, c.last, c.now, c.minInterval)
+			if ok != c.wantRefresh {
+				t.Errorf("refresh=%v, want %v", ok, c.wantRefresh)
+			}
+			want := c.last
+			if c.wantLastEq == "now" {
+				want = c.now
+			}
+			if !next.Equal(want) {
+				t.Errorf("next=%v, want %v", next, want)
+			}
+		})
 	}
 }
