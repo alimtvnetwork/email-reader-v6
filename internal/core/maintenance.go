@@ -142,6 +142,16 @@ func NewMaintenance(opts MaintenanceOptions) errtrace.Result[*Maintenance] {
 	if opts.RetentionIntervalHours <= 0 {
 		opts.RetentionIntervalHours = 24
 	}
+	if opts.WalCheckpointHours <= 0 {
+		opts.WalCheckpointHours = 6
+	}
+	if opts.VacuumHourLocal < 0 || opts.VacuumHourLocal > 23 {
+		opts.VacuumHourLocal = 3
+	} else if opts.VacuumHourLocal == 0 && opts.Vacuumer == nil {
+		// keep zero-value when explicitly intended (most callers wire Vacuumer)
+		opts.VacuumHourLocal = 3
+	}
+	// time.Sunday is the zero value, so no defaulting needed.
 	return errtrace.Ok(&Maintenance{opts: opts})
 }
 
