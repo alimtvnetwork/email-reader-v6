@@ -1,0 +1,4 @@
+# Drop Inter-Variable.ttf and JetBrainsMono-Variable.ttf here.
+# See spec/24-app-design-system-and-ui/01-tokens.md §3.
+# Both files are OFL-licensed; loadFontResource() falls back to Fyne's
+# default font when either file is absent.
