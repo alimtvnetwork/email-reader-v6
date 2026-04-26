@@ -15,9 +15,11 @@
 // `store.StoreAccountHealthRow`) so the store package doesn't import
 // `core`. This adapter does the trivial field-by-field copy and
 // leaves `Health` zero-valued (the service overwrites it via
-// `ComputeHealth`) and `ConsecutiveFailures` zero-valued (the store
-// shim doesn't compute it yet — see the deferred-work note in
-// `queries.AccountHealthSelectAll`).
+// `ComputeHealth`). As of Slice #106 `ConsecutiveFailures` is
+// populated from the store-side counter (m0014 column on
+// `WatchState`) — no longer left at zero. That closes the last
+// Phase 3 gap and lets `ComputeHealth`'s "≥3 failures → Error"
+// branch fire against real data.
 package core
 
 import (
@@ -52,15 +54,14 @@ func NewStoreAccountHealthSource(s *store.Store) accountHealthSource {
 		out := make([]AccountHealthRow, 0, len(rows))
 		for _, r := range rows {
 			out = append(out, AccountHealthRow{
-				Alias:        r.Alias,
-				LastPollAt:   r.LastPollAt,
-				LastErrorAt:  r.LastErrorAt,
-				EmailsStored: r.EmailsStored,
-				UnreadCount:  r.UnreadCount,
-				// ConsecutiveFailures left at zero — see
-				// queries.AccountHealthSelectAll for the deferred-
-				// work rationale. Health left empty — the service
-				// overwrites via ComputeHealth.
+				Alias:               r.Alias,
+				LastPollAt:          r.LastPollAt,
+				LastErrorAt:         r.LastErrorAt,
+				EmailsStored:        r.EmailsStored,
+				UnreadCount:         r.UnreadCount,
+				ConsecutiveFailures: r.ConsecutiveFailures,
+				// Health left empty — the service overwrites via
+				// ComputeHealth.
 			})
 		}
 		return errtrace.Ok(out)
