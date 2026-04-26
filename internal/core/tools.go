@@ -57,10 +57,13 @@ type urlLauncher interface {
 }
 
 // openedUrlRecorder is the slim store surface for OpenUrl audit + dedup.
-// Tests inject an in-memory implementation.
+// Tests inject an in-memory implementation. RecordOpenedUrlExt is the
+// Delta-#1 rich-insert variant — Tools.OpenUrl uses it; legacy callers
+// stay on the slim RecordOpenedUrl form.
 type openedUrlRecorder interface {
 	HasOpenedUrl(ctx context.Context, emailId int64, url string) (bool, error)
 	RecordOpenedUrl(ctx context.Context, emailId int64, ruleName, url string) (bool, error)
+	RecordOpenedUrlExt(ctx context.Context, in store.OpenedUrlInsert) (bool, error)
 }
 
 // Tools is the unified service holding the four sub-tool implementations.
