@@ -74,6 +74,9 @@ func validateInput(in SettingsInput) error {
 	if err := validateTheme(in.Theme); err != nil {
 		return err
 	}
+	if err := validateDensity(in.Density); err != nil {
+		return err
+	}
 	if err := validateSchemes(in.OpenUrlAllowedSchemes); err != nil {
 		return err
 	}
@@ -152,6 +155,15 @@ func validateTheme(t ThemeMode) error {
 	}
 	return errtrace.NewCoded(errtrace.ErrSettingsTheme, "unknown theme mode").
 		WithContext("value", uint8(t))
+}
+
+func validateDensity(d Density) error {
+	switch d {
+	case DensityComfortable, DensityCompact:
+		return nil
+	}
+	return errtrace.NewCoded(errtrace.ErrSettingsDensity, "unknown density mode").
+		WithContext("value", uint8(d))
 }
 
 func validateSchemes(schemes []string) error {
