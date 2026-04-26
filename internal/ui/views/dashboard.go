@@ -204,8 +204,9 @@ func (t liveTiles) applyCounters(c WatchCounters) {
 // newDashboardLiveRow builds the live counter caption + tile row. When
 // opts.Bus is nil (headless boot, missing runtime) it returns a single
 // muted placeholder so the dashboard still renders. The `refresh`
-// callback is invoked (debounced) on every EventNewMail so the static
-// "Emails stored" tile auto-bumps without the user clicking Refresh.
+// callback is invoked (debounced) on every EventNewMail or
+// EventUrlOpened so the static stat cards auto-bump without the user
+// clicking Refresh.
 func newDashboardLiveRow(opts DashboardOptions, refresh func()) fyne.CanvasObject {
 	caption := widget.NewLabel(FormatDashboardCounterScope(DashboardCounterScope{Alias: opts.Alias}))
 	if opts.Bus == nil {
@@ -222,9 +223,10 @@ func newDashboardLiveRow(opts DashboardOptions, refresh func()) fyne.CanvasObjec
 }
 
 // dashboardRefreshDebounce is the minimum gap between consecutive
-// auto-refresh triggers from EventNewMail. Picked to absorb backfill
-// bursts (50 messages in <1 s) into a single COUNT(*) reload while
-// still feeling instant for human-paced new mail.
+// auto-refresh triggers (NewMail or UrlOpened). Picked to absorb
+// backfill bursts (50 messages in <1 s) and rule-fan-out (one URL per
+// match) into a single COUNT(*) reload while still feeling instant for
+// human-paced activity.
 const dashboardRefreshDebounce = 750 * time.Millisecond
 
 // subscribeDashboardBus drains the watcher Bus and pushes the latest
@@ -232,9 +234,10 @@ const dashboardRefreshDebounce = 750 * time.Millisecond
 // otherwise aggregates across all aliases (dashboard-only behaviour).
 // Closing the bus channel terminates the goroutine cleanly.
 //
-// On every accepted EventNewMail we also call `refresh` (the closure
-// returned by makeDashboardRefresh) — debounced via
-// ShouldRefreshDashboardOnEvent so backfill bursts don't hammer SQL.
+// On every accepted EventNewMail / EventUrlOpened we also call
+// `refresh` (the closure returned by makeDashboardRefresh) — debounced
+// via ShouldRefreshDashboardOnEvent so backfill/fan-out bursts don't
+// hammer SQL.
 func subscribeDashboardBus(opts DashboardOptions, tiles liveTiles, refresh func()) {
 	events, cancel := opts.Bus.Subscribe()
 	defer cancel()
