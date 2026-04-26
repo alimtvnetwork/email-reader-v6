@@ -26,7 +26,8 @@ Last updated: 2026-04-26 (UTC) — Dashboard auto-refresh on EventNewMail (debou
 | 15 | Dashboard live wiring — 5-tile counter row subscribing to `watcher.Bus` | `internal/ui/views/dashboard*.go`, `internal/ui/app.go` |
 | 16 | **Audit: Emails / Rules / Accounts views already shipped** (no work needed; previous status was stale) | `internal/ui/views/{emails,rules,accounts}.go` |
 | 17 | CF acceptance tests batch #1 — 6/11 (T2/T3×2/R1/W1/A1/A2) | `internal/core/cf_acceptance_*.go` |
-| 18 | **CF acceptance tests batch #2 (this slice)** — final 5/11 (T1/T4/W3/D1/R2). All 11 spec-mandated CFs now locked as executable tests. | `internal/browser/cf_t4_test.go`, `internal/ui/cf_runtime_test.go`, `internal/core/cf_d1_dashboard_test.go`, `internal/ui/views/cf_r2_ast_guard_test.go` |
+| 18 | CF acceptance tests batch #2 — final 5/11 (T1/T4/W3/D1/R2). All 11 spec-mandated CFs now locked. | `internal/browser/cf_t4_test.go`, `internal/ui/cf_runtime_test.go`, `internal/core/cf_d1_dashboard_test.go`, `internal/ui/views/cf_r2_ast_guard_test.go` |
+| 19 | **Dashboard auto-refresh on EventNewMail (this slice)** — `ShouldRefreshDashboardOnEvent` debounces (750 ms) bus-driven reloads of the static "Emails stored" tile so it auto-bumps without the user clicking Refresh. | `internal/ui/views/dashboard_counters.go`, `internal/ui/views/dashboard.go`, `internal/ui/views/dashboard_counters_test.go` |
 
 Verification: 16 packages green under `nix run nixpkgs#go -- {vet,test} -tags nofyne ./...`; fn-length linter still **0/0** across 82 files.
 
@@ -36,9 +37,9 @@ See `spec/21-app/99-consistency-report.md` §6 for the canonical delta list. Ope
 
 1. **App boot smoke test** (user-side) — launch desktop binary; validate Settings render/live-switch, density toggle, Watch Start/Stop, Dashboard tiles incrementing, Recent opens against a populated DB. (Requires manual user run.)
 2. **Persist Density preference** (deferred per design-system §8) — when persistence lands, swap `Settings` view's local-only density handler for a `SettingsInput` field write.
-3. **Dashboard auto-refresh of static tiles on Bus events** — trigger `refresh()` on `EventNewMail` so Emails-stored count auto-bumps without manual refresh.
-4. **Race-build verification** — current verification is `-tags nofyne` (no `-race`). One-time `go test -race -tags nofyne ./...` would harden the new bridges (BridgeWatcherBus, forwardSettingsEvents, PollChans).
-5. **CF coverage extension** — consider adding regression tests for the four "informational" CFs documented in 99-consistency-report.md but not in the original 11-row matrix (Settings UpdatedAt monotonicity, OpenedUrls retention, Tools cache invalidation post-AccountEvent, Watch backoff jitter).
+3. **Race-build verification** — current verification is `-tags nofyne` (no `-race`). One-time `go test -race -tags nofyne ./...` would harden the freshly-merged bridges (BridgeWatcherBus, forwardSettingsEvents, PollChans, subscribeDashboardBus).
+4. **CF coverage extension** — regression tests for the four "informational" CFs documented in 99-consistency-report.md but not in the original 11-row matrix: Settings UpdatedAt monotonicity, OpenedUrls retention vacuum, Tools cache invalidation post-AccountEvent, Watch backoff jitter.
+5. **Static "Accounts" / "Rules enabled" tile auto-refresh** — currently only "Emails stored" benefits from the auto-refresh hook (because `EventNewMail` is what bumps it). Account-add and rule-toggle don't publish on the watcher Bus; if that's desired, hook into `core.AccountEvent` (already exists) and a future `core.RuleEvent`.
 
 ## Next logical step for the next AI session
-With all 11 CFs locked, the highest-leverage next item is **#3 — Dashboard auto-refresh on Bus events**: small, observable improvement that closes the last "must manually refresh" UX gap. After that, item **#4 — race build** is a 1-command sanity sweep with high catch potential for the freshly-merged bridges.
+**#3 — Race-build sanity sweep** is a 1-command pass over all 16 packages with high catch potential for the bridges that landed in slices #5, #12, #13, #15, #19. If clean, **#4 — CF coverage extension** is the next gradable spec contract to lock down.
