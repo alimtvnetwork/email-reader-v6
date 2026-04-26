@@ -87,6 +87,7 @@ var RegisteredCodes = map[Code]CodeMeta{
 	ErrRuleEvaluate:             {Const: "ErrRuleEvaluate", Block: "Rules", Prefix: "ER-RUL", Description: "Runtime error during rule evaluation against an email."},
 	ErrRuleSeedDefault:          {Const: "ErrRuleSeedDefault", Block: "Rules", Prefix: "ER-RUL", Description: "Seeding the default rule-set on first run failed."},
 	ErrRuleRenameNoop:           {Const: "ErrRuleRenameNoop", Block: "Rules", Prefix: "ER-RUL", Description: "Rename called with newName equal to oldName (no-op rejected; caller bug)."},
+	ErrRuleReorderMismatch:      {Const: "ErrRuleReorderMismatch", Block: "Rules", Prefix: "ER-RUL", Description: "Reorder input is not a permutation of current rule names (missing, extra, or duplicate names)."},
 	ErrSettingsConstruct:        {Const: "ErrSettingsConstruct", Block: "Settings", Prefix: "ER-SET", Description: "NewSettingsService construction failed (missing dependency)."},
 	ErrSettingsPollSeconds:      {Const: "ErrSettingsPollSeconds", Block: "Settings", Prefix: "ER-SET", Description: "PollSeconds value outside the allowed range."},
 	ErrSettingsTheme:            {Const: "ErrSettingsTheme", Block: "Settings", Prefix: "ER-SET", Description: "Theme value not one of the allowed palette identifiers."},
