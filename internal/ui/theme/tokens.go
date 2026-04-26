@@ -50,9 +50,7 @@ const (
 	ColorForegroundDisabled ColorName = "ForegroundDisabled"
 )
 
-// Brand + status tokens — 01-tokens.md §2.2 / §2.3. Subset shipped for
-// the MVP; remaining categories (raw-log, badges, code) land with the
-// raw-log viewer feature.
+// Brand + status tokens — 01-tokens.md §2.2 / §2.3.
 const (
 	ColorPrimary           ColorName = "Primary"
 	ColorPrimaryForeground ColorName = "PrimaryForeground"
@@ -61,6 +59,32 @@ const (
 	ColorWarning           ColorName = "Warning"
 	ColorError             ColorName = "Error"
 	ColorInfo              ColorName = "Info"
+)
+
+// Raw-log tokens — 01-tokens.md §2.6. Resolves OI-1 second half. Used by
+// the Watch raw-log virtualized list (04-components §RawLogLine).
+const (
+	ColorRawLogHeartbeat ColorName = "RawLogHeartbeat"
+	ColorRawLogNewMail   ColorName = "RawLogNewMail"
+	ColorRawLogError     ColorName = "RawLogError"
+	ColorRawLogTimestamp ColorName = "RawLogTimestamp"
+)
+
+// Badge tokens — 01-tokens.md §2.7. Used by the Badge widget variants
+// (Neutral / RuleMatch); Success/Warning/Error/Info badges reuse §2.3.
+const (
+	ColorRuleMatchBadge ColorName = "RuleMatchBadge"
+	ColorBadgeNeutralBg ColorName = "BadgeNeutralBg"
+	ColorBadgeNeutralFg ColorName = "BadgeNeutralFg"
+)
+
+// Code / monospace surface tokens — 01-tokens.md §2.8. Used by raw email
+// viewer, log viewer, and any <pre>-style block.
+const (
+	ColorCodeBg            ColorName = "CodeBg"
+	ColorCodeBorder        ColorName = "CodeBorder"
+	ColorCodeLineHighlight ColorName = "CodeLineHighlight"
+	ColorCodeSelection     ColorName = "CodeSelection"
 )
 
 // allColorNames is the canonical iteration order for parity tests
@@ -82,6 +106,12 @@ var allColorNames = []ColorName{
 	// §2.5 watch dots
 	ColorWatchDotIdle, ColorWatchDotStarting, ColorWatchDotWatching,
 	ColorWatchDotReconnecting, ColorWatchDotStopping, ColorWatchDotError,
+	// §2.6 raw log
+	ColorRawLogHeartbeat, ColorRawLogNewMail, ColorRawLogError, ColorRawLogTimestamp,
+	// §2.7 badges
+	ColorRuleMatchBadge, ColorBadgeNeutralBg, ColorBadgeNeutralFg,
+	// §2.8 code surfaces
+	ColorCodeBg, ColorCodeBorder, ColorCodeLineHighlight, ColorCodeSelection,
 }
 
 // AllColorNames returns a defensive copy of the canonical list. Used by
