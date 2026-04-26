@@ -114,12 +114,5 @@ func nonEmpty(s, fallback string) string {
 	return s
 }
 
-// truncURL keeps lines from blowing out horizontally in the multiline
-// entry. 100 chars is the spec default for the Watch event log too.
-func truncURL(u string) string {
-	const max = 100
-	if len(u) <= max {
-		return u
-	}
-	return u[:max-1] + "…"
-}
+// truncURL is shared with watch_events.go (same package).
+
