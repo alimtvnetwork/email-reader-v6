@@ -93,24 +93,35 @@ type emailsStore interface {
 type storeOpener func() (s emailsStore, close func() error, err error)
 
 // EmailsService renders email summaries / details / counts from an
-// injected store opener. Stateless — concurrent method calls open
-// independent store handles. The optional `refresher` dep, set via
-// `(*EmailsService).WithRefresher` at bootstrap, powers the P4.4
-// `Refresh(ctx, alias)` method (defined in emails_refresh.go).
+// injected store opener. Stateless w.r.t. method calls — concurrent
+// invocations open independent store handles. Dep set is set-once at
+// bootstrap (via `NewEmailsService` / `NewEmailsServiceFromDeps` /
+// fluent `WithRefresher`).
+//
+// Field maturity:
+//   - openStore — required, P2.4
+//   - refresher — optional, P4.4 (powers `Refresh`)
+//   - rules     — optional, P4.8 placeholder for P5 wire-up
+//   - clock     — defaults to time.Now; P4.8 forward-infra for the
+//                 P4.3 `DeletedAt` timestamps and any future
+//                 wall-clock-stamped audit field.
 type EmailsService struct {
 	openStore storeOpener
-	refresher Refresher // optional; set via WithRefresher (P4.4)
+	refresher Refresher   // optional; set via WithRefresher (P4.4)
+	rules     RulesReader // optional; placeholder for P5 (P4.8)
+	clock     Clock       // defaults to time.Now (P4.8)
 }
 
-// NewEmailsService constructs an EmailsService. The opener dep is
-// required: passing nil returns ErrCoreInvalidArgument (no defensive
-// default-injection — bootstrap is the right place for that choice).
+// NewEmailsService constructs an EmailsService with only the
+// required `openStore` dep. Equivalent to
+// `NewEmailsServiceFromDeps(EmailsServiceDeps{Store: openStore})` —
+// kept as a shim so the P2.4 / P4.4 call sites (UI bootstrap, all
+// in-package tests) stay binary-compatible.
+//
+// Pass nil → ErrCoreInvalidArgument (no defensive default-injection;
+// bootstrap is the right place for that choice).
 func NewEmailsService(openStore storeOpener) errtrace.Result[*EmailsService] {
-	if openStore == nil {
-		return errtrace.Err[*EmailsService](errtrace.NewCoded(
-			errtrace.ErrCoreInvalidArgument, "NewEmailsService: openStore is nil"))
-	}
-	return errtrace.Ok(&EmailsService{openStore: openStore})
+	return NewEmailsServiceFromDeps(EmailsServiceDeps{Store: openStore})
 }
 
 // NewDefaultEmailsService is the production-bootstrap convenience
