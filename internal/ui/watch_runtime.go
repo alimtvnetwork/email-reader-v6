@@ -41,6 +41,7 @@ type WatchRuntime struct {
 	Store        *store.Store
 	Settings     *core.Settings
 	PollChans    *core.PollChanRegistry
+	Maintenance  *core.Maintenance
 	cfgMu        sync.RWMutex
 	cfg          *config.Config
 	pollSecondsF func() int
@@ -138,7 +139,46 @@ func attachRuntimeServices(ctx context.Context, rt *WatchRuntime) error {
 	if err != nil {
 		return err
 	}
-	return attachWatchAndBridge(ctx, rt, lf)
+	if err := attachWatchAndBridge(ctx, rt, lf); err != nil {
+		return err
+	}
+	startMaintenance(ctx, rt)
+	return nil
+}
+
+// startMaintenance spawns the OpenedUrls retention sweeper goroutine
+// when both Settings and Store are wired. Failures are logged and
+// non-fatal — the rest of the runtime stays functional, the audit
+// table just grows unbounded until restart.
+func startMaintenance(ctx context.Context, rt *WatchRuntime) {
+	if rt.Settings == nil || rt.Store == nil {
+		return
+	}
+	res := core.NewMaintenance(core.MaintenanceOptions{
+		Pruner:    rt.Store.PruneOpenedUrlsBefore,
+		Retention: func() uint16 { return retentionFromSettings(ctx, rt.Settings) },
+	})
+	if res.HasError() {
+		log.Printf("ui: watch runtime: maintenance init: %v", res.Error())
+		return
+	}
+	rt.Maintenance = res.Value()
+	rt.Maintenance.Start(ctx)
+	rt.closers = append(rt.closers, func() error {
+		rt.Maintenance.Stop(2 * time.Second)
+		return nil
+	})
+}
+
+// retentionFromSettings reads the live snapshot's retention knob.
+// Errors fall back to 0 (disabled) so a transient Settings hiccup
+// cannot cause an aggressive over-prune.
+func retentionFromSettings(ctx context.Context, s *core.Settings) uint16 {
+	r := s.Get(ctx)
+	if r.HasError() {
+		return 0
+	}
+	return r.Value().OpenUrlsRetentionDays
 }
 
 // buildLoopFactory wires the resolver closure + RealLoopFactoryDeps and
