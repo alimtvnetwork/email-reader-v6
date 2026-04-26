@@ -28,18 +28,26 @@ import (
 // wired") rather than panicking — keeps headless / partial-bootstrap
 // previews safe.
 type DashboardOptions struct {
-	Alias        string
-	OnStartWatch func()
-	OnRefresh    func()
-	Service      *core.DashboardService     // production seam — constructed in app bootstrap
-	Summary      SummaryFunc                // test-only override; takes precedence over Service when non-nil
-	Bus          *watcher.Bus               // optional; live counter row when non-nil
-	HealthSource core.AccountHealthSource   // Slice #103 production seam — per-account health rollup; nil → row hidden
+	Alias          string
+	OnStartWatch   func()
+	OnRefresh      func()
+	Service        *core.DashboardService     // production seam — constructed in app bootstrap
+	Summary        SummaryFunc                // test-only override; takes precedence over Service when non-nil
+	Bus            *watcher.Bus               // optional; live counter row when non-nil
+	HealthSource   core.AccountHealthSource   // Slice #103 production seam — per-account health rollup; nil → row hidden
+	ActivitySource core.ActivitySource        // Slice #105 production seam — recent watch-event feed; nil → row hidden
 }
 
 // SummaryFunc is the seam used by tests to inject deterministic counts.
 // Returns a Result envelope so failures carry an error code (Delta #2).
 type SummaryFunc func(ctx context.Context, alias string) errtrace.Result[core.DashboardSummary]
+
+// recentActivityRenderLimit is the cap fed into
+// `(*DashboardService).RecentActivity` from the dashboard view. Picked
+// to fit one screen of typical readout (10 lines × ~80 char ≈ what a
+// glanceable activity feed should show); user-driven deeper feeds will
+// land as a dedicated `Activity` nav slice with pagination.
+const recentActivityRenderLimit = 10
 
 func BuildDashboard(opts DashboardOptions) fyne.CanvasObject {
 	if opts.Summary == nil && opts.Service != nil {
@@ -60,12 +68,20 @@ func BuildDashboard(opts DashboardOptions) fyne.CanvasObject {
 	health.Wrapping = fyne.TextWrapWord
 	health.Hide()
 
+	// Slice #105: recent-activity readout. Hidden when neither
+	// the Service nor an ActivitySource is wired (degraded boot).
+	activity := widget.NewLabel("")
+	activity.Wrapping = fyne.TextWrapWord
+	activity.Hide()
+
 	autoStart := newAutoStartIndicator()
 	refresh := makeDashboardRefresh(opts, cards, status)
 	refreshHealth := makeDashboardHealthRefresh(opts, health)
+	refreshActivity := makeDashboardActivityRefresh(opts, activity)
 	combined := func() {
 		refresh()
 		refreshHealth()
+		refreshActivity()
 	}
 	combined()
 
@@ -75,6 +91,7 @@ func BuildDashboard(opts DashboardOptions) fyne.CanvasObject {
 		heading, subtitle, widget.NewSeparator(),
 		cards.Row, widget.NewSeparator(),
 		health,
+		activity,
 		live, widget.NewSeparator(),
 		actions, autoStart, status,
 	)
