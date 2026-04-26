@@ -18,13 +18,14 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/lovable/email-read/internal/core"
+	"github.com/lovable/email-read/internal/errtrace"
 )
 
 // AddRuleFormOptions wires the form to its side effects. Save defaults to
 // core.AddRule; tests inject a stub. OnSaved fires after a successful save
 // so the shell can refresh dependent views (Rules tab counts, etc.).
 type AddRuleFormOptions struct {
-	Save    func(in core.RuleInput) (*core.AddRuleResult, error)
+	Save    func(in core.RuleInput) errtrace.Result[*core.AddRuleResult]
 	OnSaved func()
 }
 
@@ -108,12 +109,12 @@ func newRuleSubmitButton(opts AddRuleFormOptions, e *ruleFormEntries, status *wi
 			status.SetText("⚠ " + strings.Join(v.Errors, " · "))
 			return
 		}
-		res, err := opts.Save(ruleInputFromValid(v))
-		if err != nil {
-			status.SetText("⚠ Save failed: " + err.Error())
+		r := opts.Save(ruleInputFromValid(v))
+		if r.HasError() {
+			status.SetText("⚠ Save failed: " + r.Error().Error())
 			return
 		}
-		status.SetText(formatRuleSavedMessage(res))
+		status.SetText(formatRuleSavedMessage(r.Value()))
 		clear()
 		if opts.OnSaved != nil {
 			opts.OnSaved()
@@ -122,6 +123,9 @@ func newRuleSubmitButton(opts AddRuleFormOptions, e *ruleFormEntries, status *wi
 	submit.Importance = widget.HighImportance
 	return submit
 }
+
+// _ keeps errtrace imported even if Save signature changes.
+var _ = errtrace.Ok[int]
 
 // ruleFormInputFromEntries pulls the current entry values into the
 // validation input struct.
