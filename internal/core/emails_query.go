@@ -42,6 +42,7 @@ import (
 	"time"
 
 	"github.com/lovable/email-read/internal/errtrace"
+	"github.com/lovable/email-read/internal/store"
 )
 
 // EmailSortKey enumerates the orderings the UI can request. Spec
