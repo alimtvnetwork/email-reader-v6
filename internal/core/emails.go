@@ -269,7 +269,54 @@ func (s *EmailsService) MarkRead(ctx context.Context, alias string, uids []uint3
 	return errtrace.Ok(Unit{})
 }
 
-func toSummary(e store.Email) EmailSummary {
+// EmailCounts is the toolbar/dashboard projection populated by
+// `(*EmailsService).Counts`. Spec
+// `spec/21-app/02-features/02-emails/01-backend.md` §2.6 defines the
+// shape as `{Total, Unread, Deleted}` — the `Deleted` field is wired
+// to a constant `0` for now because the M0010 migration shipped
+// `IsFlagged` instead of the spec's `DeletedAt` column. Soft-delete
+// tracking lands in P4.3 (deferred pending the M0010 reconciliation
+// decision); when it does, only this struct's `Deleted` populator
+// changes and the field name is already in place so callers compile
+// through.
+type EmailCounts struct {
+	Total   int
+	Unread  int
+	Deleted int // always 0 until P4.3; present so the spec shape is stable.
+}
+
+// Counts returns total + unread (and zero-pinned deleted, see above)
+// for the given alias. Empty alias = all accounts. Issues two
+// independent COUNT queries against the store inside one open
+// handle; on either failure wraps with `ErrDbQueryEmail` + alias ctx.
+//
+// Spec: §2.6 / §3.5. Used by the toolbar badge and the dashboard
+// `AccountHealthRow`.
+func (s *EmailsService) Counts(ctx context.Context, alias string) errtrace.Result[EmailCounts] {
+	st, closeFn, err := s.openStore()
+	if err != nil {
+		return errtrace.Err[EmailCounts](
+			errtrace.WrapCode(err, errtrace.ErrDbOpen, "core.EmailsService.Counts"),
+		)
+	}
+	defer closeFn()
+	total, err := st.CountEmails(ctx, alias)
+	if err != nil {
+		return errtrace.Err[EmailCounts](
+			errtrace.WrapCode(err, errtrace.ErrDbQueryEmail, "core.EmailsService.Counts.Total").
+				WithContext("alias", alias),
+		)
+	}
+	unread, err := st.CountUnreadEmails(ctx, alias)
+	if err != nil {
+		return errtrace.Err[EmailCounts](
+			errtrace.WrapCode(err, errtrace.ErrDbQueryEmail, "core.EmailsService.Counts.Unread").
+				WithContext("alias", alias),
+		)
+	}
+	return errtrace.Ok(EmailCounts{Total: total, Unread: unread, Deleted: 0})
+}
+
 	s := EmailSummary{
 		Id:       e.Id,
 		Alias:    e.Alias,
