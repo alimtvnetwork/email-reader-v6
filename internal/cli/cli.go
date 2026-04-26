@@ -148,54 +148,51 @@ func newDoctorCmd() *cobra.Command {
 		Short: "Inspect stored password for hidden / invisible characters.",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load()
-			if err != nil {
-				return errtrace.Wrap(err, "load config")
-			}
-			if len(cfg.Accounts) == 0 {
-				return errtrace.New("no accounts configured")
-			}
 			target := ""
 			if len(args) == 1 {
 				target = args[0]
 			}
-			for _, a := range cfg.Accounts {
-				if target != "" && a.Alias != target {
-					continue
-				}
-				pw, err := config.DecodePassword(a.PasswordB64)
-				if err != nil {
-					fmt.Printf("[%s] decode error: %v\n", a.Alias, err)
-					continue
-				}
-				// Re-decode WITHOUT sanitization to expose what's actually stored.
-				rawBytes, _ := decodeRawForDoctor(a.PasswordB64)
-				rawStr := string(rawBytes)
-				fmt.Printf("[%s] %s\n", a.Alias, a.Email)
-				fmt.Printf("  stored bytes : %d  | sanitized rune count: %d\n", len(rawStr), len([]rune(pw)))
-				if rawStr != pw {
-					fmt.Printf("  ⚠ stored password contains hidden chars; sanitized version is what we send to IMAP.\n")
-				}
-				fmt.Printf("  rune dump (sanitized):\n")
-				for i, r := range pw {
-					fmt.Printf("    [%2d] U+%04X %q\n", i, r, string(r))
-				}
-				if rawStr != pw {
-					fmt.Printf("  rune dump (raw, BEFORE sanitization):\n")
-					for i, r := range rawStr {
-						fmt.Printf("    [%2d] U+%04X %q\n", i, r, string(r))
-					}
-				}
-			}
-			return nil
+			return runDoctor(target)
 		},
 	}
 }
 
-// decodeRawForDoctor returns the raw decoded bytes WITHOUT sanitization.
-// Only used by the doctor command for diagnostics.
-func decodeRawForDoctor(b64 string) ([]byte, error) {
-	return base64StdDecode(b64)
+// runDoctor renders core.Doctor reports in the same step-numbered style
+// the CLI used previously, but the structured data now also powers the
+// Tools UI Doctor card (spec/21-app/02-features/06-tools/02-frontend.md).
+func runDoctor(target string) error {
+	r := core.Doctor(target)
+	if r.HasError() {
+		return r.PropagateError()
+	}
+	for _, rep := range r.Value() {
+		printDoctorReport(rep)
+	}
+	return nil
+}
+
+// printDoctorReport renders one DoctorReport as plain text. Extracted so
+// runDoctor stays ≤15 statements and so the format is grep-able.
+func printDoctorReport(rep core.DoctorReport) {
+	if rep.DecodeError != "" {
+		fmt.Printf("[%s] decode error: %s\n", rep.Alias, rep.DecodeError)
+		return
+	}
+	fmt.Printf("[%s] %s\n", rep.Alias, rep.Email)
+	fmt.Printf("  stored bytes : %d  | sanitized rune count: %d\n", rep.StoredBytes, rep.RuneCount)
+	if rep.Hidden {
+		fmt.Printf("  ⚠ stored password contains hidden chars; sanitized version is what we send to IMAP.\n")
+	}
+	fmt.Printf("  rune dump (sanitized):\n")
+	for _, rd := range rep.Sanitized {
+		fmt.Printf("    [%2d] U+%04X %q\n", rd.Index, rd.Code, rd.Glyph)
+	}
+	if rep.Hidden {
+		fmt.Printf("  rune dump (raw, BEFORE sanitization):\n")
+		for _, rd := range rep.Raw {
+			fmt.Printf("    [%2d] U+%04X %q\n", rd.Index, rd.Code, rd.Glyph)
+		}
+	}
 }
 
 // (cmd_flagWasSet was removed when runAddQuick moved to core.AddAccount.)
