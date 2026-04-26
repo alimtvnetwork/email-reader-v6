@@ -25,13 +25,32 @@ import (
 const AppVersion = "0.27.0"
 
 // Run creates the Fyne app, builds the main window, and blocks until close.
+//
+// Bootstrap order matches spec/24-…/02-theme-implementation.md §5:
+//   1. Construct app  →  2. Apply theme  →  3. Build content  →  4. Show.
+// Theme.Apply is called BEFORE BuildShell so the very first paint already
+// uses our palette (no white-flash on dark mode).
 func Run() {
 	a := app.NewWithID("dev.lovable.email-read")
+	if r := theme.ApplyToFyne(loadInitialThemeMode()); r.HasError() {
+		log.Printf("ui: theme apply: %v (continuing with ThemeDark)", r.Error())
+	}
 	w := a.NewWindow("email-read · v" + AppVersion)
 	w.SetContent(BuildShell(LoadAliases()))
 	w.Resize(fyne.NewSize(1000, 680))
 	w.CenterOnScreen()
 	w.ShowAndRun()
+}
+
+// loadInitialThemeMode reads the persisted Settings.Theme. On any error
+// (no config yet, parse failure, etc.) we fall back to ThemeDark — the
+// default declared by core.DefaultSettingsInput().
+func loadInitialThemeMode() core.ThemeMode {
+	s := core.NewSettings(time.Now)
+	if s.HasError() {
+		return core.ThemeDark
+	}
+	return s.Value().Get().Theme
 }
 
 // LoadAliases pulls the configured account aliases from core. Failures are
