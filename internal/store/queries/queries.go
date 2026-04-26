@@ -51,6 +51,23 @@ const EmailsCountAll = `SELECT COUNT(1) FROM Emails`
 // EmailsCountByAlias counts rows matching a single alias. Static query.
 const EmailsCountByAlias = `SELECT COUNT(1) FROM Emails WHERE Alias = ?`
 
+// EmailsCountUnreadAll counts every Emails row with `IsRead = 0`.
+// Static query. Used by `(*Emails).Counts(alias="")` to render the
+// global toolbar/dashboard unread badge.
+//
+// Spec: `spec/21-app/02-features/02-emails/01-backend.md` §2.6 / §3.5
+// (`Counts` method, projecting onto `EmailCounts`). The spec's COUNT
+// formula uses a single COALESCE/SUM CASE expression; we emit two
+// independent COUNT queries instead so each can hit its own index
+// (`IxEmailAliasIsRead` from M0010 covers the Unread variant; the
+// existing PK index covers the Total variant). Two round-trips at
+// p99 ≪ 5 ms each beats one full-scan SUM.
+const EmailsCountUnreadAll = `SELECT COUNT(1) FROM Emails WHERE IsRead = 0`
+
+// EmailsCountUnreadByAlias counts unread rows for one alias. Static
+// query — see EmailsCountUnreadAll for rationale.
+const EmailsCountUnreadByAlias = `SELECT COUNT(1) FROM Emails WHERE Alias = ? AND IsRead = 0`
+
 // EmailsListInput captures the optional filter + pagination knobs for
 // composing the EmailsList query. Mirrors store.EmailQuery — kept as a
 // separate type so the queries package has no upward dependency on store.

@@ -37,6 +37,11 @@ type fakeEmailsStore struct {
 	count    int
 	countErr error
 
+	// CountUnreadEmails programming + observation (Phase 4 P4.5)
+	unread    int
+	unreadErr error
+	lastUnreadAls string
+
 	// MarkRead programming + observation (Phase 4 P4.2)
 	setReadRows int64
 	setReadErr  error
@@ -70,6 +75,10 @@ func (f *fakeEmailsStore) SetEmailRead(_ context.Context, alias string, uids []u
 	f.lastSetReadUids = append([]uint32(nil), uids...)
 	f.lastSetReadValue = read
 	return f.setReadRows, f.setReadErr
+}
+func (f *fakeEmailsStore) CountUnreadEmails(_ context.Context, alias string) (int, error) {
+	f.lastUnreadAls = alias
+	return f.unread, f.unreadErr
 }
 
 // makeOpener returns a storeOpener that hands out the given fake and
