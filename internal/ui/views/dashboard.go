@@ -136,6 +136,13 @@ func newDashboardCards() dashboardCards {
 // makeDashboardRefresh returns a closure that reloads stats and updates the cards.
 func makeDashboardRefresh(opts DashboardOptions, cards dashboardCards, status *widget.Label) func() {
 	return func() {
+		if opts.LoadStats == nil {
+			// Degraded path: bootstrap didn't wire a *DashboardService
+			// and no test override was supplied. Surface the wiring
+			// gap in the status line instead of panicking.
+			status.SetText("⚠ Dashboard service not wired (no Service or LoadStats injected)")
+			return
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		res := opts.LoadStats(ctx, opts.Alias)
