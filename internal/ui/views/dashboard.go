@@ -145,6 +145,92 @@ func formatHealthRollup(rows []core.AccountHealthRow) string {
 		healthy, warn, errCount)
 }
 
+// makeDashboardActivityRefresh returns a closure that loads the most
+// recent N activity rows (`recentActivityRenderLimit`) and renders
+// them as a multi-line readout on `lbl`. When neither `opts.Service`
+// nor `opts.ActivitySource` is wired the label stays hidden
+// (degraded boot — Slice #105 wiring may not yet be active if
+// WatchRuntime failed to open the store).
+//
+// Errors surface inline with a "⚠" prefix so a transient store
+// failure doesn't blank the whole dashboard.
+func makeDashboardActivityRefresh(opts DashboardOptions, lbl *widget.Label) func() {
+	return func() {
+		if opts.Service == nil || opts.ActivitySource == nil {
+			lbl.Hide()
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		res := opts.Service.RecentActivity(ctx, recentActivityRenderLimit, opts.ActivitySource)
+		if res.HasError() {
+			lbl.SetText("⚠ Recent activity: " + res.Error().Error())
+			lbl.Show()
+			return
+		}
+		lbl.SetText(formatRecentActivity(res.Value()))
+		lbl.Show()
+	}
+}
+
+// formatRecentActivity renders a multi-line "Recent activity" block
+// — one header line plus one "HH:MM:SS  alias  · kind · message"
+// line per row. Empty input yields a single "(no recent activity)"
+// line so the absence is explicit rather than an empty gap.
+//
+// The kind is rendered with a single-glyph prefix so eyes can scan
+// the column at speed: ▶ (started) · ✓ (succeeded) · ✗ (failed) ·
+// ✉ (email stored) · ◆ (rule matched). Unknown future ActivityKind
+// values fall through to a bare "•" so a roll-out of a new kind
+// doesn't blank the row.
+func formatRecentActivity(rows []core.ActivityRow) string {
+	if len(rows) == 0 {
+		return "Recent activity:\n  (no recent activity)"
+	}
+	var b strings.Builder
+	b.WriteString("Recent activity:")
+	for _, r := range rows {
+		b.WriteString("\n  ")
+		b.WriteString(r.OccurredAt.Format("15:04:05"))
+		b.WriteString("  ")
+		if r.Alias != "" {
+			b.WriteString(r.Alias)
+			b.WriteString("  ")
+		}
+		b.WriteString(activityGlyph(r.Kind))
+		b.WriteString(" ")
+		b.WriteString(string(r.Kind))
+		if r.Message != "" {
+			b.WriteString(" · ")
+			b.WriteString(r.Message)
+		}
+		if r.ErrorCode != 0 {
+			b.WriteString(fmt.Sprintf(" (err %d)", r.ErrorCode))
+		}
+	}
+	return b.String()
+}
+
+// activityGlyph returns the single-glyph prefix for an ActivityKind.
+// Picked so the column is visually distinct at a glance even before
+// the user reads the kind word.
+func activityGlyph(k core.ActivityKind) string {
+	switch k {
+	case core.ActivityPollStarted:
+		return "▶"
+	case core.ActivityPollSucceeded:
+		return "✓"
+	case core.ActivityPollFailed:
+		return "✗"
+	case core.ActivityEmailStored:
+		return "✉"
+	case core.ActivityRuleMatched:
+		return "◆"
+	default:
+		return "•"
+	}
+}
+
 // newAutoStartIndicator returns a label that shows the current
 // `Settings.AutoStartWatch` value and updates live on every SettingsEvent
 // (CF-D1). Constructs its own Settings client + background subscriber so
