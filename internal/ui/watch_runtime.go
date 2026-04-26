@@ -149,8 +149,42 @@ func attachRuntimeServices(ctx context.Context, rt *WatchRuntime) error {
 	if err := attachWatchAndBridge(ctx, rt, lf); err != nil {
 		return err
 	}
+	rt.Refresher = buildRefresherRegistry(rt, engine, launcher)
 	startMaintenance(ctx, rt)
 	return nil
+}
+
+// buildRefresherRegistry constructs the alias-indexed `*watcher.Watcher`
+// registry and registers per-account `watcher.Options` for every alias
+// in the boot config. This is the production wire-up of the P4.4
+// `core.Refresher` seam — `EmailsService.Refresh(ctx, alias)` will
+// look up its Options here and run a single `pollOnce` cycle.
+//
+// `PollSeconds` / `PollSecondsCh` are intentionally left zero — they
+// only matter for the long-running `Run` loop, not for one-shot
+// PollOnce calls. Per-account registration failures are logged but
+// non-fatal: the affected alias simply gets a "no account registered"
+// error if the user clicks Refresh, while every other alias still
+// works.
+func buildRefresherRegistry(rt *WatchRuntime, engine *rules.Engine, launcher *browser.Launcher) *watcher.Watcher {
+	w := watcher.NewWatcher()
+	logger := log.New(os.Stdout, "refresh ", log.LstdFlags)
+	rt.cfgMu.RLock()
+	accounts := rt.cfg.Accounts
+	rt.cfgMu.RUnlock()
+	for _, acc := range accounts {
+		if err := w.Register(watcher.Options{
+			Account:  acc,
+			Engine:   engine,
+			Launcher: launcher,
+			Store:    rt.Store,
+			Bus:      rt.Bus,
+			Logger:   logger,
+		}); err != nil {
+			log.Printf("ui: refresher registry: register %q: %v", acc.Alias, err)
+		}
+	}
+	return w
 }
 
 // startMaintenance spawns the OpenedUrls retention sweeper goroutine
