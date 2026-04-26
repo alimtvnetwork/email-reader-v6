@@ -1,104 +1,123 @@
-// maintenance_log.go owns the human-readable log line emitted after
-// every OpenedUrls retention sweep. Splitting the formatter out of
-// watch_runtime.go keeps the message under test without dragging the
-// goroutine wiring into the assertions, and lets a future structured-
-// logging migration swap the sink without touching message format.
+// maintenance_log.go owns the structured log lines emitted by the
+// maintenance loop (retention sweep, ANALYZE, VACUUM, WAL checkpoint).
 //
-// Spec: spec/23-app-database/04-retention-and-vacuum.md §2.
+// Spec: spec/23-app-database/04-retention-and-vacuum.md §6.
+// Canonical INFO-level shape (key=value, single line):
 //
-// Format rules (locked by maintenance_log_test.go):
-//   - Always one line, prefix "ui: maintenance: retention sweep".
-//   - Success: include the deleted-row count even when zero (so an
-//     operator grepping for "retention sweep" sees every tick that
-//     actually ran, not just non-trivial ones).
-//   - Error: include the error string AFTER the deleted count so the
-//     count from a partial Exec (sql/driver may return >0 on error)
-//     is preserved.
+//	component=maintenance event=prune          deleted=N ok|error=…
+//	component=maintenance event=analyze        triggered_at=N ok|error=…
+//	component=maintenance event=vacuum         reclaimed_bytes=N ok|error=…
+//	component=maintenance event=wal_checkpoint pages=N ok|error=…
+//
+// We use the stdlib `log/slog` text handler (lazy-initialised, package-
+// private, written to stdout) so ops dashboards can grep on the
+// `component=maintenance event=…` prefix. The Format* helpers stay
+// pure and string-returning so unit tests can pin the key=value tail
+// without dragging the slog timestamp/level prefix into assertions.
 package ui
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
+	"os"
+	"sync"
 )
 
-// FormatRetentionSweep returns the exact log line for a single sweep
-// outcome. Pure: callable from tests without a logger / sink.
+// maintenanceLoggerOnce + maintenanceLogger lazy-init the slog text
+// handler so importing this package costs nothing until the first log
+// call. The handler is package-private; callers go through the
+// log*Run helpers below.
+var (
+	maintenanceLoggerOnce sync.Once
+	maintenanceLogger     *slog.Logger
+)
+
+// componentMaintenance is the spec-mandated component tag for every
+// line emitted from this file. Defining it as a const keeps the value
+// in one place and makes grep audits cheap.
+const componentMaintenance = "maintenance"
+
+// maintenanceSlog returns the lazily-built structured logger. Sink is
+// os.Stdout so it interleaves with the existing stdlib `log` output
+// the rest of the runtime still uses (one stream, easy to capture).
+func maintenanceSlog() *slog.Logger {
+	maintenanceLoggerOnce.Do(func() {
+		maintenanceLogger = slog.New(slog.NewTextHandler(os.Stdout, nil)).
+			With(slog.String("component", componentMaintenance))
+	})
+	return maintenanceLogger
+}
+
+// formatTail renders the spec key=value tail used by both the slog
+// message body and the Format* helpers (so tests pin the same string
+// the operator sees in logs, sans slog's `time=… level=INFO` prefix).
+// Pure: no allocation beyond the returned string.
+func formatTail(event string, primaryKey string, primaryVal int64, err error) string {
+	if err != nil {
+		return fmt.Sprintf("event=%s %s=%d error=%v", event, primaryKey, primaryVal, err)
+	}
+	return fmt.Sprintf("event=%s %s=%d ok", event, primaryKey, primaryVal)
+}
+
+// FormatRetentionSweep returns the spec key=value tail for one prune
+// outcome. `deleted=0 ok` is preserved on idle ticks so liveness
+// monitoring keeps working.
 func FormatRetentionSweep(deleted int64, err error) string {
-	if err != nil {
-		return fmt.Sprintf(
-			"ui: maintenance: retention sweep: deleted=%d error=%v",
-			deleted, err)
-	}
-	return fmt.Sprintf(
-		"ui: maintenance: retention sweep: deleted=%d ok",
-		deleted)
+	return formatTail("prune", "deleted", deleted, err)
 }
 
-// logRetentionSweep is the production OnSweep callback wired by
-// startMaintenance. Splitting this out (instead of an inline closure)
-// keeps startMaintenance under the 15-statement linter cap and makes
-// the sink point obvious to a future structured-logging migration.
-func logRetentionSweep(deleted int64, err error) {
-	log.Print(FormatRetentionSweep(deleted, err))
-}
-
-// FormatAnalyzeRun returns the canonical log line for a single ANALYZE
-// invocation. `triggeredAt` is the cumulative-delete count that
-// crossed the threshold and fired this run. Format pinned by
-// maintenance_log_test.go.
+// FormatAnalyzeRun returns the spec tail for one ANALYZE invocation.
+// `triggeredAt` is the cumulative-delete count that crossed
+// AnalyzeThreshold and fired this run.
 func FormatAnalyzeRun(triggeredAt int64, err error) string {
-	if err != nil {
-		return fmt.Sprintf(
-			"ui: maintenance: analyze: triggered_at=%d error=%v",
-			triggeredAt, err)
-	}
-	return fmt.Sprintf(
-		"ui: maintenance: analyze: triggered_at=%d ok",
-		triggeredAt)
+	return formatTail("analyze", "triggered_at", triggeredAt, err)
 }
 
-// logAnalyzeRun is the production OnAnalyze callback wired by
-// startMaintenance. Mirrors logRetentionSweep so both maintenance
-// observers funnel through the same stdlib `log` sink for grep/audit.
-func logAnalyzeRun(triggeredAt int64, err error) {
-	log.Print(FormatAnalyzeRun(triggeredAt, err))
-}
-
-// FormatVacuumRun returns the canonical log line for one VACUUM. The
-// reclaimed-bytes count is informative; a negative value (rare:
-// SQLite grew the file) is preserved verbatim for honesty. Format
-// pinned by maintenance_log_test.go.
+// FormatVacuumRun returns the spec tail for one VACUUM. A negative
+// `reclaimedBytes` (rare: the file grew) is surfaced verbatim rather
+// than hidden so post-mortems can spot it.
 func FormatVacuumRun(reclaimedBytes int64, err error) string {
+	return formatTail("vacuum", "reclaimed_bytes", reclaimedBytes, err)
+}
+
+// FormatWalCheckpoint returns the spec tail for one
+// `wal_checkpoint(TRUNCATE)`. `pages` is the WAL frame count present
+// before truncation.
+func FormatWalCheckpoint(pages int64, err error) string {
+	return formatTail("wal_checkpoint", "pages", pages, err)
+}
+
+// emitMaintenance routes a single event through the structured logger.
+// Errors land at WARN (so dashboards can split healthy vs degraded
+// without parsing the message body); successes land at INFO per spec.
+func emitMaintenance(event, primaryKey string, primaryVal int64, err error) {
+	lg := maintenanceSlog().With(
+		slog.String("event", event),
+		slog.Int64(primaryKey, primaryVal),
+	)
 	if err != nil {
-		return fmt.Sprintf(
-			"ui: maintenance: vacuum: reclaimed_bytes=%d error=%v",
-			reclaimedBytes, err)
+		lg.Warn("maintenance error", slog.Any("error", err))
+		return
 	}
-	return fmt.Sprintf(
-		"ui: maintenance: vacuum: reclaimed_bytes=%d ok",
-		reclaimedBytes)
+	lg.Info("maintenance ok")
+}
+
+// logRetentionSweep is the production OnSweep callback.
+func logRetentionSweep(deleted int64, err error) {
+	emitMaintenance("prune", "deleted", deleted, err)
+}
+
+// logAnalyzeRun is the production OnAnalyze callback.
+func logAnalyzeRun(triggeredAt int64, err error) {
+	emitMaintenance("analyze", "triggered_at", triggeredAt, err)
 }
 
 // logVacuumRun is the production OnVacuum callback.
 func logVacuumRun(reclaimedBytes int64, err error) {
-	log.Print(FormatVacuumRun(reclaimedBytes, err))
-}
-
-// FormatWalCheckpoint returns the canonical log line for one
-// `wal_checkpoint(TRUNCATE)`. `pages` is the WAL frame count present
-// before the truncation (per SQLite docs).
-func FormatWalCheckpoint(pages int64, err error) string {
-	if err != nil {
-		return fmt.Sprintf(
-			"ui: maintenance: wal_checkpoint: pages=%d error=%v",
-			pages, err)
-	}
-	return fmt.Sprintf(
-		"ui: maintenance: wal_checkpoint: pages=%d ok",
-		pages)
+	emitMaintenance("vacuum", "reclaimed_bytes", reclaimedBytes, err)
 }
 
 // logWalCheckpoint is the production OnWalCheckpoint callback.
 func logWalCheckpoint(pages int64, err error) {
-	log.Print(FormatWalCheckpoint(pages, err))
+	emitMaintenance("wal_checkpoint", "pages", pages, err)
 }
