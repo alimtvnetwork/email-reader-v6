@@ -30,20 +30,42 @@ import (
 // that to ER-WCH-21412.
 type AccountResolver func(alias string) *config.Account
 
+// PollChanProvider is the optional CF-W1 seam: the factory asks for a
+// per-alias receive channel at Start time, and releases it when the
+// runner exits. The provider's job is to fan Settings cadence updates
+// into every live runner's channel. Two methods so the provider can
+// distinguish "runner started" (allocate / register) from "runner
+// stopped" (free the slot, never publish to it again).
+//
+// Why an interface (vs a func): Acquire-only would leak channels on
+// Stop because the factory cannot tell the provider when to forget.
+// Release closes the loop without forcing the watcher loop to call
+// `close()` on a channel it does not own (which would race with the
+// provider's fan-out goroutine).
+//
+// Nil provider is fine — the factory then passes a nil
+// `PollSecondsCh` to watcher.Run, preserving the pre-CF-W1 behaviour.
+type PollChanProvider interface {
+	Acquire(alias string) <-chan int
+	Release(alias string)
+}
+
 // RealLoopFactoryDeps bundles the long-lived collaborators that every
 // runner shares: the rules engine, browser launcher, persistent store,
 // shared watcher event bus, and a logger. Engine + Launcher are passed
 // by pointer so live config reloads upstream propagate without
 // re-wiring runners. Bus may be nil (CLI mode); Logger nil falls back
-// to a discard logger inside Run.
+// to a discard logger inside Run. PollChans is the optional CF-W1
+// provider — see PollChanProvider.
 type RealLoopFactoryDeps struct {
-	Resolver AccountResolver
-	Engine   *rules.Engine
-	Launcher *browser.Launcher
-	Store    *store.Store
-	Bus      *watcher.Bus
-	Logger   *log.Logger
-	Verbose  bool
+	Resolver  AccountResolver
+	Engine    *rules.Engine
+	Launcher  *browser.Launcher
+	Store     *store.Store
+	Bus       *watcher.Bus
+	Logger    *log.Logger
+	Verbose   bool
+	PollChans PollChanProvider
 }
 
 // NewRealLoopFactory validates `deps` (Resolver + Store are mandatory —
