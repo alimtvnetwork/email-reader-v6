@@ -53,7 +53,11 @@ func loadInitialThemeMode() core.ThemeMode {
 	if s.HasError() {
 		return core.ThemeDark
 	}
-	return s.Value().Get().Theme
+	snap := s.Value().Get(context.Background())
+	if snap.HasError() {
+		return core.ThemeDark
+	}
+	return snap.Value().Theme
 }
 
 // LoadAliases pulls the configured account aliases from core. Failures are
