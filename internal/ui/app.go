@@ -214,6 +214,8 @@ func viewFor(item NavItem, state *AppState, gotoNav func(NavKind), onAccountsCha
 			OnAccountsChanged: onAccountsChanged,
 			OnRulesChanged:    onAccountsChanged, // same shell-rebuild trigger
 		})
+	case NavSettings:
+		return views.BuildSettings(views.SettingsOptions{})
 	default:
 		return placeholderView(item, state)
 	}
