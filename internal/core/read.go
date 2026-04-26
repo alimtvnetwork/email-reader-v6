@@ -215,8 +215,8 @@ func ReadEmail(ctx context.Context, alias string, uid uint32, emit func(ReadEven
 	}
 	defer st.Close()
 	emit(ReadEvent{Kind: ReadEventStart, Email: &detail})
-	ensureSeededRule(&cfg, emit)
-	engine, launcher, err := buildEngineAndLauncher(cfg, emit)
+	ensureSeededRule(cfg, emit)
+	engine, launcher, err := buildEngineAndLauncher(*cfg, emit)
 	if err != nil {
 		return err
 	}
