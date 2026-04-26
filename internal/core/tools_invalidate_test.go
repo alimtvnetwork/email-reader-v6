@@ -43,7 +43,7 @@ func primeDiagCache(t *testing.T, tools *Tools, alias string) {
 	tools.diagCache().put(alias, DiagnosticsReport{
 		Alias:    alias,
 		StoredAt: time.Now(),
-		Events:   []DiagnoseEvent{{Stage: "primed"}},
+		Events:   []DiagnoseEvent{{Kind: DiagnoseEventStart}},
 	})
 	if _, hit := tools.diagCache().get(alias, time.Now()); !hit {
 		t.Fatalf("primeDiagCache: cache miss right after put for %q", alias)
