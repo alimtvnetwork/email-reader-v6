@@ -1,6 +1,6 @@
 # Workflow status
 
-Last updated: 2026-04-26 (UTC) — CF acceptance tests batch #2 (11/11 ✅)
+Last updated: 2026-04-26 (UTC) — Dashboard auto-refresh on EventNewMail (debounced 750 ms)
 
 ## Current milestone
 🎯 **Spec-21-app implementation Phase 2** — turning the spec/21-app deltas into shipped code. Spec authoring round (35 tasks) **closed**; tasklist archived to `mem://archive/02-spec-21-app-tasklist`.
