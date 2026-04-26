@@ -72,7 +72,7 @@ func (s *Store) QueryEmailExportRows(ctx context.Context, f EmailExportFilter) (
 
 // CountEmails returns the row count matching the same filter shape used
 // by QueryEmailExportRows, so PhaseCounting and PhaseWriting agree.
-func (s *Store) CountEmails(ctx context.Context, f EmailExportFilter) (int, error) {
+func (s *Store) CountEmailsFiltered(ctx context.Context, f EmailExportFilter) (int, error) {
 	q, args := buildEmailExportQuery(f, true)
 	var n int
 	if err := s.DB.QueryRowContext(ctx, q, args...).Scan(&n); err != nil {

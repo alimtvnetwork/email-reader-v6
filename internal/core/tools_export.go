@@ -87,7 +87,7 @@ func (t *Tools) ExportCsv(ctx context.Context, spec ExportSpec, progress chan<- 
 }
 
 func runExportCsv(ctx context.Context, st *store.Store, progress chan<- ExportProgress) errtrace.Result[ExportReport] {
-	total, err := st.CountEmails(ctx, store.EmailExportFilter{})
+	total, err := st.CountEmailsFiltered(ctx, store.EmailExportFilter{})
 	if err != nil {
 		return errtrace.Err[ExportReport](errtrace.WrapCode(err, errtrace.ErrToolsInvalidArgument, "count emails"))
 	}
@@ -106,7 +106,7 @@ func runExportCsv(ctx context.Context, st *store.Store, progress chan<- ExportPr
 // COUNT query and its own SELECT so we can emit accurate TotalRows in
 // the Counting tick before any I/O happens on the writer.
 func runExportCsvFiltered(ctx context.Context, st *store.Store, spec ExportSpec, progress chan<- ExportProgress) errtrace.Result[ExportReport] {
-	total, err := st.CountEmails(ctx, emailExportFilterFromSpec(spec))
+	total, err := st.CountEmailsFiltered(ctx, emailExportFilterFromSpec(spec))
 	if err != nil {
 		return errtrace.Err[ExportReport](errtrace.WrapCode(err, errtrace.ErrToolsInvalidArgument, "count emails"))
 	}

@@ -155,7 +155,7 @@ func TestQueryEmailExportRows_RoundTrip(t *testing.T) {
 		t.Errorf("want 1 row, got %d", n)
 	}
 
-	got, err := st.CountEmails(ctx, EmailExportFilter{})
+	got, err := st.CountEmailsFiltered(ctx, EmailExportFilter{})
 	if err != nil {
 		t.Fatalf("CountEmails: %v", err)
 	}
