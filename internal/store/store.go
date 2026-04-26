@@ -91,7 +91,7 @@ func (s *Store) migrate() error {
 			BodyHtml    TEXT    NOT NULL DEFAULT '',
 			ReceivedAt  DATETIME,
 			FilePath    TEXT    NOT NULL DEFAULT '',
-			CreatedAt   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+			CreatedAt   DATETIME NOT NULL DEFAULT ` + sqliteRFC3339NowExpr + `
 		)`,
 		`CREATE INDEX IF NOT EXISTS IxEmailsAliasUid ON Emails(Alias, Uid)`,
 		`CREATE TABLE IF NOT EXISTS WatchState (
@@ -99,14 +99,14 @@ func (s *Store) migrate() error {
 			LastUid        INTEGER NOT NULL DEFAULT 0,
 			LastSubject    TEXT    NOT NULL DEFAULT '',
 			LastReceivedAt DATETIME,
-			UpdatedAt      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+			UpdatedAt      DATETIME NOT NULL DEFAULT ` + sqliteRFC3339NowExpr + `
 		)`,
 		`CREATE TABLE IF NOT EXISTS OpenedUrls (
 			Id        INTEGER PRIMARY KEY AUTOINCREMENT,
 			EmailId   INTEGER NOT NULL,
 			RuleName  TEXT    NOT NULL DEFAULT '',
 			Url       TEXT    NOT NULL,
-			OpenedAt  DATETIME DEFAULT CURRENT_TIMESTAMP,
+			OpenedAt  DATETIME DEFAULT ` + sqliteRFC3339NowExpr + `,
 			FOREIGN KEY(EmailId) REFERENCES Emails(Id) ON DELETE CASCADE
 		)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS IxOpenedUrlsUnique ON OpenedUrls(EmailId, Url)`,
