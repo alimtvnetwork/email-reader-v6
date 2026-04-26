@@ -76,16 +76,19 @@ func BuildEmails(opts EmailsOptions) fyne.CanvasObject {
 // buildEmailsBody runs the per-render data fetch and returns the
 // rows-or-error widget. Extracted from BuildEmails so the Refresh
 // button (buildEmailsToolbar) can swap it in place without touching
-// the surrounding chrome.
+// the surrounding chrome (heading + toolbar). Body variants pass
+// `nil` for the inner heading because the outer Border already
+// renders it — passing a real heading here would double-stack it
+// after every Refresh click.
 func buildEmailsBody(opts EmailsOptions) fyne.CanvasObject {
 	rows, err := loadEmailRows(opts)
 	if err != nil {
-		return emailsErrorView(widget.NewLabel(""), err)
+		return emailsErrorBody(err)
 	}
 	if len(rows) == 0 {
-		return emailsEmptyRows(widget.NewLabel(""), opts.Alias)
+		return emailsEmptyRowsBody(opts.Alias)
 	}
-	return buildEmailsBrowser(widget.NewLabel(""), opts, rows)
+	return buildEmailsBrowserBody(opts, rows)
 }
 
 // buildEmailsToolbar returns the "🔄 Refresh" action row — but only
