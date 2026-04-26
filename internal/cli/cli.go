@@ -325,10 +325,8 @@ func runWatch(parent context.Context, alias string, verbose bool) error {
 	ctx, stop := newWatchContext(parent)
 	defer stop()
 
-	pollCh, cancelPoll := startPollReloadBridge(ctx)
-	defer cancelPoll()
-	cancelBrowser := startBrowserReloadBridge(ctx, launcher)
-	defer cancelBrowser()
+	pollCh, cancelReload := startReloadBridges(ctx, launcher)
+	defer cancelReload()
 
 	logger := log.New(os.Stdout, "", 0)
 	return watcher.Run(ctx, watcher.Options{
