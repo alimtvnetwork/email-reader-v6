@@ -112,12 +112,19 @@ func BuildRules(opts RulesOptions) fyne.CanvasObject {
 			widget.NewLabelWithStyle("Actions", fyne.TextAlignTrailing, fyne.TextStyle{Bold: true}),
 		)
 		rows := []fyne.CanvasObject{header, widget.NewSeparator()}
+		// Snapshot the current ordered name list once per reload so each
+		// row's move-up/move-down handlers can build a permutation
+		// without re-listing. Captured by closure into ruleRow below.
+		orderedNames := make([]string, len(rules))
+		for i, r := range rules {
+			orderedNames[i] = r.Name
+		}
 		enabledCount := 0
-		for _, r := range rules {
+		for i, r := range rules {
 			if r.Enabled {
 				enabledCount++
 			}
-			rows = append(rows, ruleRow(r, opts, status, reload))
+			rows = append(rows, ruleRow(r, i, orderedNames, opts, status, reload))
 		}
 		body.Objects = rows
 		body.Refresh()
