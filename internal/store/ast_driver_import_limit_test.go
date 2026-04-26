@@ -137,7 +137,3 @@ func scanFileForDriverImports(path, rel string) []string {
 // (repoRootForMaintenanceGuard, skipUninterestingDir defined in
 //  ast_maintenance_only_test.go — same package, same build.)
 
-// Compile-time guard so an unused-import refactor of runtime/fs/os
-// doesn't silently delete this file's intent. The variables are tied
-// to the helpers we explicitly depend on at the package level.
-var _ = runtime.GOOS
