@@ -42,6 +42,13 @@ type WatchRuntime struct {
 	Settings     *core.Settings
 	PollChans    *core.PollChanRegistry
 	Maintenance  *core.Maintenance
+	// Refresher is the alias-indexed one-shot poll registry that
+	// satisfies `core.Refresher` (P4.4 seam). Built once at
+	// bootstrap and populated with every configured account so the
+	// "🔄 Refresh" button in the Emails view can drain a single
+	// IMAP cycle on demand without touching the long-running
+	// `Watch` runners.
+	Refresher    *watcher.Watcher
 	cfgMu        sync.RWMutex
 	cfg          *config.Config
 	pollSecondsF func() int
