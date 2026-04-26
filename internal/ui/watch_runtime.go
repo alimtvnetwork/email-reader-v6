@@ -193,10 +193,12 @@ func buildEngineAndLauncher(cfg *config.Config) (*rules.Engine, *browser.Launche
 }
 
 // startSettingsBridge subscribes to Settings ONCE and fans events to
-// the launcher (CF-T1) and the cadence accessor (CF-W1, applied on
-// the NEXT Start since live in-loop reload is wired in a follow-up
-// slice). Mirrors the CLI's startReloadBridges shape so behaviour is
-// consistent across surfaces.
+// three consumers: (1) the cadence accessor used by new Start calls,
+// (2) the per-runner PollChans registry that pushes the new cadence
+// into every LIVE runner (CF-W1, mid-loop), and (3) the launcher's
+// `Reload` for browser overrides (CF-T1). Mirrors the CLI's
+// `startReloadBridges` shape so behaviour is consistent across
+// surfaces.
 func startSettingsBridge(ctx context.Context, s *core.Settings, launcher *browser.Launcher, rt *WatchRuntime) {
 	events, cancel := s.Subscribe(ctx)
 	rt.closers = append(rt.closers, func() error { cancel(); return nil })
@@ -208,17 +210,26 @@ func startSettingsBridge(ctx context.Context, s *core.Settings, launcher *browse
 		defer liveMu.RUnlock()
 		return livePoll
 	}
-	go func() {
-		for ev := range events {
-			liveMu.Lock()
-			livePoll = int(ev.Snapshot.PollSeconds)
-			liveMu.Unlock()
-			if launcher != nil {
-				launcher.Reload(config.Browser{
-					ChromePath:   ev.Snapshot.BrowserOverride.ChromePath,
-					IncognitoArg: ev.Snapshot.BrowserOverride.IncognitoArg,
-				})
-			}
+	go forwardSettingsEvents(events, launcher, rt, &liveMu, &livePoll)
+}
+
+// forwardSettingsEvents drains the Settings event stream and applies
+// each snapshot. Extracted from startSettingsBridge so the parent
+// stays under the 15-statement cap and so the loop body is reusable
+// from future tests.
+func forwardSettingsEvents(events <-chan core.SettingsEvent, launcher *browser.Launcher, rt *WatchRuntime, liveMu *sync.RWMutex, livePoll *int) {
+	for ev := range events {
+		liveMu.Lock()
+		*livePoll = int(ev.Snapshot.PollSeconds)
+		liveMu.Unlock()
+		if rt.PollChans != nil {
+			rt.PollChans.Broadcast(int(ev.Snapshot.PollSeconds))
 		}
-	}()
+		if launcher != nil {
+			launcher.Reload(config.Browser{
+				ChromePath:   ev.Snapshot.BrowserOverride.ChromePath,
+				IncognitoArg: ev.Snapshot.BrowserOverride.IncognitoArg,
+			})
+		}
+	}
 }
