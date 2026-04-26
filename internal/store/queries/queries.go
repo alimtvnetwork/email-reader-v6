@@ -243,3 +243,48 @@ func OpenedUrlsList(in OpenedUrlsListInput) (string, []any) {
 const PruneOpenedUrlsBatched = `DELETE FROM OpenedUrls WHERE rowid IN (
        SELECT rowid FROM OpenedUrls WHERE OpenedAt < ? LIMIT ?
      )`
+
+// ---------------- Email flags (Phase 4 — MarkRead) ----------------
+
+// SetEmailReadMaxBatch caps a single UPDATE statement at the SQLite
+// `SQLITE_MAX_VARIABLE_NUMBER` floor (999). Callers that need to mark
+// more than 999 UIDs in one logical operation must split into batches
+// of this size and wrap them in a single transaction. See spec
+// `spec/21-app/02-features/02-emails/01-backend.md` §3.3.
+const SetEmailReadMaxBatch = 999
+
+// SetEmailRead composes the UPDATE that flips Emails.IsRead for a
+// given (Alias, Uid set). Bind order: read (0/1), alias, uid1, uid2, …
+//
+// The IN list is rendered with one `?` placeholder per UID (no string
+// interpolation of values), so the call site is parameterised end-to-
+// end. Caller MUST ensure `len(uids) <= SetEmailReadMaxBatch` and
+// `len(uids) > 0` before calling — an empty IN list is invalid SQL.
+//
+// Spec: M0010 added `IsRead INTEGER NOT NULL DEFAULT 0`. The migration
+// note labels the column "boolean-style" (positive form per
+// `18-database-conventions.md` §4); we store 1 for read, 0 for unread.
+func SetEmailRead(read bool, alias string, uids []uint32) (string, []any) {
+	var sb strings.Builder
+	sb.WriteString(`UPDATE Emails SET IsRead = ? WHERE Alias = ? AND Uid IN (`)
+	for i := range uids {
+		if i > 0 {
+			sb.WriteByte(',')
+		}
+		sb.WriteByte('?')
+	}
+	sb.WriteByte(')')
+
+	args := make([]any, 0, 2+len(uids))
+	if read {
+		args = append(args, 1)
+	} else {
+		args = append(args, 0)
+	}
+	args = append(args, alias)
+	for _, u := range uids {
+		args = append(args, u)
+	}
+	return sb.String(), args
+}
+

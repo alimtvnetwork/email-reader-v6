@@ -37,6 +37,14 @@ type fakeEmailsStore struct {
 	count    int
 	countErr error
 
+	// MarkRead programming + observation (Phase 4 P4.2)
+	setReadRows int64
+	setReadErr  error
+	setReadCalls int32
+	lastSetReadAlias string
+	lastSetReadUids  []uint32
+	lastSetReadValue bool
+
 	// observed inputs — for assertions
 	lastListQuery store.EmailQuery
 	lastGetAlias  string
@@ -55,6 +63,13 @@ func (f *fakeEmailsStore) GetEmailByUid(_ context.Context, alias string, uid uin
 func (f *fakeEmailsStore) CountEmails(_ context.Context, alias string) (int, error) {
 	f.lastCountAls = alias
 	return f.count, f.countErr
+}
+func (f *fakeEmailsStore) SetEmailRead(_ context.Context, alias string, uids []uint32, read bool) (int64, error) {
+	atomic.AddInt32(&f.setReadCalls, 1)
+	f.lastSetReadAlias = alias
+	f.lastSetReadUids = append([]uint32(nil), uids...)
+	f.lastSetReadValue = read
+	return f.setReadRows, f.setReadErr
 }
 
 // makeOpener returns a storeOpener that hands out the given fake and
