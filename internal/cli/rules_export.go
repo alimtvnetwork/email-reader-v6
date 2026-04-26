@@ -1,3 +1,12 @@
+// rules_export.go — CLI subcommands for rule CRUD + CSV export.
+//
+// **Phase 2.8 migration.** All three CLI rule commands (`add`, `list`,
+// `enable/disable`) used to call the deprecated package-level
+// `core.AddRule` / `core.ListRules` / `core.SetRuleEnabled` wrappers.
+// They now construct a typed `*core.RulesService` via
+// `core.NewDefaultRulesService` per command — same default-injection
+// shape the UI uses (services.go in internal/ui), keeping a single
+// path through the production code.
 package cli
 
 import (
@@ -15,6 +24,18 @@ import (
 // countEnabledRules is a thin wrapper kept so existing call sites in
 // watch.go / read.go compile unchanged. Logic lives in internal/core.
 func countEnabledRules(rs []config.Rule) int { return core.CountEnabledRules(rs) }
+
+// rulesService builds a default-injected *core.RulesService for CLI
+// commands. Constructor cannot fail in practice (all deps non-nil),
+// but on the impossible failure path we surface a typed error to the
+// caller so cobra renders it cleanly instead of nil-panicking.
+func rulesService() (*core.RulesService, error) {
+	r := core.NewDefaultRulesService()
+	if r.HasError() {
+		return nil, r.PropagateError()
+	}
+	return r.Value(), nil
+}
 
 func newRulesCmd() *cobra.Command {
 	c := &cobra.Command{
@@ -65,7 +86,11 @@ Examples:
     --from-regex 'noreply@lovable\.dev' \
     --url-regex 'https://lovable\.dev/auth/action[^\s]+'`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			r := core.AddRule(core.RuleInput{
+			svc, err := rulesService()
+			if err != nil {
+				return err
+			}
+			r := svc.Add(core.RuleInput{
 				Name:         name,
 				UrlRegex:     urlRegex,
 				FromRegex:    fromRegex,
@@ -93,7 +118,11 @@ Examples:
 }
 
 func runRulesList() error {
-	res := core.ListRules()
+	svc, err := rulesService()
+	if err != nil {
+		return err
+	}
+	res := svc.List()
 	if res.HasError() {
 		return res.PropagateError()
 	}
@@ -113,7 +142,11 @@ func runRulesList() error {
 }
 
 func runRulesToggle(name string, enabled bool) error {
-	if r := core.SetRuleEnabled(name, enabled); r.HasError() {
+	svc, err := rulesService()
+	if err != nil {
+		return err
+	}
+	if r := svc.SetEnabled(name, enabled); r.HasError() {
 		return r.PropagateError()
 	}
 	state := "disabled"

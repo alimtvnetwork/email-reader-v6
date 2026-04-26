@@ -73,9 +73,15 @@ func TestBootSmoke_FreshDataDir(t *testing.T) {
 		}
 
 		// Step 4: rules load for the Rules view. Same shape contract.
-		rules := ListRules()
+		// Phase 2.8: routed through *RulesService instead of the
+		// deprecated package-level ListRules wrapper.
+		rsvcRes := NewDefaultRulesService()
+		if rsvcRes.HasError() {
+			t.Fatalf("step 4 NewDefaultRulesService: %v", rsvcRes.Error())
+		}
+		rules := rsvcRes.Value().List()
 		if rules.HasError() {
-			t.Fatalf("step 4 ListRules on fresh dir: %v", rules.Error())
+			t.Fatalf("step 4 RulesService.List on fresh dir: %v", rules.Error())
 		}
 		if len(rules.Value()) != 0 {
 			t.Fatalf("step 4 fresh dir should have 0 rules, got %d", len(rules.Value()))
