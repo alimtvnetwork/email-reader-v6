@@ -96,9 +96,11 @@ func TestM0011_PicksMostRecentPerAlias(t *testing.T) {
 		}
 		got = append(got, r)
 	}
+	// SQLite's DATETIME affinity normalises `…:00.000Z` → `…:00Z`
+	// on read-back; the seeded value round-trips through the engine.
 	want := []row{
-		{alias: "alpha", kind: 4, occurredAt: "2026-04-26T10:05:00.000Z", status: "ok"},
-		{alias: "beta", kind: 3, occurredAt: "2026-04-26T09:30:00.000Z", status: "err"},
+		{alias: "alpha", kind: 4, occurredAt: "2026-04-26T10:05:00Z", status: "ok"},
+		{alias: "beta", kind: 3, occurredAt: "2026-04-26T09:30:00Z", status: "err"},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("row count = %d, want %d (got=%+v)", len(got), len(want), got)
