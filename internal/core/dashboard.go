@@ -23,10 +23,15 @@ type DashboardStats struct {
 
 // LoadDashboardStats reads config + emails store and returns aggregate counts.
 // Alias may be empty; when set, EmailsForAlias is populated as well.
-func LoadDashboardStats(ctx context.Context, alias string) (DashboardStats, error) {
+//
+// Returns errtrace.Result[DashboardStats] per Delta #2 — callers use
+// HasError/Value/PropagateError instead of the legacy (T, error) pair.
+func LoadDashboardStats(ctx context.Context, alias string) errtrace.Result[DashboardStats] {
 	cfg, err := config.Load()
 	if err != nil {
-		return DashboardStats{}, errtrace.Wrap(err, "load config")
+		return errtrace.Err[DashboardStats](
+			errtrace.WrapCode(err, errtrace.ErrConfigOpen, "core.LoadDashboardStats"),
+		)
 	}
 	stats := DashboardStats{
 		Accounts:     len(cfg.Accounts),
@@ -36,15 +41,22 @@ func LoadDashboardStats(ctx context.Context, alias string) (DashboardStats, erro
 	}
 	total, err := CountEmails(ctx, "")
 	if err != nil {
-		return stats, errtrace.Wrap(err, "count emails total")
+		return errtrace.Err[DashboardStats](
+			errtrace.WrapCode(err, errtrace.ErrDbQueryEmail, "core.LoadDashboardStats").
+				WithContext("scope", "total"),
+		)
 	}
 	stats.EmailsTotal = total
 	if alias != "" {
 		n, err := CountEmails(ctx, alias)
 		if err != nil {
-			return stats, errtrace.Wrapf(err, "count emails for %s", alias)
+			return errtrace.Err[DashboardStats](
+				errtrace.WrapCode(err, errtrace.ErrDbQueryEmail, "core.LoadDashboardStats").
+					WithContext("scope", "alias").
+					WithContext("alias", alias),
+			)
 		}
 		stats.EmailsForAlias = n
 	}
-	return stats, nil
+	return errtrace.Ok(stats)
 }

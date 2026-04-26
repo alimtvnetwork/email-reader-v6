@@ -12,6 +12,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/lovable/email-read/internal/core"
+	"github.com/lovable/email-read/internal/errtrace"
 )
 
 // DashboardOptions wires the dashboard to app state + actions.
@@ -23,7 +24,8 @@ type DashboardOptions struct {
 }
 
 // LoadStatsFunc is the seam used by tests to inject deterministic counts.
-type LoadStatsFunc func(ctx context.Context, alias string) (core.DashboardStats, error)
+// Returns a Result envelope so failures carry an error code (Delta #2).
+type LoadStatsFunc func(ctx context.Context, alias string) errtrace.Result[core.DashboardStats]
 
 func BuildDashboard(opts DashboardOptions) fyne.CanvasObject {
 	if opts.LoadStats == nil {
@@ -75,11 +77,12 @@ func makeDashboardRefresh(opts DashboardOptions, cards dashboardCards, status *w
 	return func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		s, err := opts.LoadStats(ctx, opts.Alias)
-		if err != nil {
-			status.SetText("⚠ Failed to load stats: " + err.Error())
+		res := opts.LoadStats(ctx, opts.Alias)
+		if res.HasError() {
+			status.SetText("⚠ Failed to load stats: " + res.Error().Error())
 			return
 		}
+		s := res.Value()
 		cards.Accounts.Value.SetText(fmt.Sprintf("%d", s.Accounts))
 		cards.Rules.Value.SetText(fmt.Sprintf("%d / %d", s.RulesEnabled, s.RulesTotal))
 		cards.Emails.Value.SetText(FormatEmailsValue(s))

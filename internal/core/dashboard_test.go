@@ -64,10 +64,11 @@ func TestLoadDashboardStats(t *testing.T) {
 		t.Fatalf("save cfg: %v", err)
 	}
 
-	stats, err := LoadDashboardStats(context.Background(), "a")
-	if err != nil {
-		t.Fatalf("LoadDashboardStats: %v", err)
+	res := LoadDashboardStats(context.Background(), "a")
+	if res.HasError() {
+		t.Fatalf("LoadDashboardStats: %v", res.Error())
 	}
+	stats := res.Value()
 	if stats.Accounts != 2 {
 		t.Errorf("Accounts = %d, want 2", stats.Accounts)
 	}
