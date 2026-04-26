@@ -12,58 +12,16 @@ import (
 	"time"
 )
 
-// TestBuildEmailExportQuery_Composition is the SQL-composition twin of
-// the (now-deleted) `core.TestBuildExportQuery_Composition`. Lives here
-// because the builder moved into store/shims.go (AC-DB-52).
-func TestBuildEmailExportQuery_Composition(t *testing.T) {
+// TestEmailExportFilter_RoundTrip confirms the shim's filter type maps
+// cleanly into queries.EmailExportInput. SQL composition itself is
+// covered exhaustively in queries/queries_test.go (P1.8).
+func TestEmailExportFilter_RoundTrip(t *testing.T) {
 	t.Parallel()
 	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	t1 := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
-
-	cases := []struct {
-		name       string
-		f          EmailExportFilter
-		wantClause string
-		wantArgs   int
-	}{
-		{"empty", EmailExportFilter{}, "", 0},
-		{"alias", EmailExportFilter{Alias: "a"}, "Alias = ?", 1},
-		{"since", EmailExportFilter{Since: t0}, "ReceivedAt >= ?", 1},
-		{"until", EmailExportFilter{Until: t1}, "ReceivedAt < ?", 1},
-		{"all", EmailExportFilter{Alias: "a", Since: t0, Until: t1},
-			"Alias = ? AND ReceivedAt >= ? AND ReceivedAt < ?", 3},
-	}
-	for _, c := range cases {
-		q, args := buildEmailExportQuery(c.f, false)
-		if c.wantClause == "" {
-			if strings.Contains(q, "WHERE") {
-				t.Errorf("%s: expected no WHERE, got %q", c.name, q)
-			}
-		} else if !strings.Contains(q, c.wantClause) {
-			t.Errorf("%s: expected clause %q in %q", c.name, c.wantClause, q)
-		}
-		if len(args) != c.wantArgs {
-			t.Errorf("%s: want %d args, got %d", c.name, c.wantArgs, len(args))
-		}
-		if !strings.Contains(q, "ORDER BY Id ASC") {
-			t.Errorf("%s: missing ORDER BY: %q", c.name, q)
-		}
-	}
-}
-
-// TestBuildEmailExportQuery_Count flips the count flag and asserts the
-// projection swaps to COUNT(*) and the ORDER BY drops out.
-func TestBuildEmailExportQuery_Count(t *testing.T) {
-	t.Parallel()
-	q, _ := buildEmailExportQuery(EmailExportFilter{Alias: "x"}, true)
-	if !strings.Contains(q, "SELECT COUNT(*)") {
-		t.Errorf("count form should project COUNT(*): %q", q)
-	}
-	if strings.Contains(q, "ORDER BY") {
-		t.Errorf("count form should not ORDER BY: %q", q)
-	}
-	if !strings.Contains(q, "WHERE Alias = ?") {
-		t.Errorf("count form should still honour WHERE: %q", q)
+	in := filterToExportInput(EmailExportFilter{Alias: "a", Since: t0, Until: t1})
+	if in.Alias != "a" || !in.Since.Equal(t0) || !in.Until.Equal(t1) {
+		t.Errorf("round-trip mismatch: %+v", in)
 	}
 }
 

@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/lovable/email-read/internal/errtrace"
+	"github.com/lovable/email-read/internal/store/queries"
 )
 
 // RowsScanner is the slim subset of `*sql.Rows` that streaming callers
@@ -54,15 +55,12 @@ type EmailExportFilter struct {
 	Until time.Time
 }
 
-// emailExportColumns is the explicit PascalCase column list shared by
-// QueryEmailExportRows and CountEmails. No `SELECT *` (AC-DB-D-04 spirit).
-const emailExportColumns = `Id, Alias, MessageId, Uid, FromAddr, ToAddr, CcAddr,
-                              Subject, BodyText, BodyHtml, ReceivedAt, FilePath, CreatedAt`
+// (emailExportColumns moved to internal/store/queries; see P1.8.)
 
 // QueryEmailExportRows streams the Emails table filtered per spec.
 // Caller is responsible for `defer rows.Close()`.
 func (s *Store) QueryEmailExportRows(ctx context.Context, f EmailExportFilter) (RowsScanner, error) {
-	q, args := buildEmailExportQuery(f, false)
+	q, args := queries.EmailExport(filterToExportInput(f))
 	rows, err := s.DB.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, errtrace.Wrap(err, "QueryEmailExportRows")
@@ -70,10 +68,11 @@ func (s *Store) QueryEmailExportRows(ctx context.Context, f EmailExportFilter) (
 	return rows, nil
 }
 
-// CountEmails returns the row count matching the same filter shape used
-// by QueryEmailExportRows, so PhaseCounting and PhaseWriting agree.
+// CountEmailsFiltered returns the row count matching the same filter
+// shape used by QueryEmailExportRows, so PhaseCounting and PhaseWriting
+// agree.
 func (s *Store) CountEmailsFiltered(ctx context.Context, f EmailExportFilter) (int, error) {
-	q, args := buildEmailExportQuery(f, true)
+	q, args := queries.EmailExportCount(filterToExportInput(f))
 	var n int
 	if err := s.DB.QueryRowContext(ctx, q, args...).Scan(&n); err != nil {
 		return 0, errtrace.Wrap(err, "CountEmails")
@@ -81,46 +80,8 @@ func (s *Store) CountEmailsFiltered(ctx context.Context, f EmailExportFilter) (i
 	return n, nil
 }
 
-// buildEmailExportQuery composes the SELECT (or COUNT) + bound args.
-// `count=true` swaps the projection for `COUNT(*)` and drops ORDER BY.
-// Bind parameters are appended in lock-step with the WHERE clauses
-// (injection-safe by construction).
-func buildEmailExportQuery(f EmailExportFilter, count bool) (string, []any) {
-	var sb strings.Builder
-	if count {
-		sb.WriteString(`SELECT COUNT(*) FROM Emails`)
-	} else {
-		sb.WriteString(`SELECT `)
-		sb.WriteString(emailExportColumns)
-		sb.WriteString(` FROM Emails`)
-	}
-	where, args := whereForEmailExport(f)
-	if where != "" {
-		sb.WriteString(" WHERE ")
-		sb.WriteString(where)
-	}
-	if !count {
-		sb.WriteString(" ORDER BY Id ASC")
-	}
-	return sb.String(), args
-}
-
-func whereForEmailExport(f EmailExportFilter) (string, []any) {
-	var clauses []string
-	var args []any
-	if f.Alias != "" {
-		clauses = append(clauses, "Alias = ?")
-		args = append(args, f.Alias)
-	}
-	if !f.Since.IsZero() {
-		clauses = append(clauses, "ReceivedAt >= ?")
-		args = append(args, f.Since.UTC())
-	}
-	if !f.Until.IsZero() {
-		clauses = append(clauses, "ReceivedAt < ?")
-		args = append(args, f.Until.UTC())
-	}
-	return strings.Join(clauses, " AND "), args
+func filterToExportInput(f EmailExportFilter) queries.EmailExportInput {
+	return queries.EmailExportInput{Alias: f.Alias, Since: f.Since, Until: f.Until}
 }
 
 // OpenedUrlListFilter mirrors the user-facing filter knobs of

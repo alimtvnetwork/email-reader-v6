@@ -3,6 +3,7 @@ package queries
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestEmailByUid_Static(t *testing.T) {
@@ -77,5 +78,48 @@ func TestEmailsCount_Constants(t *testing.T) {
 	}
 	if !strings.Contains(EmailsCountByAlias, "WHERE Alias = ?") {
 		t.Fatalf("EmailsCountByAlias missing alias predicate: %q", EmailsCountByAlias)
+	}
+}
+
+func TestEmailExport_NoFilters(t *testing.T) {
+	sql, args := EmailExport(EmailExportInput{})
+	if len(args) != 0 {
+		t.Fatalf("expected 0 args, got %v", args)
+	}
+	if !strings.Contains(sql, "ORDER BY Id ASC") {
+		t.Fatalf("missing ORDER BY: %q", sql)
+	}
+	if strings.Contains(sql, "WHERE") {
+		t.Fatalf("unexpected WHERE: %q", sql)
+	}
+}
+
+func TestEmailExportCount_NoOrderBy(t *testing.T) {
+	sql, args := EmailExportCount(EmailExportInput{Alias: "a"})
+	if strings.Contains(sql, "ORDER BY") {
+		t.Fatalf("count must not order: %q", sql)
+	}
+	if !strings.Contains(sql, "COUNT(*)") {
+		t.Fatalf("expected COUNT(*): %q", sql)
+	}
+	if len(args) != 1 || args[0] != "a" {
+		t.Fatalf("expected 1 arg [a], got %v", args)
+	}
+}
+
+func TestEmailExport_AllFilters_ArgOrder(t *testing.T) {
+	since := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	until := time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)
+	sql, args := EmailExport(EmailExportInput{Alias: "a@b", Since: since, Until: until})
+	if !strings.Contains(sql, "Alias = ?") ||
+		!strings.Contains(sql, "ReceivedAt >= ?") ||
+		!strings.Contains(sql, "ReceivedAt < ?") {
+		t.Fatalf("missing predicates: %q", sql)
+	}
+	if len(args) != 3 {
+		t.Fatalf("expected 3 args, got %v", args)
+	}
+	if args[0] != "a@b" || args[1] != since || args[2] != until {
+		t.Fatalf("wrong arg order: %v", args)
 	}
 }

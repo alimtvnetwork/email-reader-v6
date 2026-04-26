@@ -18,6 +18,7 @@ package queries
 
 import (
 	"strings"
+	"time"
 )
 
 // emailColumns is the canonical column list for any SELECT against the
@@ -78,4 +79,68 @@ func EmailsList(in EmailsListInput) (string, []any) {
 		}
 	}
 	return sb.String(), args
+}
+
+// emailExportColumns is the explicit PascalCase column list shared by
+// EmailExport and EmailExportCount. No `SELECT *` (AC-DB-D-04 spirit).
+const emailExportColumns = `Id, Alias, MessageId, Uid, FromAddr, ToAddr, CcAddr,
+                              Subject, BodyText, BodyHtml, ReceivedAt, FilePath, CreatedAt`
+
+// EmailExportInput captures the user-facing filter knobs of ExportCsv.
+// Empty Alias means "all aliases"; zero Since/Until means no bound.
+// Mirrors store.EmailExportFilter — separate type to keep queries/ free
+// of a back-dependency on store.
+type EmailExportInput struct {
+	Alias string
+	Since time.Time
+	Until time.Time
+}
+
+// EmailExport composes the streaming SELECT for ExportCsv + bound args.
+func EmailExport(in EmailExportInput) (string, []any) {
+	return buildEmailExportSQL(in, false)
+}
+
+// EmailExportCount composes the matching COUNT(*) so PhaseCounting and
+// PhaseWriting agree on totals. Same WHERE clause, no ORDER BY.
+func EmailExportCount(in EmailExportInput) (string, []any) {
+	return buildEmailExportSQL(in, true)
+}
+
+func buildEmailExportSQL(in EmailExportInput, count bool) (string, []any) {
+	var sb strings.Builder
+	if count {
+		sb.WriteString(`SELECT COUNT(*) FROM Emails`)
+	} else {
+		sb.WriteString(`SELECT `)
+		sb.WriteString(emailExportColumns)
+		sb.WriteString(` FROM Emails`)
+	}
+	where, args := whereForEmailExport(in)
+	if where != "" {
+		sb.WriteString(" WHERE ")
+		sb.WriteString(where)
+	}
+	if !count {
+		sb.WriteString(" ORDER BY Id ASC")
+	}
+	return sb.String(), args
+}
+
+func whereForEmailExport(in EmailExportInput) (string, []any) {
+	var clauses []string
+	var args []any
+	if in.Alias != "" {
+		clauses = append(clauses, "Alias = ?")
+		args = append(args, in.Alias)
+	}
+	if !in.Since.IsZero() {
+		clauses = append(clauses, "ReceivedAt >= ?")
+		args = append(args, in.Since.UTC())
+	}
+	if !in.Until.IsZero() {
+		clauses = append(clauses, "ReceivedAt < ?")
+		args = append(args, in.Until.UTC())
+	}
+	return strings.Join(clauses, " AND "), args
 }
