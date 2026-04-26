@@ -188,3 +188,42 @@ func TestPruneOpenedUrlsBatched_HasBoundedDelete(t *testing.T) {
 		t.Fatalf("missing LIMIT (would deadlock the writer lock): %q", PruneOpenedUrlsBatched)
 	}
 }
+
+func TestEmailUpsert_Static(t *testing.T) {
+	if !strings.Contains(EmailUpsert, "INSERT INTO Emails") {
+		t.Fatalf("missing INSERT: %q", EmailUpsert)
+	}
+	if !strings.Contains(EmailUpsert, "ON CONFLICT(MessageId) DO NOTHING") {
+		t.Fatalf("missing dedup branch: %q", EmailUpsert)
+	}
+	// 11 placeholders for the 11 columns.
+	if got := strings.Count(EmailUpsert, "?"); got != 11 {
+		t.Fatalf("expected 11 placeholders, got %d: %q", got, EmailUpsert)
+	}
+}
+
+func TestEmailIdByMessageId_Static(t *testing.T) {
+	if EmailIdByMessageId != "SELECT Id FROM Emails WHERE MessageId = ?" {
+		t.Fatalf("EmailIdByMessageId drift: %q", EmailIdByMessageId)
+	}
+}
+
+func TestOpenedUrlInsert_Static(t *testing.T) {
+	if !strings.Contains(OpenedUrlInsert, "INSERT INTO OpenedUrls") {
+		t.Fatalf("missing INSERT: %q", OpenedUrlInsert)
+	}
+	if !strings.Contains(OpenedUrlInsert, "ON CONFLICT(EmailId, Url) DO NOTHING") {
+		t.Fatalf("missing dedup branch: %q", OpenedUrlInsert)
+	}
+	// 9 placeholders for the 9 columns.
+	if got := strings.Count(OpenedUrlInsert, "?"); got != 9 {
+		t.Fatalf("expected 9 placeholders, got %d: %q", got, OpenedUrlInsert)
+	}
+	// Column order must match args bind order documented above the const.
+	for _, col := range []string{"EmailId", "RuleName", "Url", "Alias", "Origin",
+		"OriginalUrl", "IsDeduped", "IsIncognito", "TraceId"} {
+		if !strings.Contains(OpenedUrlInsert, col) {
+			t.Fatalf("missing column %s: %q", col, OpenedUrlInsert)
+		}
+	}
+}
