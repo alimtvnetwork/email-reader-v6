@@ -365,6 +365,29 @@ blocks:
         code: "ER-TLS-21767"
         description: Browser launch returned a non-zero exit before the URL opened.
 
+  - name: Emails
+    prefix: ER-EML
+    range: [22000, 22099]
+    description: |
+      Emails service (`internal/core/emails*.go`) — list/get/count/refresh
+      and the upcoming P4.3 delete/undelete/receipt operations. Carved
+      out of the 22000-block so the historical ER-WCH (21400–21499) and
+      ER-COR (21700–21799) wrapping codes used by `Refresh` (P4.4) stay
+      put while the service-native codes get a clean numeric range.
+      Reserves 22000–22019 for query-shape errors, 22020–22049 for the
+      P4.3 delete/undelete lifecycle, and 22050–22099 for future
+      surfaces (search, label-mutation, attachment streaming).
+    codes:
+      - const: ErrEmailsListInvalidLimit
+        code: "ER-EML-22001"
+        description: ListEmailsOptions.Limit was negative or above the cap.
+      - const: ErrEmailsGetNotFound
+        code: "ER-EML-22002"
+        description: Get(alias, uid) returned no row — caller passed a stale UID.
+      - const: ErrEmailsRefresherUnwired
+        code: "ER-EML-22003"
+        description: Refresh called before WithRefresher injected a Refresher (bootstrap gap).
+
   - name: Unknown
     prefix: ER-UNKNOWN
     range: [21999, 21999]

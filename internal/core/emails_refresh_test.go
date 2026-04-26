@@ -6,7 +6,7 @@
 //   - PropagatesAliasInPollOnceCall
 //   - EmptyAlias_ReturnsAliasRequired         (errtrace code)
 //   - WhitespaceAlias_AlsoRejected            (TrimSpace contract)
-//   - NoRefresher_ReturnsConfigBugError       (ErrCoreInvalidArgument)
+//   - NoRefresher_ReturnsConfigBugError       (ErrEmailsRefresherUnwired)
 //   - CtxCancelledBeforePoll_ShortCircuits    (refresher MUST NOT be invoked)
 //   - RefresherError_WrappedWithPollCycleCode (+ alias context)
 //   - WithRefresher_IsChainable_ReplacesPriorDep
@@ -112,8 +112,14 @@ func TestEmailsService_Refresh_NoRefresher_ReturnsConfigError(t *testing.T) {
 		t.Fatal("want config error, got nil")
 	}
 	var coded *errtrace.Coded
-	if !errors.As(res.Error(), &coded) || coded.Code != errtrace.ErrCoreInvalidArgument {
-		t.Errorf("code = %v, want ErrCoreInvalidArgument", coded)
+	// Errtrace registry restructure: the no-refresher branch now
+	// returns the dedicated ER-EML-22003 (ErrEmailsRefresherUnwired)
+	// instead of the generic ER-COR-21701. This lets bootstrap
+	// dashboards/log alerts distinguish "the user clicked Refresh
+	// before the watcher runtime came up" from generic argument-
+	// validation failures.
+	if !errors.As(res.Error(), &coded) || coded.Code != errtrace.ErrEmailsRefresherUnwired {
+		t.Errorf("code = %v, want ErrEmailsRefresherUnwired", coded)
 	}
 	// alias context still attached for diagnostics.
 	if !findCtxKey(coded, "alias", "primary") {

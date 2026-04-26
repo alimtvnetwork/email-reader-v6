@@ -130,6 +130,18 @@ const (
 	ErrToolsOpenUrlNoBrowser    Code = "ER-TLS-21766"
 	ErrToolsOpenUrlLaunchFailed Code = "ER-TLS-21767"
 
+	// ER-EML (Emails service) — block 22000–22099
+	//
+	// Carved out of the next free range above ER-UI (21999) so the
+	// emails *service* gets a clean numeric block distinct from the
+	// IMAP transport-layer ER-MAIL block (21200–21299). Reservation:
+	//   22000–22019 query-shape errors
+	//   22020–22049 P4.3 delete/undelete lifecycle (planned)
+	//   22050–22099 future surfaces (search, labels, attachments)
+	ErrEmailsListInvalidLimit Code = "ER-EML-22001"
+	ErrEmailsGetNotFound      Code = "ER-EML-22002"
+	ErrEmailsRefresherUnwired Code = "ER-EML-22003"
+
 	// Fallback — used by Err[T](nil) defensive path and as last resort.
 	ErrUnknown Code = "ER-UNKNOWN-21999"
 )
