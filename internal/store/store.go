@@ -92,6 +92,35 @@ func (s *Store) migrate() error {
 	return migrate.Apply(context.Background(), s.DB)
 }
 
+// openedUrlsColumns returns the set of column names currently present
+// on the OpenedUrls table. Retained as a small introspection helper
+// after the schema migration moved into `internal/store/migrate/` —
+// `TestOpenedUrlsDelta1_Migration_Idempotent` uses it to lock the
+// post-migration column shape without depending on the migrate
+// package's internals.
+func (s *Store) openedUrlsColumns() (map[string]bool, error) {
+	rows, err := s.DB.Query(`PRAGMA table_info(OpenedUrls)`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]bool{}
+	for rows.Next() {
+		var (
+			cid       int
+			name, typ string
+			notnull   int
+			dflt      sql.NullString
+			pk        int
+		)
+		if err := rows.Scan(&cid, &name, &typ, &notnull, &dflt, &pk); err != nil {
+			return nil, err
+		}
+		out[name] = true
+	}
+	return out, rows.Err()
+}
+
 // UpsertEmail inserts a new email row or returns the existing Id when the
 // MessageId is already known. Returns (id, inserted).
 func (s *Store) UpsertEmail(ctx context.Context, e *Email) (int64, bool, error) {
