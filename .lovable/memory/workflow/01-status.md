@@ -44,9 +44,10 @@ Last updated: 2026-04-26 (UTC) — Slice #36 landed: AST guard test for AC-DB-51
 | 33 | **Structured-logging migration** — `internal/ui/maintenance_log.go` adopts `log/slog` with package-private `maintenanceSlog` carrying `component=maintenance`; INFO on success / WARN on error; `Format*` helpers re-canonicalised to `event=…` tail; emit-test verifies all 4 callbacks. | `internal/ui/{maintenance_log,maintenance_log_test,maintenance_log_jobs_test,maintenance_log_emit_test}.go` |
 | 34 | **AC-DB-47 AST guard** — `Test_AST_MaintenanceOnly` walks repo, parses every production `.go`, rejects any `*ast.BasicLit` whose trimmed body equals `VACUUM`/`ANALYZE` or starts with `pragma wal_checkpoint`. Allowlist: `internal/store/vacuum.go`. Statement-shaped matcher avoids false positives on UI labels. | `internal/store/ast_maintenance_only_test.go` |
 | 35 | **AC-DB-50 AST guard** — `Test_AST_DriverImportLimit` walks repo with `parser.ImportsOnly`, rejects any production `.go` outside `internal/store/` that imports a known SQL driver. `driverImportPaths` covers modernc/sqlite, mattn/go-sqlite3, lib/pq, jackc/pgx/v5(+stdlib), go-sql-driver/mysql, microsoft/go-mssqldb, and bare `database/sql/driver`. Reuses `repoRootForMaintenanceGuard` + `skipUninterestingDir` from #34. | `internal/store/ast_driver_import_limit_test.go` |
-| 36 | **AC-DB-51 AST guard** — `Test_AST_NoSqlTypeLeak` walks `internal/store/`, parses every production `.go`, and for each top-level `*ast.FuncDecl` whose name + receiver are both exported, walks the return list with `ast.Inspect` to find any `*ast.SelectorExpr` `sql.{DB,Tx,Rows}` at any depth (bare pointer, slice element, map value, channel element, generic type-arg). Stdlib-free `itoa` keeps the import block lean. **Architectural gap noted out of scope:** `Store.DB *sql.DB` is exported and read by `internal/exporter` + `internal/core/tools_export.go` + `internal/core/tools_diagnose.go`; closing that leak is AC-DB-52's territory. | `internal/store/ast_no_sql_type_leak_test.go` |
+| 36 | **AC-DB-51 AST guard** — `Test_AST_NoSqlTypeLeak` walks `internal/store/`, parses every production `.go`, and for each top-level `*ast.FuncDecl` whose name + receiver are both exported, walks the return list with `ast.Inspect` to find any `*ast.SelectorExpr` `sql.{DB,Tx,Rows}` at any depth. **Architectural gap noted out of scope:** `Store.DB *sql.DB` is exported and read by `internal/exporter` + 2 `internal/core/tools_*.go` files; closing that leak is AC-DB-52's territory. | `internal/store/ast_no_sql_type_leak_test.go` |
+| 37 | **AC-DB-53 RFC 3339 UTC datetime storage + test** — new `internal/store/datetime.go` exports `formatRFC3339UTC(t)` (returns `2006-01-02T15:04:05.000Z` or `""` for zero) and `sqliteRFC3339NowExpr` (`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`). `migrate()` swaps three `DEFAULT CURRENT_TIMESTAMP` (Emails.CreatedAt / WatchState.UpdatedAt / OpenedUrls.OpenedAt) for the strftime expr. `UpsertEmail` binds `formatRFC3339UTC(e.ReceivedAt)`; `UpsertWatchState` extracted to a named const + swaps inline `CURRENT_TIMESTAMP` (×2). Reads unchanged — `sql.NullTime` parses both formats (probe-verified). New `datetime_test.go` regex-matches every datetime column via `CAST(... AS TEXT)`. | `internal/store/{datetime,datetime_test,store}.go` |
 
-Verification: 16 packages green under `nix run nixpkgs#go -- {vet,test} -tags nofyne -race -count=2 ./...`; `go build -tags nofyne ./...` clean; fn-length linter **0/0** across edited Go files.
+Verification: 16 packages green under `nix run nixpkgs#go -- {vet,test} -tags nofyne -race -count=2 ./...`; `go build -tags nofyne ./...` clean; new file `datetime.go` 0 fn-length violations (96 in `store.go` are pre-existing, unchanged by this slice).
 
 ## Remaining tracked work
 
@@ -73,8 +74,7 @@ Behaviour-equivalents may already exist in `internal/store/store_test.go` / `int
 - AC-DB-30…36 migrate suite *(blocked on `internal/store/migrate/` landing)*
 - AC-DB-37 `Test_AST_DdlOnlyInMigrate` *(blocked on migrate package; meanwhile no DDL exists outside the bootstrap path)*
 - AC-DB-40…46 maintenance-behaviour tests *(spec-named — present behaviour is locked under different names today)*
-- AC-DB-52 `Test_AST_CoreUsesStoreOnly`
-- AC-DB-53 `Test_DateTime_FormatUtc`
+- AC-DB-52 `Test_AST_CoreUsesStoreOnly` *(would surface today's `Store.DB` exported-field leak; pair with a typed-method shim slice first)*
 - AC-DB-54 `Test_BooleanPositive`
 - AC-DB-55 `Test_LogScan_NoOriginalUrlLeak`
 
