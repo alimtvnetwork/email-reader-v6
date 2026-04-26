@@ -190,10 +190,14 @@ func BuildShell(aliases []string) fyne.CanvasObject {
 func viewFor(item NavItem, state *AppState, gotoNav func(NavKind), onAccountsChanged func()) fyne.CanvasObject {
 	switch item.Kind {
 	case NavDashboard:
-		return views.BuildDashboard(views.DashboardOptions{
+		dashOpts := views.DashboardOptions{
 			Alias:        state.Alias(),
 			OnStartWatch: func() { gotoNav(NavWatch) },
-		})
+		}
+		if rt := WatchRuntimeOrNil(); rt != nil {
+			dashOpts.Bus = rt.Bus
+		}
+		return views.BuildDashboard(dashOpts)
 	case NavEmails:
 		return views.BuildEmails(views.EmailsOptions{Alias: state.Alias()})
 	case NavRules:
