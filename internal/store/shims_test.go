@@ -114,10 +114,10 @@ func TestQueryEmailExportRows_RoundTrip(t *testing.T) {
 	ctx := context.Background()
 
 	for i, alias := range []string{"a", "b"} {
-		if err := st.UpsertEmail(ctx, &Email{
+		if _, _, err := st.UpsertEmail(ctx, &Email{
 			Alias:      alias,
-			MessageId:  string(rune('A' + i)) + "@x",
-			Uid:        int64(i + 1),
+			MessageId:  string(rune('A'+i)) + "@x",
+			Uid:        uint32(i + 1),
 			FromAddr:   "f@x",
 			Subject:    "s",
 			ReceivedAt: time.Date(2026, 1, 1+i, 0, 0, 0, 0, time.UTC),
