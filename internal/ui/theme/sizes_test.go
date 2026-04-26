@@ -122,4 +122,56 @@ func Test_Fonts_FallbackWhenAbsent(t *testing.T) {
 	if inter != nil && len(inter.Content()) == 0 {
 		t.Errorf("Inter resource present but empty — embed glob misconfigured")
 	}
+	if mono != nil && len(mono.Content()) == 0 {
+		t.Errorf("JetBrains Mono resource present but empty — embed glob misconfigured")
+	}
 }
+
+// Test_Fonts_PresentAndValidTTF locks the fact that the OFL .ttf assets
+// have shipped — both fonts must load and start with the TrueType magic
+// signature 0x00010000. Drops to t.Skip on a fresh checkout so the
+// test pair stays compatible with the intentional fallback contract.
+func Test_Fonts_PresentAndValidTTF(t *testing.T) {
+	cases := []struct {
+		name string
+		load func() (resourceContent, bool)
+	}{
+		{"Inter", func() (resourceContent, bool) {
+			r := TextFont()
+			if r == nil {
+				return nil, false
+			}
+			return r.Content(), true
+		}},
+		{"JetBrainsMono", func() (resourceContent, bool) {
+			r := TextMonospaceFont()
+			if r == nil {
+				return nil, false
+			}
+			return r.Content(), true
+		}},
+	}
+	for _, c := range cases {
+		c := c
+		t.Run(c.name, func(t *testing.T) {
+			data, ok := c.load()
+			if !ok {
+				t.Skipf("%s asset not committed yet — skip per fallback contract", c.name)
+			}
+			if len(data) < 4 {
+				t.Fatalf("%s payload too small: %d bytes", c.name, len(data))
+			}
+			// TrueType magic: 0x00010000 (TTF) or "OTTO" (OpenType CFF).
+			isTTF := data[0] == 0x00 && data[1] == 0x01 && data[2] == 0x00 && data[3] == 0x00
+			isOTF := data[0] == 'O' && data[1] == 'T' && data[2] == 'T' && data[3] == 'O'
+			if !isTTF && !isOTF {
+				t.Fatalf("%s: not a valid TTF/OTF (magic=%x %x %x %x)",
+					c.name, data[0], data[1], data[2], data[3])
+			}
+		})
+	}
+}
+
+// resourceContent is a tiny alias to keep the table-driven test above
+// readable without importing fyne types into the test signature line.
+type resourceContent = []byte

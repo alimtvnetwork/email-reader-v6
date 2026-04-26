@@ -735,7 +735,7 @@ func printReport(report *ValidationReport) {
 	fmt.Println(sep)
 
 	if len(report.Violations) == 0 {
-		fmt.Println("\n  ✅ ALL CLEAR — No violations found.\n")
+		fmt.Println("\n  ✅ ALL CLEAR — No violations found.")
 		return
 	}
 
