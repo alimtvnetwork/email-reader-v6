@@ -329,4 +329,72 @@ Fakes:
 
 ---
 
+## 13. Symbol Map (AC → Go symbol)
+
+Authoritative bridge between `97-acceptance-criteria.md` IDs and the production Go identifiers an AI implementer must touch. **Status legend:** ✅ shipped on `main` · ⏳ planned · 🧪 test-only · 🟡 partial (top-level helpers exist; `Emails` service refactor pending).
+
+### 13.1 Service surface
+
+| AC IDs                          | Go symbol                                                                                       | File                                            | Status |
+|---------------------------------|-------------------------------------------------------------------------------------------------|-------------------------------------------------|:------:|
+| F-01, T-02                      | `core.Emails` + `NewEmails(store.Store, *Watch, *Rules, Clock) *Emails`                         | `internal/core/emails.go`                       |   ⏳   |
+| F-01, F-04, F-16, P-01, P-08    | `(*Emails).List(ctx, EmailQuery) errtrace.Result[EmailPage]`                                    | `internal/core/emails.go`                       |   ⏳   |
+| F-07, F-18, P-04                | `(*Emails).Get(ctx, alias, uid) errtrace.Result[EmailDetail]`                                   | `internal/core/emails.go`                       |   🟡   |
+| F-11, F-19, P-05, T-06          | `(*Emails).MarkRead(ctx, alias, uids, read bool) errtrace.Result[Unit]`                         | `internal/core/emails.go`                       |   ⏳   |
+| F-12, F-13                      | `(*Emails).Delete(ctx, alias, uids) errtrace.Result[DeleteReceipt]`                             | `internal/core/emails.go`                       |   ⏳   |
+| F-13                            | `(*Emails).Undelete(ctx, ids) errtrace.Result[Unit]`                                            | `internal/core/emails.go`                       |   ⏳   |
+| F-14                            | `(*Emails).Refresh(ctx, alias) errtrace.Result[RefreshReport]`                                  | `internal/core/emails.go`                       |   ⏳   |
+| F-17                            | `(*Emails).Counts(ctx, alias) errtrace.Result[EmailCounts]`                                     | `internal/core/emails.go`                       |   ⏳   |
+| —                               | `core.ListEmails`, `core.GetEmail`, `core.CountEmails` *(legacy free funcs)*                    | `internal/core/emails.go`                       |   ✅   |
+
+### 13.2 Projection types
+
+| AC IDs              | Go symbol                                                  | File                          | Status |
+|---------------------|------------------------------------------------------------|-------------------------------|:------:|
+| F-01, F-04          | `core.EmailQuery`, `core.EmailPage`, `core.EmailSortKey`   | `internal/core/emails.go`     |   ⏳   |
+| F-07                | `core.EmailDetail`                                         | `internal/core/emails.go`     |   ✅   |
+| F-13                | `core.DeleteReceipt`                                       | `internal/core/emails.go`     |   ⏳   |
+| F-17                | `core.EmailCounts`                                         | `internal/core/emails.go`     |   ⏳   |
+
+### 13.3 Store / SQL surface
+
+| AC IDs           | Go symbol / SQL artefact                                                          | File                                  | Status |
+|------------------|-----------------------------------------------------------------------------------|---------------------------------------|:------:|
+| D-01             | Migration `M0010_AddEmailFlags`                                                   | `internal/store/migrate/`             |   ⏳   |
+| D-02             | Indexes `IxEmailAliasReceived`, `IxEmailAliasIsRead`, `IxEmailDeletedAt`          | `internal/store/store.go`             |   ⏳   |
+| F-01, F-04, P-01, D-06 | `Store.QueryEmailPage(ctx, EmailListFilter) ([]EmailRow, error)` + filter shape | `internal/store/shims.go`           |   ⏳   |
+| F-17             | `Store.CountEmailsFiltered(ctx, EmailExportFilter) (int, error)`                  | `internal/store/shims.go`             |   ✅   |
+| F-11, P-05, D-05 | `Store.SetEmailRead(ctx, alias, uids []uint32, read bool) (int64, error)` *(≤999 batches)* | `internal/store/shims.go`     |   ⏳   |
+| F-12, F-13       | `Store.SoftDeleteEmails`, `Store.UndeleteEmails`                                  | `internal/store/shims.go`             |   ⏳   |
+| D-04             | Positive-boolean enforcement test `Test_BooleanPositive`                          | `internal/store/boolean_positive_test.go` |   ✅   |
+
+### 13.4 Live-update surface
+
+| AC IDs        | Go symbol                                                                | File                                    | Status |
+|---------------|--------------------------------------------------------------------------|-----------------------------------------|:------:|
+| L-01, L-02    | `core.WatchEvent` (`Kind=EmailStored`) consumed via `eventbus.Bus[WatchEvent]` | `internal/core/watch.go`           |   ✅   |
+| L-03, L-05    | `BridgeWatcherBus` lifecycle hook                                        | `internal/core/watch_bridge.go`         |   ✅   |
+
+### 13.5 Errors & logging
+
+| AC IDs        | Go symbol                                                              | File                                    | Status |
+|---------------|------------------------------------------------------------------------|-----------------------------------------|:------:|
+| E-01, E-06    | `errtrace.ErrEmailsListInvalidQuery` (21201), `…QueryFailed` (21202)   | `internal/errtrace/codes_gen.go`        |   ⏳   |
+| E-02          | `errtrace.ErrEmailNotFound` (21210)                                    | `internal/errtrace/codes_gen.go`        |   ⏳   |
+| E-03          | `errtrace.ErrEmailsMarkReadFailed` (21220)                             | `internal/errtrace/codes_gen.go`        |   ⏳   |
+| E-04          | `errtrace.ErrEmailsDeleteFailed` (21230) + `…UndeleteFailed` (21231)   | `internal/errtrace/codes_gen.go`        |   ⏳   |
+| G-01..G-06    | `emailsSlog` (`component=emails`) + `FormatEmails*` helpers            | `internal/ui/emails_log.go`             |   ⏳   |
+
+### 13.6 Test contract
+
+| AC IDs        | Test symbol                                                          | File                                            | Status |
+|---------------|----------------------------------------------------------------------|-------------------------------------------------|:------:|
+| T-01, T-02    | `Test_Emails_List_*`, `_Get_*`, `_MarkRead_*`, `_Delete_*` (16 cases per §7) | `internal/core/emails_test.go`           |   🟡   |
+| T-04          | `Test_Emails_RaceClean`                                              | `internal/core/emails_race_test.go`             |   ⏳   |
+| T-05          | `BenchmarkEmailsList_100k_3CharSearch`, `BenchmarkEmailsMarkRead_500` | `internal/core/emails_bench_test.go`           |   ⏳   |
+| T-06          | `Test_Emails_MarkRead_Idempotent`                                    | `internal/core/emails_test.go`                  |   ⏳   |
+| G-05, G-06    | `Test_LogScan_NoOriginalUrlLeak` *(extends to email PII)*            | `internal/core/tools_log_scan_test.go`          |   ✅   |
+
+---
+
 **End of `02-emails/01-backend.md`**

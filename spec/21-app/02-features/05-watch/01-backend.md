@@ -620,4 +620,70 @@ Fakes:
 
 ---
 
+## N. Symbol Map (AC → Go symbol)
+
+Authoritative bridge between the watch `97-acceptance-criteria.md` table and the production Go identifiers an AI implementer must touch. AC tables already name the Go test functions in their right column; this map covers the **service surface, types, and infra** an implementer needs to satisfy them. **Status legend:** ✅ shipped on `main` · ⏳ planned · 🧪 test-only · 🟡 partial.
+
+### N.1 Service surface (`core.Watch`)
+
+| AC IDs                          | Go symbol                                                                        | File                                  | Status |
+|---------------------------------|----------------------------------------------------------------------------------|---------------------------------------|:------:|
+| F-01..F-14, T-02                | `core.Watch` + `NewWatch(...)`                                                   | `internal/core/watch.go`              |   ✅   |
+| F-01, F-02                      | `(*Watch).Start(ctx, WatchOptions) errtrace.Result[Unit]`                        | `internal/core/watch.go`              |   ✅   |
+| F-03, F-04                      | `(*Watch).Stop(ctx, alias) errtrace.Result[Unit]`                                | `internal/core/watch.go`              |   ✅   |
+| F-05                            | `(*Watch).Status(alias) WatchState`                                              | `internal/core/watch.go`              |   ✅   |
+| F-07                            | `(*Watch).StatusAll(ctx) []WatchState`                                           | `internal/core/watch.go`              |   ✅   |
+| F-06, L-01..L-05                | `(*Watch).Subscribe(ctx) <-chan WatchEvent` *(buffered cap 256)*                 | `internal/core/watch.go`              |   ✅   |
+| F-13, F-14                      | `(*Watch).OnAccountRemoved(alias)`, `RestartOnAccountUpdate(alias)`              | `internal/core/watch.go`              |   ✅   |
+| F-08, F-09                      | Polling cycle inside `internal/watcher` invoked via `LoopFactory`                | `internal/watcher/watcher.go`         |   ✅   |
+| F-11, F-12                      | Rule-match path → `core.Rules.EvaluateAll` + `core.Tools.OpenUrl`                | `internal/watcher/watcher.go`         |   ✅   |
+
+### N.2 Bridge / event surface
+
+| AC IDs                | Go symbol                                                              | File                                    | Status |
+|-----------------------|------------------------------------------------------------------------|-----------------------------------------|:------:|
+| F-06, L-01..L-05      | `core.WatchEvent` + `core.WatchEventKind` (10 kinds)                   | `internal/core/watch.go`                |   ✅   |
+| L-01..L-05            | `BridgeWatcherBus(ctx, *watcher.Bus, *eventbus.Bus[WatchEvent]) func()` | `internal/core/watch_bridge.go`       |   ✅   |
+| L-01..L-05            | `TranslateWatcherEvent(watcher.Event) (WatchEvent, bool)`              | `internal/core/watch_bridge.go`         |   ✅   |
+| F-01                  | `core.LoopFactory` interface + `NewRealLoopFactory(deps) Result[LoopFactory]` | `internal/core/watch_factory.go` |   ✅   |
+
+### N.3 Heartbeat & backoff (🔴 H-01..H-06, R-01..R-08)
+
+| AC IDs        | Go symbol                                                              | File                                    | Status |
+|---------------|------------------------------------------------------------------------|-----------------------------------------|:------:|
+| H-01, H-02, H-04 | `EventPollHeartbeat` (currently `EventHeartbeat` — **rename pending**) | `internal/watcher/events.go`         |   🟡   |
+| H-03, H-05    | Heartbeat cadence enforced by `runLoop`'s ticker                       | `internal/watcher/watcher.go`           |   ✅   |
+| R-01..R-08    | `NextPollDelay(base, streak, jitter) time.Duration` *(doubling, cap 5min)* | `internal/watcher/backoff.go`       |   ✅   |
+| R-01..R-08    | `BackoffLadder` *(needs export)*                                       | `internal/watcher/backoff.go`           |   🟡   |
+| R-01..R-08    | `pollState.consecutiveErrors` increment/reset                          | `internal/watcher/watcher.go`           |   ✅   |
+
+### N.4 Mode negotiation & store cursor
+
+| AC IDs        | Go symbol                                                              | File                                    | Status |
+|---------------|------------------------------------------------------------------------|-----------------------------------------|:------:|
+| M-01..M-05    | IDLE-vs-Poll selector inside `runLoop`                                 | `internal/watcher/watcher.go`           |   ✅   |
+| F-09, D-01..D-06 | `WatchState` table (`Alias PK`, `LastPollAt`, `LastErrorAt`, `ConsecutiveFailures`, `LastSeenUid`) | `internal/store/store.go` | ✅ |
+| D-01          | `Store.UpdateWatchCursor(ctx, alias, lastUid uint32, at time.Time) error` | `internal/store/shims.go`            |   ⏳   |
+| D-02          | `Store.GetWatchState(ctx, alias) (WatchState, error)`                  | `internal/store/shims.go`               |   ⏳   |
+
+### N.5 Errors & logging
+
+| AC IDs        | Go symbol                                                              | File                                    | Status |
+|---------------|------------------------------------------------------------------------|-----------------------------------------|:------:|
+| E-01..E-06    | Codes 21400..21499 per §8 (`ErrWatchAlreadyStarted` = 21401, `ErrWatcherProcessEmail` = 21403, …) | `internal/errtrace/codes_gen.go` | ⏳ |
+| E-04          | `errtrace.ErrWatchAccountNotFound` *(distinct code)*                   | `internal/core/watch_factory.go` (constant) | ✅ |
+| L-01..L-05, X-01..X-05 | `watcherSlog` (`component=watcher`) + redaction-safe `FormatPoll*` helpers | `internal/ui/maintenance_log.go` *(pattern)* | ⏳ |
+
+### N.6 Test contract (named tests already declared in AC tables)
+
+| AC IDs           | Test symbol                                                           | File                                            | Status |
+|------------------|-----------------------------------------------------------------------|-------------------------------------------------|:------:|
+| F-01..F-14       | Per AC table (`Watch_Start_*`, `Watch_Stop_*`, `Watch_Status_*`, …)   | `internal/core/watch*_test.go`                  |   🟡   |
+| H-01, H-02, H-04 | Heartbeat regression sentinel                                         | `internal/watcher/cf_w_heartbeat_test.go`       |   ⏳   |
+| R-01..R-08       | `Test_NextPollDelay_*`, `TestCF_W_Backoff_*`                          | `internal/watcher/backoff_test.go`, `cf_w_backoff_test.go` | ✅ |
+| L-01..L-05       | `Test_TranslateWatcherEvent_*`, `Test_BridgeWatcherBus_*`             | `internal/core/watch_bridge_test.go`            |   ✅   |
+| Q-01..Q-08       | `goleak.VerifyNone(t)` in `TestMain` of `internal/watcher`            | `internal/watcher/main_test.go`                 |   ⏳   |
+
+---
+
 **End of `05-watch/01-backend.md`**
