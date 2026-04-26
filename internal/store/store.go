@@ -247,20 +247,55 @@ func (s *Store) UpsertWatchState(ctx context.Context, ws WatchState) error {
 	return nil
 }
 
+// OpenedUrlInsert is the rich payload for `RecordOpenedUrlExt` introduced
+// by Delta #1. The legacy `RecordOpenedUrl(emailId, ruleName, url)` call
+// path still works (Tools.OpenUrl uses the Ext form; watcher and CLI
+// readers stay on the slim form). Empty fields are persisted as defaults.
+type OpenedUrlInsert struct {
+	EmailId     int64
+	RuleName    string
+	Url         string // canonical / post-redaction
+	Alias       string
+	Origin      string // OpenUrlOrigin string value (manual|rule|cli)
+	OriginalUrl string // pre-redaction; "" when same as Url
+	IsDeduped   bool
+	IsIncognito bool
+	TraceId     string
+}
+
 // RecordOpenedUrl inserts a row into OpenedUrls. Returns true if newly inserted,
-// false if (EmailId, Url) already exists (dedup hit).
+// false if (EmailId, Url) already exists (dedup hit). Slim form: leaves the
+// Delta-#1 columns at their default values.
 func (s *Store) RecordOpenedUrl(ctx context.Context, emailId int64, ruleName, url string) (bool, error) {
+	return s.RecordOpenedUrlExt(ctx, OpenedUrlInsert{
+		EmailId: emailId, RuleName: ruleName, Url: url,
+	})
+}
+
+// RecordOpenedUrlExt is the Delta-#1 rich-insert variant. Persists Alias,
+// Origin, OriginalUrl, IsDeduped, IsIncognito, and TraceId alongside the
+// legacy columns. Returns true on insert, false on (EmailId, Url) conflict.
+func (s *Store) RecordOpenedUrlExt(ctx context.Context, in OpenedUrlInsert) (bool, error) {
 	res, err := s.DB.ExecContext(ctx, `
-		INSERT INTO OpenedUrls (EmailId, RuleName, Url)
-		VALUES (?, ?, ?)
+		INSERT INTO OpenedUrls (EmailId, RuleName, Url, Alias, Origin,
+		                        OriginalUrl, IsDeduped, IsIncognito, TraceId)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(EmailId, Url) DO NOTHING`,
-		emailId, ruleName, url,
+		in.EmailId, in.RuleName, in.Url, in.Alias, in.Origin,
+		in.OriginalUrl, boolToInt(in.IsDeduped), boolToInt(in.IsIncognito), in.TraceId,
 	)
 	if err != nil {
-		return false, errtrace.Wrap(err, "record opened url")
+		return false, errtrace.Wrap(err, "record opened url ext")
 	}
 	n, _ := res.RowsAffected()
 	return n > 0, nil
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 // HasOpenedUrl reports whether the (emailId, url) pair has already been opened.
