@@ -1,18 +1,18 @@
 // tools_diagnose.go adds two services on top of the existing
 // `core.Diagnose` backend:
 //
-//   1. `Tools.Diagnose(ctx, spec, emit)` — wraps the global Diagnose with
-//      a 60 s in-memory cache (per `Tools` instance, per alias). On cache
-//      hit, the captured event trail is replayed to `emit` so the UI
-//      renders identically to a live run. `Force: true` bypasses + evicts.
+//  1. `Tools.Diagnose(ctx, spec, emit)` — wraps the global Diagnose with
+//     a 60 s in-memory cache (per `Tools` instance, per alias). On cache
+//     hit, the captured event trail is replayed to `emit` so the UI
+//     renders identically to a live run. `Force: true` bypasses + evicts.
 //
-//   2. `Tools.RecentOpenedUrls(ctx, spec)` — read-only audit accessor
-//      backed by the existing OpenedUrls table. Per spec §2.5 the rich
-//      schema (Alias / Origin / OriginalUrl / IsDeduped / IsIncognito) is
-//      deferred to Delta #1 (PascalCase migration); v1 returns the rows
-//      that exist today (Id, EmailId, RuleName, Url, OpenedAt) and the
-//      caller can filter on Limit + Before. Alias/Origin filters are
-//      accepted but ignored until the schema is migrated.
+//  2. `Tools.RecentOpenedUrls(ctx, spec)` — read-only audit accessor
+//     backed by the existing OpenedUrls table. Per spec §2.5 the rich
+//     schema (Alias / Origin / OriginalUrl / IsDeduped / IsIncognito) is
+//     deferred to Delta #1 (PascalCase migration); v1 returns the rows
+//     that exist today (Id, EmailId, RuleName, Url, OpenedAt) and the
+//     caller can filter on Limit + Before. Alias/Origin filters are
+//     accepted but ignored until the schema is migrated.
 //
 // Spec: spec/21-app/02-features/06-tools/01-backend.md §2.3 + §2.5.
 package core
