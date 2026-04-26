@@ -53,6 +53,7 @@ const (
 	ErrRuleDuplicate      Code = "ER-RUL-21303"
 	ErrRuleEvaluate       Code = "ER-RUL-21304"
 	ErrRuleSeedDefault    Code = "ER-RUL-21305"
+	ErrRuleRenameNoop     Code = "ER-RUL-21306"
 
 	// ER-WCH (Watcher) — block 21400–21499
 	ErrWatcherStart          Code = "ER-WCH-21401"
