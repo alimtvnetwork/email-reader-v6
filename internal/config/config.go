@@ -55,8 +55,30 @@ type Config struct {
 }
 
 var (
+	// mu serialises a single Load or Save against concurrent callers.
 	mu sync.Mutex
+
+	// writeMu serialises an entire read-modify-write transaction
+	// against the config file. Acquire via WithWriteLock when a caller
+	// needs to Load, mutate, and Save without another goroutine
+	// interleaving its own Save in between.
+	//
+	// CF-A2 (spec/21-app/02-features/07-settings/99-consistency-report.md):
+	// without this lock, Settings.Save and AddAccount/RemoveAccount can
+	// race and silently lose either side's update because each one's
+	// Load+Save pair is only individually serialised by `mu`.
+	writeMu sync.Mutex
 )
+
+// WithWriteLock runs fn while holding the process-wide config write
+// lock. Use this to make Load+mutate+Save atomic across goroutines.
+// fn must NOT block on anything that itself calls back into config
+// (deadlock risk).
+func WithWriteLock(fn func()) {
+	writeMu.Lock()
+	defer writeMu.Unlock()
+	fn()
+}
 
 // Default returns a sensible empty config.
 func Default() *Config {
