@@ -45,7 +45,7 @@ func BuildDashboard(opts DashboardOptions) fyne.CanvasObject {
 	refresh()
 
 	actions := newDashboardActions(opts, refresh)
-	live := newDashboardLiveRow(opts)
+	live := newDashboardLiveRow(opts, refresh)
 	return container.NewVBox(
 		heading, subtitle, widget.NewSeparator(),
 		cards.Row, widget.NewSeparator(),
