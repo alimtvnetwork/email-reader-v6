@@ -125,3 +125,30 @@ func (s *Services) AttachRefresher(refresher core.Refresher) {
 	}
 	s.Emails.WithRefresher(refresher)
 }
+
+// AttachHealthSource builds a production `core.AccountHealthSource`
+// from the supplied `*store.Store` and stores it on the bundle so the
+// Dashboard view can pass it into `(*core.DashboardService).AccountHealth`.
+//
+// Slice #103 wire-up: the store is opened lazily by
+// `WatchRuntimeOrNil()` (see `internal/ui/watch_runtime.go`); calling
+// here from the NavDashboard arm guarantees the source is attached
+// the first time the user lands on the dashboard with a healthy
+// runtime, without forcing a second `store.Open()` at boot (which
+// would risk SQLite lock contention).
+//
+// Safe to call with a nil receiver, nil store, or after a previous
+// successful attach (idempotent — a second call simply replaces the
+// adapter with one bound to the same underlying *store.Store, which
+// is harmless because the underlying store is shared).
+func (s *Services) AttachHealthSource(st *store.Store) {
+	if s == nil || st == nil {
+		return
+	}
+	src := core.NewStoreAccountHealthSource(st)
+	if src == nil {
+		log.Printf("services: AttachHealthSource: NewStoreAccountHealthSource returned nil")
+		return
+	}
+	s.HealthSource = src
+}
