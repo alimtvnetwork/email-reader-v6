@@ -365,7 +365,7 @@ func processMessage(ctx context.Context, opts Options, logger *log.Logger, ws *s
 	return urlsLaunched > 0, nil
 }
 
-func advanceCursor(ws *store.WatchState, m mailclient.Message) {
+func advanceCursor(ws *store.WatchState, m *mailclient.Message) {
 	if m.Uid > ws.LastUid {
 		ws.LastUid = m.Uid
 		ws.LastSubject = m.Subject
