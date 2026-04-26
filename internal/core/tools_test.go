@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/lovable/email-read/internal/errtrace"
+	"github.com/lovable/email-read/internal/store"
 )
 
 type fakeBrowser struct {
@@ -41,9 +42,10 @@ func (f *fakeBrowser) Path() (string, error) {
 }
 
 type fakeStore struct {
-	mu      sync.Mutex
-	hasHits map[string]bool
-	records []string
+	mu          sync.Mutex
+	hasHits     map[string]bool
+	records     []string
+	extInserts  []store.OpenedUrlInsert
 }
 
 func newFakeStore() *fakeStore { return &fakeStore{hasHits: map[string]bool{}} }
@@ -58,6 +60,14 @@ func (s *fakeStore) RecordOpenedUrl(_ context.Context, id int64, rule, u string)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.records = append(s.records, u)
+	return true, nil
+}
+
+func (s *fakeStore) RecordOpenedUrlExt(_ context.Context, in store.OpenedUrlInsert) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.records = append(s.records, in.Url)
+	s.extInserts = append(s.extInserts, in)
 	return true, nil
 }
 
