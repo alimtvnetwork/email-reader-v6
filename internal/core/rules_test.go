@@ -1,3 +1,7 @@
+// rules_test.go — Phase 2.8: routed through *RulesService instead of
+// the deprecated package-level wrappers (deleted in P2.8b). Each test
+// constructs a default-injected service via NewDefaultRulesService and
+// drives the same scenarios that the old wrappers covered.
 package core
 
 import (
@@ -6,15 +10,28 @@ import (
 	"github.com/lovable/email-read/internal/config"
 )
 
+// newRulesSvc builds a default-injected *RulesService backed by the
+// real config package, used inside withIsolatedConfig to point at a
+// per-test temp dir.
+func newRulesSvc(t *testing.T) *RulesService {
+	t.Helper()
+	res := NewDefaultRulesService()
+	if res.HasError() {
+		t.Fatalf("NewDefaultRulesService: %v", res.Error())
+	}
+	return res.Value()
+}
+
 func TestAddRule_RequiresFields(t *testing.T) {
 	withIsolatedConfig(t, func() {
-		if r := AddRule(RuleInput{}); !r.HasError() {
+		svc := newRulesSvc(t)
+		if r := svc.Add(RuleInput{}); !r.HasError() {
 			t.Fatal("expected error for empty input")
 		}
-		if r := AddRule(RuleInput{Name: "x"}); !r.HasError() {
+		if r := svc.Add(RuleInput{Name: "x"}); !r.HasError() {
 			t.Fatal("expected error for missing urlRegex")
 		}
-		if r := AddRule(RuleInput{UrlRegex: "https?://.+"}); !r.HasError() {
+		if r := svc.Add(RuleInput{UrlRegex: "https?://.+"}); !r.HasError() {
 			t.Fatal("expected error for missing name")
 		}
 	})
@@ -22,7 +39,8 @@ func TestAddRule_RequiresFields(t *testing.T) {
 
 func TestAddRule_RejectsInvalidRegex(t *testing.T) {
 	withIsolatedConfig(t, func() {
-		r := AddRule(RuleInput{
+		svc := newRulesSvc(t)
+		r := svc.Add(RuleInput{
 			Name:     "bad",
 			UrlRegex: "https?://[",
 		})
@@ -30,9 +48,9 @@ func TestAddRule_RejectsInvalidRegex(t *testing.T) {
 			t.Fatal("expected invalid regex error")
 		}
 		// Sanity check: nothing persisted.
-		rs := ListRules()
+		rs := svc.List()
 		if rs.HasError() {
-			t.Fatalf("ListRules: %v", rs.Error())
+			t.Fatalf("List: %v", rs.Error())
 		}
 		if len(rs.Value()) != 0 {
 			t.Fatalf("invalid rule should not persist, got %d rules", len(rs.Value()))
@@ -42,32 +60,33 @@ func TestAddRule_RejectsInvalidRegex(t *testing.T) {
 
 func TestAddRule_PersistsAndUpserts(t *testing.T) {
 	withIsolatedConfig(t, func() {
-		res := AddRule(RuleInput{
+		svc := newRulesSvc(t)
+		res := svc.Add(RuleInput{
 			Name:     "open-all",
 			UrlRegex: `https?://\S+`,
 			Enabled:  true,
 		})
 		if res.HasError() {
-			t.Fatalf("AddRule: %v", res.Error())
+			t.Fatalf("Add: %v", res.Error())
 		}
 		if res.Value().Replaced {
 			t.Fatal("first add should not be a replace")
 		}
 		// Upsert with new pattern + disabled.
-		res2 := AddRule(RuleInput{
+		res2 := svc.Add(RuleInput{
 			Name:     "open-all",
 			UrlRegex: `https://example\.com/\S+`,
 			Enabled:  false,
 		})
 		if res2.HasError() {
-			t.Fatalf("AddRule upsert: %v", res2.Error())
+			t.Fatalf("Add upsert: %v", res2.Error())
 		}
 		if !res2.Value().Replaced {
 			t.Fatal("second add should report Replaced=true")
 		}
-		got := GetRule("open-all")
+		got := svc.Get("open-all")
 		if got.HasError() {
-			t.Fatalf("GetRule: %v", got.Error())
+			t.Fatalf("Get: %v", got.Error())
 		}
 		if got.Value().UrlRegex != `https://example\.com/\S+` || got.Value().Enabled {
 			t.Fatalf("upsert did not apply: %+v", got.Value())
@@ -77,14 +96,15 @@ func TestAddRule_PersistsAndUpserts(t *testing.T) {
 
 func TestSetRuleEnabled_TogglesAndErrors(t *testing.T) {
 	withIsolatedConfig(t, func() {
-		if r := SetRuleEnabled("missing", true); !r.HasError() {
+		svc := newRulesSvc(t)
+		if r := svc.SetEnabled("missing", true); !r.HasError() {
 			t.Fatal("expected error for unknown rule")
 		}
-		_ = AddRule(RuleInput{Name: "r1", UrlRegex: "x", Enabled: false})
-		if r := SetRuleEnabled("r1", true); r.HasError() {
+		_ = svc.Add(RuleInput{Name: "r1", UrlRegex: "x", Enabled: false})
+		if r := svc.SetEnabled("r1", true); r.HasError() {
 			t.Fatalf("enable: %v", r.Error())
 		}
-		got := GetRule("r1")
+		got := svc.Get("r1")
 		if got.HasError() || !got.Value().Enabled {
 			t.Fatal("rule should be enabled")
 		}
@@ -93,15 +113,16 @@ func TestSetRuleEnabled_TogglesAndErrors(t *testing.T) {
 
 func TestRemoveRule_DeletesAndErrors(t *testing.T) {
 	withIsolatedConfig(t, func() {
-		if r := RemoveRule("nope"); !r.HasError() {
+		svc := newRulesSvc(t)
+		if r := svc.Remove("nope"); !r.HasError() {
 			t.Fatal("expected error for missing rule")
 		}
-		_ = AddRule(RuleInput{Name: "r1", UrlRegex: "x", Enabled: true})
-		_ = AddRule(RuleInput{Name: "r2", UrlRegex: "y", Enabled: true})
-		if r := RemoveRule("r1"); r.HasError() {
+		_ = svc.Add(RuleInput{Name: "r1", UrlRegex: "x", Enabled: true})
+		_ = svc.Add(RuleInput{Name: "r2", UrlRegex: "y", Enabled: true})
+		if r := svc.Remove("r1"); r.HasError() {
 			t.Fatalf("remove: %v", r.Error())
 		}
-		rs := ListRules()
+		rs := svc.List()
 		if rs.HasError() {
 			t.Fatalf("list: %v", rs.Error())
 		}
