@@ -1,6 +1,6 @@
 # Workflow status
 
-Last updated: 2026-04-26 (UTC) — CF acceptance tests batch #1 (6/11)
+Last updated: 2026-04-26 (UTC) — CF acceptance tests batch #2 (11/11 ✅)
 
 ## Current milestone
 🎯 **Spec-21-app implementation Phase 2** — turning the spec/21-app deltas into shipped code. Spec authoring round (35 tasks) **closed**; tasklist archived to `mem://archive/02-spec-21-app-tasklist`.
@@ -25,7 +25,8 @@ Last updated: 2026-04-26 (UTC) — CF acceptance tests batch #1 (6/11)
 | 14 | Delta #1 activated end-to-end — Recent opens tab, first prod caller of `Tools.RecentOpenedUrls` | `internal/ui/views/tools_recent_opens*.go`, `internal/ui/views/tools.go` |
 | 15 | Dashboard live wiring — 5-tile counter row subscribing to `watcher.Bus` | `internal/ui/views/dashboard*.go`, `internal/ui/app.go` |
 | 16 | **Audit: Emails / Rules / Accounts views already shipped** (no work needed; previous status was stale) | `internal/ui/views/{emails,rules,accounts}.go` |
-| 17 | **CF acceptance tests batch #1 (this slice)** — 6/11 spec-mandated CFs (T2/T3×2/R1/W1/A1/A2) locked as executable Go tests; 21 PASS sub-tests | `internal/core/cf_acceptance_*.go` |
+| 17 | CF acceptance tests batch #1 — 6/11 (T2/T3×2/R1/W1/A1/A2) | `internal/core/cf_acceptance_*.go` |
+| 18 | **CF acceptance tests batch #2 (this slice)** — final 5/11 (T1/T4/W3/D1/R2). All 11 spec-mandated CFs now locked as executable tests. | `internal/browser/cf_t4_test.go`, `internal/ui/cf_runtime_test.go`, `internal/core/cf_d1_dashboard_test.go`, `internal/ui/views/cf_r2_ast_guard_test.go` |
 
 Verification: 16 packages green under `nix run nixpkgs#go -- {vet,test} -tags nofyne ./...`; fn-length linter still **0/0** across 82 files.
 
@@ -33,15 +34,11 @@ Verification: 16 packages green under `nix run nixpkgs#go -- {vet,test} -tags no
 
 See `spec/21-app/99-consistency-report.md` §6 for the canonical delta list. Open items:
 
-1. **CF acceptance tests batch #2 — UI-side (5 outstanding)**:
-   - CF-T1 — `Test_Tools_OpenUrl_RespectsNewChromePath` (browser launcher live-reload from Settings).
-   - CF-T4 — `Test_Browser_IncognitoArg_OverrideVsAuto` (per-browser auto-pick vs. user override).
-   - CF-W3 — `Test_Watch_LiveCadenceUpdate` (UI cadence label updates ≤1s of SettingsSaved).
-   - CF-D1 — `Test_Dashboard_AutoStartIndicator_Live` (Dashboard indicator reflects AutoStartWatch event).
-   - CF-R2 — `Test_AST_RulesUI_NoSchemeBypass` (AST guard: no widget exposes a scheme-allowlist bypass toggle).
-2. **App boot smoke test** (user-side) — launch desktop binary; validate Settings render/live-switch, density toggle, Watch Start/Stop, Dashboard tiles incrementing, Recent opens against a populated DB.
-3. **Persist Density preference** (deferred per design-system §8) — when persistence lands, swap `Settings` view's local-only density handler for a `SettingsInput` field write.
-4. **Dashboard auto-refresh of static tiles on Bus events** — trigger `refresh()` on `EventNewMail` so Emails-stored count auto-bumps without manual refresh.
+1. **App boot smoke test** (user-side) — launch desktop binary; validate Settings render/live-switch, density toggle, Watch Start/Stop, Dashboard tiles incrementing, Recent opens against a populated DB. (Requires manual user run.)
+2. **Persist Density preference** (deferred per design-system §8) — when persistence lands, swap `Settings` view's local-only density handler for a `SettingsInput` field write.
+3. **Dashboard auto-refresh of static tiles on Bus events** — trigger `refresh()` on `EventNewMail` so Emails-stored count auto-bumps without manual refresh.
+4. **Race-build verification** — current verification is `-tags nofyne` (no `-race`). One-time `go test -race -tags nofyne ./...` would harden the new bridges (BridgeWatcherBus, forwardSettingsEvents, PollChans).
+5. **CF coverage extension** — consider adding regression tests for the four "informational" CFs documented in 99-consistency-report.md but not in the original 11-row matrix (Settings UpdatedAt monotonicity, OpenedUrls retention, Tools cache invalidation post-AccountEvent, Watch backoff jitter).
 
 ## Next logical step for the next AI session
-Pick item **1** — CF batch #2 (UI-side acceptance tests). Start with CF-T1 + CF-T4 (backend-adjacent: browser launcher contract); CF-W3 + CF-D1 require build-tag `!nofyne` and the WatchRuntime singleton; CF-R2 is a small AST guard scanning `internal/ui/views/rules*.go` for forbidden widget kinds.
+With all 11 CFs locked, the highest-leverage next item is **#3 — Dashboard auto-refresh on Bus events**: small, observable improvement that closes the last "must manually refresh" UX gap. After that, item **#4 — race build** is a 1-command sanity sweep with high catch potential for the freshly-merged bridges.
