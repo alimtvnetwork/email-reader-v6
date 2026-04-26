@@ -45,4 +45,21 @@ var paletteDark = map[ColorName]color.NRGBA{
 	ColorWatchDotReconnecting: {240, 175, 60, 255},
 	ColorWatchDotStopping:     {145, 195, 245, 255},
 	ColorWatchDotError:        {240, 90, 105, 255},
+
+	// §2.6 raw log
+	ColorRawLogHeartbeat: {90, 96, 110, 255},
+	ColorRawLogNewMail:   {235, 237, 242, 255},
+	ColorRawLogError:     {240, 90, 105, 255},
+	ColorRawLogTimestamp: {120, 125, 135, 255},
+
+	// §2.7 badges
+	ColorRuleMatchBadge: {170, 130, 255, 255},
+	ColorBadgeNeutralBg: {46, 49, 58, 255},
+	ColorBadgeNeutralFg: {200, 205, 215, 255},
+
+	// §2.8 code surfaces
+	ColorCodeBg:            {19, 21, 26, 255},
+	ColorCodeBorder:        {46, 49, 58, 255},
+	ColorCodeLineHighlight: {30, 33, 40, 255},
+	ColorCodeSelection:     {46, 72, 130, 255},
 }
