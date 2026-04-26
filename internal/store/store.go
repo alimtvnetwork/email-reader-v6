@@ -116,7 +116,69 @@ func (s *Store) migrate() error {
 			return errtrace.Wrapf(err, "migrate stmt: %s", q)
 		}
 	}
+	return s.migrateOpenedUrlsDelta1()
+}
+
+// migrateOpenedUrlsDelta1 adds the six PascalCase audit columns specified
+// by Delta #1 (Alias / Origin / OriginalUrl / IsDeduped / IsIncognito /
+// TraceId). SQLite's `ALTER TABLE ADD COLUMN` is non-idempotent, so we
+// introspect `PRAGMA table_info(OpenedUrls)` and emit each ADD only when
+// missing. This keeps fresh DBs and re-migrated existing DBs both happy.
+//
+// Spec: spec/21-app/02-features/06-tools/01-backend.md §2.5 + Delta #1.
+func (s *Store) migrateOpenedUrlsDelta1() error {
+	have, err := s.openedUrlsColumns()
+	if err != nil {
+		return errtrace.Wrap(err, "introspect OpenedUrls")
+	}
+	adds := []struct{ name, ddl string }{
+		{"Alias", `ALTER TABLE OpenedUrls ADD COLUMN Alias TEXT NOT NULL DEFAULT ''`},
+		{"Origin", `ALTER TABLE OpenedUrls ADD COLUMN Origin TEXT NOT NULL DEFAULT ''`},
+		{"OriginalUrl", `ALTER TABLE OpenedUrls ADD COLUMN OriginalUrl TEXT NOT NULL DEFAULT ''`},
+		{"IsDeduped", `ALTER TABLE OpenedUrls ADD COLUMN IsDeduped INTEGER NOT NULL DEFAULT 0`},
+		{"IsIncognito", `ALTER TABLE OpenedUrls ADD COLUMN IsIncognito INTEGER NOT NULL DEFAULT 0`},
+		{"TraceId", `ALTER TABLE OpenedUrls ADD COLUMN TraceId TEXT NOT NULL DEFAULT ''`},
+	}
+	for _, a := range adds {
+		if have[a.name] {
+			continue
+		}
+		if _, err := s.DB.Exec(a.ddl); err != nil {
+			return errtrace.Wrapf(err, "add column %s", a.name)
+		}
+	}
+	// Helpful (but non-unique) lookup index for the activated filters.
+	if _, err := s.DB.Exec(
+		`CREATE INDEX IF NOT EXISTS IxOpenedUrlsAliasOpenedAt ON OpenedUrls(Alias, OpenedAt)`,
+	); err != nil {
+		return errtrace.Wrap(err, "create IxOpenedUrlsAliasOpenedAt")
+	}
 	return nil
+}
+
+// openedUrlsColumns returns the set of column names currently present on
+// the OpenedUrls table. Used by Delta #1 to skip already-applied ADDs.
+func (s *Store) openedUrlsColumns() (map[string]bool, error) {
+	rows, err := s.DB.Query(`PRAGMA table_info(OpenedUrls)`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]bool{}
+	for rows.Next() {
+		var (
+			cid       int
+			name, typ string
+			notnull   int
+			dflt      sql.NullString
+			pk        int
+		)
+		if err := rows.Scan(&cid, &name, &typ, &notnull, &dflt, &pk); err != nil {
+			return nil, err
+		}
+		out[name] = true
+	}
+	return out, rows.Err()
 }
 
 // UpsertEmail inserts a new email row or returns the existing Id when the
@@ -185,20 +247,55 @@ func (s *Store) UpsertWatchState(ctx context.Context, ws WatchState) error {
 	return nil
 }
 
+// OpenedUrlInsert is the rich payload for `RecordOpenedUrlExt` introduced
+// by Delta #1. The legacy `RecordOpenedUrl(emailId, ruleName, url)` call
+// path still works (Tools.OpenUrl uses the Ext form; watcher and CLI
+// readers stay on the slim form). Empty fields are persisted as defaults.
+type OpenedUrlInsert struct {
+	EmailId     int64
+	RuleName    string
+	Url         string // canonical / post-redaction
+	Alias       string
+	Origin      string // OpenUrlOrigin string value (manual|rule|cli)
+	OriginalUrl string // pre-redaction; "" when same as Url
+	IsDeduped   bool
+	IsIncognito bool
+	TraceId     string
+}
+
 // RecordOpenedUrl inserts a row into OpenedUrls. Returns true if newly inserted,
-// false if (EmailId, Url) already exists (dedup hit).
+// false if (EmailId, Url) already exists (dedup hit). Slim form: leaves the
+// Delta-#1 columns at their default values.
 func (s *Store) RecordOpenedUrl(ctx context.Context, emailId int64, ruleName, url string) (bool, error) {
+	return s.RecordOpenedUrlExt(ctx, OpenedUrlInsert{
+		EmailId: emailId, RuleName: ruleName, Url: url,
+	})
+}
+
+// RecordOpenedUrlExt is the Delta-#1 rich-insert variant. Persists Alias,
+// Origin, OriginalUrl, IsDeduped, IsIncognito, and TraceId alongside the
+// legacy columns. Returns true on insert, false on (EmailId, Url) conflict.
+func (s *Store) RecordOpenedUrlExt(ctx context.Context, in OpenedUrlInsert) (bool, error) {
 	res, err := s.DB.ExecContext(ctx, `
-		INSERT INTO OpenedUrls (EmailId, RuleName, Url)
-		VALUES (?, ?, ?)
+		INSERT INTO OpenedUrls (EmailId, RuleName, Url, Alias, Origin,
+		                        OriginalUrl, IsDeduped, IsIncognito, TraceId)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(EmailId, Url) DO NOTHING`,
-		emailId, ruleName, url,
+		in.EmailId, in.RuleName, in.Url, in.Alias, in.Origin,
+		in.OriginalUrl, boolToInt(in.IsDeduped), boolToInt(in.IsIncognito), in.TraceId,
 	)
 	if err != nil {
-		return false, errtrace.Wrap(err, "record opened url")
+		return false, errtrace.Wrap(err, "record opened url ext")
 	}
 	n, _ := res.RowsAffected()
 	return n > 0, nil
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 // HasOpenedUrl reports whether the (emailId, url) pair has already been opened.

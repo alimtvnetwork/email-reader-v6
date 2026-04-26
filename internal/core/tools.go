@@ -10,6 +10,8 @@ package core
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"net/url"
@@ -18,6 +20,7 @@ import (
 	"time"
 
 	"github.com/lovable/email-read/internal/errtrace"
+	"github.com/lovable/email-read/internal/store"
 )
 
 // OpenUrlOrigin captures the caller context for the audit row. The UI
@@ -57,10 +60,13 @@ type urlLauncher interface {
 }
 
 // openedUrlRecorder is the slim store surface for OpenUrl audit + dedup.
-// Tests inject an in-memory implementation.
+// Tests inject an in-memory implementation. RecordOpenedUrlExt is the
+// Delta-#1 rich-insert variant — Tools.OpenUrl uses it; legacy callers
+// stay on the slim RecordOpenedUrl form.
 type openedUrlRecorder interface {
 	HasOpenedUrl(ctx context.Context, emailId int64, url string) (bool, error)
 	RecordOpenedUrl(ctx context.Context, emailId int64, ruleName, url string) (bool, error)
+	RecordOpenedUrlExt(ctx context.Context, in store.OpenedUrlInsert) (bool, error)
 }
 
 // Tools is the unified service holding the four sub-tool implementations.
@@ -120,6 +126,7 @@ type OpenUrlReport struct {
 	BrowserBinary string
 	Deduped       bool
 	IsIncognito   bool
+	TraceId       string // 24-char hex; identifies this launch in audit + logs
 }
 
 // OpenUrl is the only authorised browser-launch path. Validates →
@@ -129,10 +136,14 @@ func (t *Tools) OpenUrl(ctx context.Context, spec OpenUrlSpec) errtrace.Result[O
 		return errtrace.Err[OpenUrlReport](err)
 	}
 	canonical, original := redactUrl(spec.Url)
+	traceId := newTraceId()
 	if dup, err := t.checkDedup(ctx, spec, canonical); err != nil {
 		return errtrace.Err[OpenUrlReport](err)
 	} else if dup {
-		return errtrace.Ok(OpenUrlReport{Url: canonical, OriginalUrl: original, Deduped: true, IsIncognito: true})
+		// Audit the dedup hit too — Delta #1 surfaces IsDeduped=true so the
+		// Recent list shows suppressed launches. Best-effort, swallowed.
+		t.recordAuditExt(ctx, spec, canonical, original, traceId, true)
+		return errtrace.Ok(OpenUrlReport{Url: canonical, OriginalUrl: original, Deduped: true, IsIncognito: true, TraceId: traceId})
 	}
 	binary, err := t.browser.Path()
 	if err != nil {
@@ -141,8 +152,20 @@ func (t *Tools) OpenUrl(ctx context.Context, spec OpenUrlSpec) errtrace.Result[O
 	if err := t.browser.Open(canonical); err != nil {
 		return errtrace.Err[OpenUrlReport](errtrace.WrapCode(err, errtrace.ErrToolsOpenUrlLaunchFailed, "browser.Open"))
 	}
-	t.recordAudit(ctx, spec, canonical)
-	return errtrace.Ok(OpenUrlReport{Url: canonical, OriginalUrl: original, BrowserBinary: binary, IsIncognito: true})
+	t.recordAuditExt(ctx, spec, canonical, original, traceId, false)
+	return errtrace.Ok(OpenUrlReport{Url: canonical, OriginalUrl: original, BrowserBinary: binary, IsIncognito: true, TraceId: traceId})
+}
+
+// newTraceId returns a 24-char lowercase hex identifier (12 random
+// bytes). Crypto-grade randomness — never collides in practice; if the
+// kernel RNG fails we fall back to a deterministic time stamp so the
+// audit row still has a non-empty TraceId.
+func newTraceId() string {
+	var b [12]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return fmt.Sprintf("ts-%016x", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(b[:])
 }
 
 // validateUrl runs the §5.1 pipeline; first failure short-circuits.
@@ -230,14 +253,33 @@ func (t *Tools) checkDedup(ctx context.Context, spec OpenUrlSpec, canonical stri
 	return false, nil
 }
 
-// recordAudit writes the persistent + in-memory audit entries. Failures
-// are logged-and-swallowed: the launch already happened (§7 trade-off).
-func (t *Tools) recordAudit(ctx context.Context, spec OpenUrlSpec, canonical string) {
+// recordAuditExt writes the persistent + in-memory audit entries with
+// the Delta-#1 rich payload (Alias / Origin / OriginalUrl / IsDeduped /
+// IsIncognito / TraceId). Failures are logged-and-swallowed: the launch
+// already happened (§7 trade-off). When EmailId == 0 the persistent
+// insert is skipped (FK to Emails would fail) but the in-memory dedup
+// key is still recorded.
+func (t *Tools) recordAuditExt(ctx context.Context, spec OpenUrlSpec, canonical, original, traceId string, deduped bool) {
 	key := spec.Alias + "|" + canonical
 	t.openMu.Lock()
 	t.keys[key] = time.Now()
 	t.openMu.Unlock()
-	if spec.EmailId > 0 {
-		_, _ = t.store.RecordOpenedUrl(ctx, spec.EmailId, spec.RuleName, canonical)
+	if spec.EmailId == 0 {
+		return
 	}
+	origStr := ""
+	if original != canonical {
+		origStr = original
+	}
+	_, _ = t.store.RecordOpenedUrlExt(ctx, store.OpenedUrlInsert{
+		EmailId:     spec.EmailId,
+		RuleName:    spec.RuleName,
+		Url:         canonical,
+		Alias:       spec.Alias,
+		Origin:      string(spec.Origin),
+		OriginalUrl: origStr,
+		IsDeduped:   deduped,
+		IsIncognito: true, // OpenUrl always launches in incognito (§5)
+		TraceId:     traceId,
+	})
 }

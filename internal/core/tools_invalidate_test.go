@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/lovable/email-read/internal/errtrace"
+	"github.com/lovable/email-read/internal/store"
 )
 
 // helper: build a Tools with a stub launcher + recorder so we can
@@ -32,6 +33,9 @@ type stubRecorder struct{}
 
 func (stubRecorder) HasOpenedUrl(context.Context, int64, string) (bool, error) { return false, nil }
 func (stubRecorder) RecordOpenedUrl(context.Context, int64, string, string) (bool, error) {
+	return false, nil
+}
+func (stubRecorder) RecordOpenedUrlExt(context.Context, store.OpenedUrlInsert) (bool, error) {
 	return false, nil
 }
 

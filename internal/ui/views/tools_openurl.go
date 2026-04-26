@@ -20,6 +20,7 @@ import (
 	"github.com/lovable/email-read/internal/browser"
 	"github.com/lovable/email-read/internal/config"
 	"github.com/lovable/email-read/internal/core"
+	"github.com/lovable/email-read/internal/store"
 )
 
 // noopOpenedUrlStore satisfies core's openedUrlRecorder for manual
@@ -31,6 +32,9 @@ func (noopOpenedUrlStore) HasOpenedUrl(_ context.Context, _ int64, _ string) (bo
 	return false, nil
 }
 func (noopOpenedUrlStore) RecordOpenedUrl(_ context.Context, _ int64, _, _ string) (bool, error) {
+	return true, nil
+}
+func (noopOpenedUrlStore) RecordOpenedUrlExt(_ context.Context, _ store.OpenedUrlInsert) (bool, error) {
 	return true, nil
 }
 

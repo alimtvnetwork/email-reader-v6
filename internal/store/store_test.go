@@ -85,3 +85,88 @@ func TestOpenedUrlsDedup(t *testing.T) {
 		t.Fatal("HasOpenedUrl should be true")
 	}
 }
+
+// TestOpenedUrlsDelta1_Migration_Idempotent locks the contract that a
+// freshly-opened DB has the 6 PascalCase Delta-#1 columns AND that a
+// subsequent migrate() call (re-opening the same path) is a no-op.
+func TestOpenedUrlsDelta1_Migration_Idempotent(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "delta1.db")
+	s, err := OpenAt(path)
+	if err != nil {
+		t.Fatalf("open1: %v", err)
+	}
+	cols, err := s.openedUrlsColumns()
+	if err != nil {
+		t.Fatalf("introspect: %v", err)
+	}
+	for _, want := range []string{"Alias", "Origin", "OriginalUrl", "IsDeduped", "IsIncognito", "TraceId"} {
+		if !cols[want] {
+			t.Errorf("missing Delta-#1 column %q", want)
+		}
+	}
+	_ = s.Close()
+	// Re-open: migrate() must not error on already-applied ALTERs.
+	s2, err := OpenAt(path)
+	if err != nil {
+		t.Fatalf("open2 (idempotence): %v", err)
+	}
+	t.Cleanup(func() { _ = s2.Close() })
+}
+
+// TestRecordOpenedUrlExt_RoundTrip asserts every Delta-#1 field flows
+// through the Ext insert and is readable via a direct SELECT.
+func TestRecordOpenedUrlExt_RoundTrip(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	id, _, err := s.UpsertEmail(ctx, &Email{Alias: "a", MessageId: "<m@x>", Uid: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := OpenedUrlInsert{
+		EmailId: id, RuleName: "rule-A", Url: "https://x.test/canon",
+		Alias: "work", Origin: "manual", OriginalUrl: "https://x.test/canon?token=secret",
+		IsDeduped: false, IsIncognito: true, TraceId: "abc123def456",
+	}
+	ok, err := s.RecordOpenedUrlExt(ctx, in)
+	if err != nil || !ok {
+		t.Fatalf("Ext insert: ok=%v err=%v", ok, err)
+	}
+	var (
+		alias, origin, orig, trace string
+		dedup, incog               int
+	)
+	row := s.DB.QueryRowContext(ctx,
+		`SELECT Alias, Origin, OriginalUrl, IsDeduped, IsIncognito, TraceId
+		   FROM OpenedUrls WHERE EmailId = ? AND Url = ?`,
+		id, "https://x.test/canon")
+	if err := row.Scan(&alias, &origin, &orig, &dedup, &incog, &trace); err != nil {
+		t.Fatalf("readback: %v", err)
+	}
+	if alias != "work" || origin != "manual" || orig == "" || dedup != 0 || incog != 1 || trace != "abc123def456" {
+		t.Fatalf("round-trip mismatch: alias=%q origin=%q orig=%q dedup=%d incog=%d trace=%q",
+			alias, origin, orig, dedup, incog, trace)
+	}
+}
+
+// TestRecordOpenedUrl_LegacyShim asserts the slim form still works and
+// leaves the Delta-#1 columns at their default values.
+func TestRecordOpenedUrl_LegacyShim(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	id, _, _ := s.UpsertEmail(ctx, &Email{Alias: "a", MessageId: "<legacy@x>", Uid: 2})
+	if ok, err := s.RecordOpenedUrl(ctx, id, "rule-X", "https://legacy.test/p"); err != nil || !ok {
+		t.Fatalf("legacy insert: ok=%v err=%v", ok, err)
+	}
+	var alias, trace string
+	var incog int
+	err := s.DB.QueryRowContext(ctx,
+		`SELECT Alias, IsIncognito, TraceId FROM OpenedUrls WHERE EmailId = ?`, id,
+	).Scan(&alias, &incog, &trace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if alias != "" || incog != 0 || trace != "" {
+		t.Fatalf("legacy insert must default Delta-#1 cols, got alias=%q incog=%d trace=%q", alias, incog, trace)
+	}
+}
