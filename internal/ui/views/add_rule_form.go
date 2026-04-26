@@ -62,8 +62,10 @@ type ruleFormEntries struct {
 // pre-filled with the existing rule's values and the Name entry locked.
 func BuildAddRuleForm(opts AddRuleFormOptions) fyne.CanvasObject {
 	editing := opts.Initial != nil
-	if opts.Save == nil {
-		opts.Save = core.AddRule
+	if opts.Save == nil && opts.Service != nil {
+		// Bind the service's typed Add to the Save shape so downstream
+		// submit/clear closures see one uniform seam.
+		opts.Save = opts.Service.Add
 	}
 	e := newRuleFormEntries()
 	status := newStatusLabel()
