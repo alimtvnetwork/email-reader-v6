@@ -304,9 +304,24 @@ func (c *Client) FetchSince(lastUid uint32) ([]*Message, error) {
 //   - "__uidN" suffix as the dedup key — guarantees uniqueness even when
 //     two emails share second + sender + subject.
 func SaveRaw(alias string, m *Message) (string, error) {
+	dir, when, err := resolveSaveDir(alias, m)
+	if err != nil {
+		return "", err
+	}
+	name := buildRawFilename(when, m)
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, m.Raw, 0o600); err != nil {
+		return "", errtrace.Wrapf(err, "write eml %s", path)
+	}
+	return path, nil
+}
+
+// resolveSaveDir returns the day-folder under email/<alias>/YYYY-MM-DD/,
+// creating it if needed, plus the resolved timestamp used for the filename.
+func resolveSaveDir(alias string, m *Message) (string, time.Time, error) {
 	root, err := config.EmailDir()
 	if err != nil {
-		return "", errtrace.Wrap(err, "email dir")
+		return "", time.Time{}, errtrace.Wrap(err, "email dir")
 	}
 	when := m.ReceivedAt
 	if when.IsZero() {
@@ -314,9 +329,14 @@ func SaveRaw(alias string, m *Message) (string, error) {
 	}
 	dir := filepath.Join(root, sanitize(alias), when.Format("2006-01-02"))
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", errtrace.Wrap(err, "mkdir email dir")
+		return "", time.Time{}, errtrace.Wrap(err, "mkdir email dir")
 	}
+	return dir, when, nil
+}
 
+// buildRawFilename composes the readable .eml filename:
+// "HH.MM.SS__from__subject__uidN.eml" with sender/subject sanitized & truncated.
+func buildRawFilename(when time.Time, m *Message) string {
 	timePrefix := when.Format("15.04.05")
 	fromPart := sanitizeReadable(extractEmailAddr(m.From))
 	if fromPart == "" {
@@ -332,12 +352,7 @@ func SaveRaw(alias string, m *Message) (string, error) {
 	if len(subjPart) > 80 {
 		subjPart = subjPart[:80]
 	}
-	name := fmt.Sprintf("%s__%s__%s__uid%d.eml", timePrefix, fromPart, subjPart, m.Uid)
-	path := filepath.Join(dir, name)
-	if err := os.WriteFile(path, m.Raw, 0o600); err != nil {
-		return "", errtrace.Wrapf(err, "write eml %s", path)
-	}
-	return path, nil
+	return fmt.Sprintf("%s__%s__%s__uid%d.eml", timePrefix, fromPart, subjPart, m.Uid)
 }
 
 // --- helpers ---------------------------------------------------------------
