@@ -101,7 +101,7 @@ func TestGoleak_BridgeWatcherBus_StopExitsGoroutine(t *testing.T) {
 	// select at least once before we ask it to stop. This catches
 	// the regression class where stop() races with a never-yet-
 	// scheduled goroutine and "succeeds" by accident.
-	src.Publish(watcher.Event{Kind: watcher.EventNewMail, Alias: "a", Time: time.Now()})
+	src.Publish(watcher.Event{Kind: watcher.EventNewMail, Alias: "a", At: time.Now()})
 
 	stop()
 
