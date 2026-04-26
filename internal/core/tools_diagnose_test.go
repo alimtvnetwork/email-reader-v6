@@ -147,47 +147,36 @@ func TestValidateOpenedUrlListSpec(t *testing.T) {
 	}
 }
 
-// TestBuildOpenedUrlsQuery covers the Delta-#1 filter activation:
-// alias-only, origin-only, both, and the bare-cursor baseline.
-func TestBuildOpenedUrlsQuery(t *testing.T) {
+// TestOpenedUrlFilterFromSpec covers the Delta-#1 filter activation by
+// asserting the spec→filter translator produces the right primitive
+// payload for each combination. (The SQL composition itself lives in
+// store and is covered by `TestBuildOpenedUrlsQuery` over there.)
+func TestOpenedUrlFilterFromSpec(t *testing.T) {
 	now := time.Now()
 	cases := []struct {
-		name     string
-		spec     OpenedUrlListSpec
-		wantArgs int
-		wantSubs []string
+		name string
+		spec OpenedUrlListSpec
+		want store.OpenedUrlListFilter
 	}{
-		{"baseline", OpenedUrlListSpec{Limit: 50, Before: now}, 2, []string{"OpenedAt < ?", "LIMIT ?"}},
-		{"alias", OpenedUrlListSpec{Limit: 50, Before: now, Alias: "work"}, 3, []string{"Alias = ?"}},
-		{"origin", OpenedUrlListSpec{Limit: 50, Before: now, Origin: OriginRule}, 3, []string{"Origin = ?"}},
-		{"both", OpenedUrlListSpec{Limit: 50, Before: now, Alias: "w", Origin: OriginManual}, 4, []string{"Alias = ?", "Origin = ?"}},
+		{"baseline",
+			OpenedUrlListSpec{Limit: 50, Before: now},
+			store.OpenedUrlListFilter{Limit: 50, Before: now}},
+		{"alias",
+			OpenedUrlListSpec{Limit: 50, Before: now, Alias: "work"},
+			store.OpenedUrlListFilter{Limit: 50, Before: now, Alias: "work"}},
+		{"origin",
+			OpenedUrlListSpec{Limit: 50, Before: now, Origin: OriginRule},
+			store.OpenedUrlListFilter{Limit: 50, Before: now, Origin: string(OriginRule)}},
+		{"both",
+			OpenedUrlListSpec{Limit: 50, Before: now, Alias: "w", Origin: OriginManual},
+			store.OpenedUrlListFilter{Limit: 50, Before: now, Alias: "w", Origin: string(OriginManual)}},
 	}
 	for _, c := range cases {
-		q, args := buildOpenedUrlsQuery(c.spec)
-		if len(args) != c.wantArgs {
-			t.Errorf("%s: want %d args, got %d (%v)", c.name, c.wantArgs, len(args), args)
-		}
-		for _, sub := range c.wantSubs {
-			if !openedUrlsQueryContains(q, sub) {
-				t.Errorf("%s: query missing %q in %s", c.name, sub, q)
-			}
+		got := openedUrlFilterFromSpec(c.spec)
+		if got != c.want {
+			t.Errorf("%s: got %+v want %+v", c.name, got, c.want)
 		}
 	}
-}
-
-func openedUrlsQueryContains(haystack, needle string) bool {
-	return len(needle) == 0 || (len(haystack) >= len(needle) && openedUrlsQueryIndex(haystack, needle) >= 0)
-}
-
-// openedUrlsQueryIndex is a trivial substring search to keep this test
-// free of the strings package import noise.
-func openedUrlsQueryIndex(h, n string) int {
-	for i := 0; i+len(n) <= len(h); i++ {
-		if h[i:i+len(n)] == n {
-			return i
-		}
-	}
-	return -1
 }
 
 // fakeRows satisfies the inline interface scanOpenedUrlRows expects.
