@@ -1,4 +1,4 @@
-// vacuum_test.go covers PruneOpenedUrlsBefore.
+// vacuum_test.go covers PruneOpenedUrlsBefore, Analyze, and ShouldAnalyze.
 package store
 
 import (
@@ -76,5 +76,41 @@ func TestPruneOpenedUrlsBefore_ZeroCutoffIsNoop(t *testing.T) {
 	}
 	if n != 0 {
 		t.Fatalf("deleted = %d, want 0 (no-op)", n)
+	}
+}
+
+// TestShouldAnalyze_AtAndAroundThreshold pins the integer comparison —
+// exactly AnalyzeThreshold triggers, one less does not, anything more does.
+func TestShouldAnalyze_AtAndAroundThreshold(t *testing.T) {
+	cases := []struct {
+		cum  int64
+		want bool
+	}{
+		{0, false},
+		{1, false},
+		{AnalyzeThreshold - 1, false},
+		{AnalyzeThreshold, true},
+		{AnalyzeThreshold + 1, true},
+		{10 * AnalyzeThreshold, true},
+	}
+	for _, c := range cases {
+		if got := ShouldAnalyze(c.cum); got != c.want {
+			t.Fatalf("ShouldAnalyze(%d) = %v, want %v", c.cum, got, c.want)
+		}
+	}
+}
+
+// TestAnalyze_RunsCleanlyOnEmptyDB: ANALYZE is supposed to be safe to
+// call any time. Smoke-test it on an empty DB so we know the SQL parses
+// and does not error out on a fresh schema.
+func TestAnalyze_RunsCleanlyOnEmptyDB(t *testing.T) {
+	dir := t.TempDir()
+	s, err := OpenAt(filepath.Join(dir, "an.db"))
+	if err != nil {
+		t.Fatalf("OpenAt: %v", err)
+	}
+	defer s.Close()
+	if err := s.Analyze(context.Background()); err != nil {
+		t.Fatalf("Analyze: %v", err)
 	}
 }
