@@ -258,3 +258,41 @@ func formatAccountSavedMessage(res *core.AddAccountResult) string {
 	}
 	return msg
 }
+
+// newTestConnectionButton wires the "Test connection" button: validate
+// → call opts.TestConn → render status. Does NOT call Save and does NOT
+// run OnSaved — this is purely a probe so the user can verify
+// credentials before committing them.
+//
+// Disables itself for the duration of the probe so a hung server can't
+// be re-triggered. The status banner reports the resolved endpoint on
+// success ("Connected to imap.gmail.com:993 (TLS)") so the user knows
+// exactly what was tested.
+func newTestConnectionButton(opts AddAccountFormOptions, e *accountFormEntries, status *widget.Label) *widget.Button {
+	btn := widget.NewButton("Test connection", nil)
+	btn.OnTapped = func() {
+		v := ValidateAccountForm(accountFormInputFromEntries(e))
+		if !v.Valid {
+			status.SetText("⚠ " + strings.Join(v.Errors, " · "))
+			return
+		}
+		btn.Disable()
+		status.SetText("⏳ Testing connection…")
+		go runTestConnection(opts, accountInputFromValid(v), status, btn)
+	}
+	return btn
+}
+
+// runTestConnection performs the probe off the UI goroutine and renders
+// the result. Split out so newTestConnectionButton stays under the
+// 15-statement linter limit (AC-PROJ-20).
+func runTestConnection(opts AddAccountFormOptions, in core.AccountInput, status *widget.Label, btn *widget.Button) {
+	r := opts.TestConn(in)
+	defer btn.Enable()
+	if r.HasError() {
+		status.SetText("⚠ Test failed: " + r.Error().Error())
+		return
+	}
+	res := r.Value()
+	status.SetText(fmt.Sprintf("✓ Connected to %s:%d (TLS=%v).", res.Host, res.Port, res.UseTLS))
+}
