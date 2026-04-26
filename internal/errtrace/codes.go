@@ -82,11 +82,12 @@ const (
 	ErrCliInteractiveAborted Code = "ER-CLI-21804"
 
 	// ER-UI (Fyne) — block 21900–21999 (reserved low end)
-	ErrUiStateLoad      Code = "ER-UI-21901"
-	ErrUiStateSave      Code = "ER-UI-21902"
-	ErrUiFormValidation Code = "ER-UI-21903"
-	ErrUiViewRender     Code = "ER-UI-21904"
-	ErrUiClipboard      Code = "ER-UI-21905"
+	ErrUiThemeUnknownToken Code = "ER-UI-21900"
+	ErrUiStateLoad         Code = "ER-UI-21901"
+	ErrUiStateSave         Code = "ER-UI-21902"
+	ErrUiFormValidation    Code = "ER-UI-21903"
+	ErrUiViewRender        Code = "ER-UI-21904"
+	ErrUiClipboard         Code = "ER-UI-21905"
 
 	// ER-SET (Settings) — block 21770–21789
 	ErrSettingsConstruct        Code = "ER-SET-21770"
