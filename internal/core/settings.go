@@ -37,6 +37,7 @@ import (
 // older config files (which lack the key) still parse cleanly.
 type settingsExtension struct {
 	Theme                 string   `json:"theme"`
+	Density               string   `json:"density"`
 	OpenUrlAllowedSchemes []string `json:"openUrlAllowedSchemes"`
 	AllowLocalhostUrls    bool     `json:"allowLocalhostUrls"`
 	AutoStartWatch        bool     `json:"autoStartWatch"`
@@ -318,6 +319,7 @@ func applyInputToRaw(raw *rawConfigWithSettings, in SettingsInput, now time.Time
 	raw.cfg.Browser.ChromePath = in.BrowserOverride.ChromePath
 	raw.cfg.Browser.IncognitoArg = in.BrowserOverride.IncognitoArg
 	raw.ext.Theme = in.Theme.String()
+	raw.ext.Density = in.Density.String()
 	raw.ext.OpenUrlAllowedSchemes = append([]string(nil), in.OpenUrlAllowedSchemes...)
 	raw.ext.AllowLocalhostUrls = in.AllowLocalhostUrls
 	raw.ext.AutoStartWatch = in.AutoStartWatch
