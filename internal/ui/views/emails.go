@@ -50,15 +50,71 @@ func BuildEmails(opts EmailsOptions) fyne.CanvasObject {
 			fmt.Errorf("emails service not wired (no Service or List/Get overrides injected)"))
 	}
 
+	// Body is a swappable container so the Refresh button can
+	// re-render the list/detail tree in place without rebuilding the
+	// outer layout (which would also drop the toolbar focus).
+	body := container.NewStack()
+	render := func() {
+		body.Objects = []fyne.CanvasObject{buildEmailsBody(opts)}
+		body.Refresh()
+	}
+	render()
+
+	toolbar := buildEmailsToolbar(opts, render)
+	if toolbar == nil {
+		return container.NewBorder(
+			container.NewVBox(heading, widget.NewSeparator()),
+			nil, nil, nil, body,
+		)
+	}
+	return container.NewBorder(
+		container.NewVBox(heading, toolbar, widget.NewSeparator()),
+		nil, nil, nil, body,
+	)
+}
+
+// buildEmailsBody runs the per-render data fetch and returns the
+// rows-or-error widget. Extracted from BuildEmails so the Refresh
+// button (buildEmailsToolbar) can swap it in place without touching
+// the surrounding chrome.
+func buildEmailsBody(opts EmailsOptions) fyne.CanvasObject {
 	rows, err := loadEmailRows(opts)
 	if err != nil {
-		return emailsErrorView(heading, err)
+		return emailsErrorView(widget.NewLabel(""), err)
 	}
 	if len(rows) == 0 {
-		return emailsEmptyRows(heading, opts.Alias)
+		return emailsEmptyRows(widget.NewLabel(""), opts.Alias)
 	}
+	return buildEmailsBrowser(widget.NewLabel(""), opts, rows)
+}
 
-	return buildEmailsBrowser(heading, opts, rows)
+// buildEmailsToolbar returns the "🔄 Refresh" action row — but only
+// when the wired EmailsService can actually do the work (a Refresher
+// was injected via WithRefresher at bootstrap; see app.go NavEmails
+// arm). Returns nil in degraded modes so the toolbar simply doesn't
+// render rather than displaying a button that always errors.
+//
+// The button uses a 30s timeout: a single IMAP poll cycle (connect,
+// SELECT, fetch new UIDs, persist, evaluate rules) typically
+// finishes in <2s but can spike on cold connections or large new-
+// message batches. 30s matches the `Run` loop's per-cycle budget.
+func buildEmailsToolbar(opts EmailsOptions, onRefresh func()) fyne.CanvasObject {
+	if opts.Service == nil {
+		return nil
+	}
+	status := widget.NewLabel("")
+	btn := widget.NewButton("🔄 Refresh", func() {
+		status.SetText("Refreshing…")
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := opts.Service.Refresh(ctx, opts.Alias); err != nil {
+			status.SetText("⚠ Refresh failed: " + err.Error())
+			return
+		}
+		status.SetText("")
+		onRefresh()
+	})
+	return container.NewHBox(btn, status)
 }
 
 // applyEmailsDefaults fills test-override seams from the injected
