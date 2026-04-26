@@ -37,6 +37,12 @@ func normalizeInput(in SettingsInput) SettingsInput {
 	in.BrowserOverride.IncognitoArg = strings.TrimSpace(in.BrowserOverride.IncognitoArg)
 	in.OpenUrlAllowedSchemes = canonSchemes(in.OpenUrlAllowedSchemes)
 	defaults := DefaultSettingsInput()
+	if in.Density == 0 {
+		// Density was added after callers already constructed partial
+		// SettingsInput literals; treat the zero value as "use the
+		// default" rather than failing validation.
+		in.Density = defaults.Density
+	}
 	if in.WalCheckpointHours == 0 {
 		in.WalCheckpointHours = defaults.WalCheckpointHours
 	}
