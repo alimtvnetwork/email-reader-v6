@@ -5,7 +5,7 @@ Hard prohibitions for this project. Violating these will break builds, leak secr
 - **Do NOT touch `.release/` folder.** User preference (read-only domain).
 - **Do NOT modify read-only files:** `.gitignore`, `bun.lock`, `bun.lockb`, `package-lock.json`, `.lovable/user-preferences`.
 - **Do NOT introduce CGO dependencies.** SQLite must remain pure-Go (`modernc.org/sqlite`) so `go build` works on any host without a C toolchain.
-- **Do NOT run `go build` from the sandbox.** No Go toolchain is assumed here. The user runs `run.ps1` locally.
+- **Do NOT run `go build` from the sandbox.** No Go toolchain is preinstalled and the Fyne packages need GL/X11 dev headers that the sandbox lacks. The user runs `run.ps1` locally for builds. **Exception:** `go vet -tags nofyne ./...` and `go test -tags nofyne ./...` ARE allowed via `nix run nixpkgs#go -- ...` — they cover all 16 internal packages without GL deps and are the canonical verification path for headless changes.
 - **Do NOT commit plaintext passwords.** All IMAP passwords in `config.json` are Base64-encoded via `internal/config` helpers.
 - **Do NOT split plans or suggestions into multiple files.** Single source of truth: `.lovable/plan.md`, `.lovable/suggestions.md`.
 - **Do NOT create `.lovable/memories/`** (with trailing s). Correct path is `.lovable/memory/`.
