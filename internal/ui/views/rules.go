@@ -142,7 +142,17 @@ func BuildRules(opts RulesOptions) fyne.CanvasObject {
 	)
 }
 
-func ruleRow(r config.Rule, opts RulesOptions, status *widget.Label, reload func()) fyne.CanvasObject {
+// ruleRow renders a single rule line. `index` is the rule's
+// zero-based position in `orderedNames` (the full snapshot from the
+// most recent reload) — both are needed to compose the permutation
+// passed to `opts.Reorder` when the user clicks ↑/↓.
+//
+// The Rename + Reorder buttons are conditionally rendered: when the
+// corresponding callback is nil (e.g. headless test wiring or a
+// pre-Phase-5.6 caller), they're omitted from the row entirely
+// rather than rendered-disabled. Disabled buttons would invite
+// "why doesn't this do anything?" reports; absence is unambiguous.
+func ruleRow(r config.Rule, index int, orderedNames []string, opts RulesOptions, status *widget.Label, reload func()) fyne.CanvasObject {
 	name := widget.NewLabel(r.Name)
 	urlLbl := widget.NewLabel(r.UrlRegex)
 	urlLbl.Wrapping = fyne.TextWrapBreak
@@ -167,12 +177,111 @@ func ruleRow(r config.Rule, opts RulesOptions, status *widget.Label, reload func
 	}
 	checkCell := container.NewHBox(widget.NewLabel(""), check)
 
+	actionWidgets := []fyne.CanvasObject{}
+	// Reorder buttons (↑ / ↓) — only rendered when Reorder is wired
+	// AND the move is valid (top-row has no ↑, bottom-row has no ↓).
+	// Disabling-vs-omitting decision: see func doc-comment.
+	if opts.Reorder != nil {
+		if index > 0 {
+			upBtn := widget.NewButton("↑", func() {
+				moveRule(orderedNames, index, index-1, opts, status, reload)
+			})
+			actionWidgets = append(actionWidgets, upBtn)
+		}
+		if index < len(orderedNames)-1 {
+			downBtn := widget.NewButton("↓", func() {
+				moveRule(orderedNames, index, index+1, opts, status, reload)
+			})
+			actionWidgets = append(actionWidgets, downBtn)
+		}
+	}
+	// Rename button — only rendered when Rename is wired.
+	if opts.Rename != nil {
+		renameBtn := widget.NewButton("Rename", func() {
+			openRenameRuleDialog(r, opts, status, reload)
+		})
+		actionWidgets = append(actionWidgets, renameBtn)
+	}
 	editBtn := widget.NewButton("Edit", func() { openEditRuleDialog(r, opts, status, reload) })
 	delBtn := widget.NewButton("Delete", func() { confirmDeleteRule(r, opts, status, reload) })
 	delBtn.Importance = widget.DangerImportance
-	actions := container.NewHBox(editBtn, delBtn)
+	actionWidgets = append(actionWidgets, editBtn, delBtn)
+	actions := container.NewHBox(actionWidgets...)
 
 	return container.NewGridWithColumns(5, name, urlLbl, filters, checkCell, actions)
+}
+
+// moveRule swaps two positions in the ordered name list and pushes
+// the resulting permutation through `opts.Reorder`. Builds a fresh
+// slice (rather than mutating `orderedNames` in place) so the
+// snapshot captured by sibling rows in this reload-cycle stays
+// stable if the Reorder fails — a half-mutated snapshot would make
+// the second click's permutation incoherent.
+func moveRule(orderedNames []string, from, to int, opts RulesOptions, status *widget.Label, reload func()) {
+	if from < 0 || to < 0 || from >= len(orderedNames) || to >= len(orderedNames) || from == to {
+		return // defensive: button-render gates already prevent this
+	}
+	perm := make([]string, len(orderedNames))
+	copy(perm, orderedNames)
+	perm[from], perm[to] = perm[to], perm[from]
+	if res := opts.Reorder(perm); res.HasError() {
+		status.SetText("⚠ Reorder failed: " + res.Error().Error())
+		return
+	}
+	status.SetText(fmt.Sprintf("Moved rule %q.", orderedNames[from]))
+	if opts.OnRulesChanged != nil {
+		opts.OnRulesChanged()
+	}
+	reload()
+}
+
+// openRenameRuleDialog prompts for a new name and pipes the result
+// through `opts.Rename`. Reuses Fyne's `dialog.NewForm` for the
+// input affordance — matches the existing confirm-style dialog
+// idiom in this view (see confirmDeleteRule).
+//
+// Same-name (post-trim) is gated client-side BEFORE calling Rename:
+// the core service returns `ErrRuleRenameNoop` for that case
+// (intentional UI-bug surface), but we don't want to flash an error
+// banner just because the user closed the dialog without changing
+// anything. Empty input is similarly gated.
+func openRenameRuleDialog(r config.Rule, opts RulesOptions, status *widget.Label, reload func()) {
+	parent := currentParentWindow()
+	if parent == nil {
+		status.SetText("⚠ Cannot open Rename dialog: no parent window.")
+		return
+	}
+	entry := widget.NewEntry()
+	entry.SetText(r.Name)
+	entry.Validator = func(s string) error {
+		if len(s) == 0 {
+			return fmt.Errorf("name required")
+		}
+		return nil
+	}
+	d := dialog.NewForm("Rename rule", "Rename", "Cancel",
+		[]*widget.FormItem{widget.NewFormItem("New name", entry)},
+		func(ok bool) {
+			if !ok {
+				return
+			}
+			newName := entry.Text
+			// Client-side no-op short-circuit (see func doc).
+			if newName == "" || newName == r.Name {
+				return
+			}
+			if res := opts.Rename(r.Name, newName); res.HasError() {
+				status.SetText("⚠ Rename failed: " + res.Error().Error())
+				return
+			}
+			status.SetText(fmt.Sprintf("✓ Renamed %q → %q", r.Name, newName))
+			if opts.OnRulesChanged != nil {
+				opts.OnRulesChanged()
+			}
+			reload()
+		}, parent)
+	d.Resize(fyne.NewSize(420, 180))
+	d.Show()
 }
 
 // openEditRuleDialog shows the Add Rule form in edit mode inside a modal
