@@ -11,6 +11,12 @@
 // JSON envelope are stable across reorderings.
 package errtrace
 
+//go:generate go run ./codegen
+//
+// Regenerates codes_gen.go from codes.yaml. Run after editing either
+// this file or codes.yaml. The P1.4 registry test fails the build if
+// codes.go and codes_gen.go drift apart.
+
 const (
 	// ER-CFG (Config) — block 21000–21099
 	ErrConfigOpen          Code = "ER-CFG-21001"
