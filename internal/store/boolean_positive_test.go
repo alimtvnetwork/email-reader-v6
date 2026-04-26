@@ -24,9 +24,7 @@ import (
 func Test_BooleanPositive(t *testing.T) {
 	t.Parallel()
 
-	st, cleanup := newTempStore(t)
-	defer cleanup()
-
+	st := newTestStore(t)
 	ctx := context.Background()
 
 	tables, err := userTables(ctx, st)
