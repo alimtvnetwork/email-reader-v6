@@ -122,8 +122,8 @@ func TestReorder_DuplicateInInput(t *testing.T) {
 		t.Fatal("expected ErrRuleReorderMismatch, got nil")
 	}
 	c := mustCoded(t, res.Error(), errtrace.ErrRuleReorderMismatch)
-	if c.Context["duplicateName"] != "alpha" {
-		t.Errorf("duplicateName ctx = %q, want %q", c.Context["duplicateName"], "alpha")
+	if !findCtxKeyRules(c, "duplicateName", "alpha") {
+		t.Errorf("missing duplicateName=alpha in context: %+v", c.Context)
 	}
 }
 
@@ -135,8 +135,8 @@ func TestReorder_MissingName(t *testing.T) {
 		t.Fatal("expected ErrRuleReorderMismatch, got nil")
 	}
 	c := mustCoded(t, res.Error(), errtrace.ErrRuleReorderMismatch)
-	if c.Context["missingName"] != "delta" {
-		t.Errorf("missingName ctx = %q, want %q", c.Context["missingName"], "delta")
+	if !findCtxKeyRules(c, "missingName", "delta") {
+		t.Errorf("missing missingName=delta in context: %+v", c.Context)
 	}
 }
 
@@ -186,7 +186,7 @@ func TestReorder_SaveError_Wrapped(t *testing.T) {
 	if !errors.Is(res.Error(), saveErr) {
 		t.Errorf("expected wrapped saveErr, got %v", res.Error())
 	}
-	if c.Context["firstName"] != "alpha" {
-		t.Errorf("firstName ctx = %q, want %q", c.Context["firstName"], "alpha")
+	if !findCtxKeyRules(c, "firstName", "alpha") {
+		t.Errorf("missing firstName=alpha in context: %+v", c.Context)
 	}
 }
