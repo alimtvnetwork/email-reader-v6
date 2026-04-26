@@ -27,7 +27,7 @@ var state = struct {
 // settings code so a single registry entry covers both producers).
 func Apply(mode core.ThemeMode) errtrace.Result[struct{}] {
 	if !validMode(mode) {
-		return errtrace.Err[struct{}](errtrace.WrapCode(
+		return errtrace.Err[struct{}](errtrace.NewCoded(
 			errtrace.ErrSettingsTheme, "theme.Apply: invalid mode"))
 	}
 	state.mu.Lock()
