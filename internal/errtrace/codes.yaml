@@ -136,6 +136,9 @@ blocks:
       - const: ErrRuleSeedDefault
         code: "ER-RUL-21305"
         description: Seeding the default rule-set on first run failed.
+      - const: ErrRuleRenameNoop
+        code: "ER-RUL-21306"
+        description: Rename called with newName equal to oldName (no-op rejected; caller bug).
 
   - name: Watcher
     prefix: ER-WCH
