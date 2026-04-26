@@ -32,18 +32,47 @@ func BuildDashboard(opts DashboardOptions) fyne.CanvasObject {
 	heading := widget.NewLabelWithStyle("Dashboard", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	subtitle := widget.NewLabel("Live counts from data/config.json + data/emails.db.")
 
-	accountsCard := newStatCard("Accounts", "—")
-	rulesCard := newStatCard("Rules enabled", "—")
-	emailsCard := newStatCard("Emails stored", "—")
-	aliasCard := newStatCard("Selected account", "(none)")
-	statsRow := container.NewGridWithColumns(4,
-		accountsCard.Container, rulesCard.Container, emailsCard.Container, aliasCard.Container,
-	)
-
+	cards := newDashboardCards()
 	status := widget.NewLabel("Loaded just now.")
 	status.Wrapping = fyne.TextWrapWord
 
-	refresh := func() {
+	refresh := makeDashboardRefresh(opts, cards, status)
+	refresh()
+
+	actions := newDashboardActions(opts, refresh)
+	return container.NewVBox(
+		heading, subtitle, widget.NewSeparator(),
+		cards.Row, widget.NewSeparator(),
+		actions, status,
+	)
+}
+
+// dashboardCards groups the four stat tiles plus their parent grid container.
+type dashboardCards struct {
+	Accounts statCard
+	Rules    statCard
+	Emails   statCard
+	Alias    statCard
+	Row      *fyne.Container
+}
+
+// newDashboardCards builds the four stat tiles in a single row.
+func newDashboardCards() dashboardCards {
+	c := dashboardCards{
+		Accounts: newStatCard("Accounts", "—"),
+		Rules:    newStatCard("Rules enabled", "—"),
+		Emails:   newStatCard("Emails stored", "—"),
+		Alias:    newStatCard("Selected account", "(none)"),
+	}
+	c.Row = container.NewGridWithColumns(4,
+		c.Accounts.Container, c.Rules.Container, c.Emails.Container, c.Alias.Container,
+	)
+	return c
+}
+
+// makeDashboardRefresh returns a closure that reloads stats and updates the cards.
+func makeDashboardRefresh(opts DashboardOptions, cards dashboardCards, status *widget.Label) func() {
+	return func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		s, err := opts.LoadStats(ctx, opts.Alias)
@@ -51,21 +80,23 @@ func BuildDashboard(opts DashboardOptions) fyne.CanvasObject {
 			status.SetText("⚠ Failed to load stats: " + err.Error())
 			return
 		}
-		accountsCard.Value.SetText(fmt.Sprintf("%d", s.Accounts))
-		rulesCard.Value.SetText(fmt.Sprintf("%d / %d", s.RulesEnabled, s.RulesTotal))
-		emailsCard.Value.SetText(FormatEmailsValue(s))
+		cards.Accounts.Value.SetText(fmt.Sprintf("%d", s.Accounts))
+		cards.Rules.Value.SetText(fmt.Sprintf("%d / %d", s.RulesEnabled, s.RulesTotal))
+		cards.Emails.Value.SetText(FormatEmailsValue(s))
 		if s.Alias == "" {
-			aliasCard.Value.SetText("(none)")
+			cards.Alias.Value.SetText("(none)")
 		} else {
-			aliasCard.Value.SetText(s.Alias)
+			cards.Alias.Value.SetText(s.Alias)
 		}
 		status.SetText("Loaded at " + time.Now().Format("15:04:05") + ".")
 		if opts.OnRefresh != nil {
 			opts.OnRefresh()
 		}
 	}
-	refresh()
+}
 
+// newDashboardActions builds the start-watch + refresh button row.
+func newDashboardActions(opts DashboardOptions, refresh func()) *fyne.Container {
 	refreshBtn := widget.NewButton("Refresh", refresh)
 	startWatch := widget.NewButton("Start watching", func() {
 		if opts.OnStartWatch != nil {
@@ -73,13 +104,7 @@ func BuildDashboard(opts DashboardOptions) fyne.CanvasObject {
 		}
 	})
 	startWatch.Importance = widget.HighImportance
-
-	return container.NewVBox(
-		heading, subtitle, widget.NewSeparator(),
-		statsRow, widget.NewSeparator(),
-		container.NewHBox(startWatch, refreshBtn),
-		status,
-	)
+	return container.NewHBox(startWatch, refreshBtn)
 }
 
 type statCard struct {
