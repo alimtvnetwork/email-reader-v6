@@ -51,37 +51,55 @@ func AddAccount(in AccountInput) errtrace.Result[*AddAccountResult] {
 				WithContext("Email", in.Email),
 		)
 	}
-
-	cfg, err := config.Load()
-	if err != nil {
-		return errtrace.Err[*AddAccountResult](
-			errtrace.WrapCode(err, errtrace.ErrConfigOpen, "load config").
-				WithContext("Alias", in.Alias),
-		)
+	result, acct, existed := persistAddAccount(in, clean, hidden)
+	if result.HasError() {
+		return result
 	}
-
-	acct := buildAccount(in, clean)
-	existed := cfg.FindAccount(acct.Alias) != nil
-	cfg.UpsertAccount(acct)
-	if err := config.Save(cfg); err != nil {
-		return errtrace.Err[*AddAccountResult](
-			errtrace.WrapCode(err, errtrace.ErrConfigEncode, "save config").
-				WithContext("Alias", in.Alias),
-		)
-	}
-	// Publish AFTER persistence so consumers (e.g. Tools.diagCache)
-	// only invalidate on a state that actually exists on disk.
+	// Publish AFTER persistence (and outside the write lock) so
+	// subscriber callbacks don't run on the hot path.
 	if existed {
 		publishAccountEvent(AccountUpdated, acct.Alias)
 	} else {
 		publishAccountEvent(AccountAdded, acct.Alias)
 	}
-	p, _ := config.Path()
-	return errtrace.Ok(&AddAccountResult{
-		Account:        acct,
-		HiddenCharsRem: hidden,
-		ConfigPath:     p,
+	return result
+}
+
+// persistAddAccount runs the locked Load+Upsert+Save transaction for
+// AddAccount. Split out so AddAccount stays under the 15-statement
+// linter limit (AC-PROJ-20). Returns the result, the saved account
+// (for the publish step), and whether an existing alias was replaced.
+func persistAddAccount(in AccountInput, clean string, hidden int) (errtrace.Result[*AddAccountResult], config.Account, bool) {
+	var (
+		result  errtrace.Result[*AddAccountResult]
+		acct    config.Account
+		existed bool
+	)
+	// CF-A2: Load+UpsertAccount+Save must be atomic vs Settings.Save
+	// and other AddAccount/RemoveAccount calls, or updates get lost.
+	config.WithWriteLock(func() {
+		cfg, err := config.Load()
+		if err != nil {
+			result = errtrace.Err[*AddAccountResult](
+				errtrace.WrapCode(err, errtrace.ErrConfigOpen, "load config").
+					WithContext("Alias", in.Alias))
+			return
+		}
+		acct = buildAccount(in, clean)
+		existed = cfg.FindAccount(acct.Alias) != nil
+		cfg.UpsertAccount(acct)
+		if err := config.Save(cfg); err != nil {
+			result = errtrace.Err[*AddAccountResult](
+				errtrace.WrapCode(err, errtrace.ErrConfigEncode, "save config").
+					WithContext("Alias", in.Alias))
+			return
+		}
+		p, _ := config.Path()
+		result = errtrace.Ok(&AddAccountResult{
+			Account: acct, HiddenCharsRem: hidden, ConfigPath: p,
+		})
 	})
+	return result, acct, existed
 }
 
 // buildAccount constructs the persisted config.Account from validated input
@@ -177,25 +195,34 @@ func GetAccount(alias string) errtrace.Result[config.Account] {
 
 // RemoveAccount deletes the account with the given alias.
 func RemoveAccount(alias string) errtrace.Result[struct{}] {
-	cfg, err := config.Load()
-	if err != nil {
-		return errtrace.Err[struct{}](
-			errtrace.WrapCode(err, errtrace.ErrConfigOpen, "load config").
-				WithContext("Alias", alias),
-		)
-	}
-	if !cfg.RemoveAccount(alias) {
-		return errtrace.Err[struct{}](
-			errtrace.NewCoded(errtrace.ErrConfigAccountMissing, "remove account").
-				WithContext("Alias", alias),
-		)
-	}
-	if err := config.Save(cfg); err != nil {
-		return errtrace.Err[struct{}](
-			errtrace.WrapCode(err, errtrace.ErrConfigEncode, "save config").
-				WithContext("Alias", alias),
-		)
+	var result errtrace.Result[struct{}]
+	// CF-A2: Load+Remove+Save must be atomic vs Settings.Save and
+	// other AddAccount/RemoveAccount calls.
+	config.WithWriteLock(func() {
+		cfg, err := config.Load()
+		if err != nil {
+			result = errtrace.Err[struct{}](
+				errtrace.WrapCode(err, errtrace.ErrConfigOpen, "load config").
+					WithContext("Alias", alias))
+			return
+		}
+		if !cfg.RemoveAccount(alias) {
+			result = errtrace.Err[struct{}](
+				errtrace.NewCoded(errtrace.ErrConfigAccountMissing, "remove account").
+					WithContext("Alias", alias))
+			return
+		}
+		if err := config.Save(cfg); err != nil {
+			result = errtrace.Err[struct{}](
+				errtrace.WrapCode(err, errtrace.ErrConfigEncode, "save config").
+					WithContext("Alias", alias))
+			return
+		}
+		result = errtrace.Ok(struct{}{})
+	})
+	if result.HasError() {
+		return result
 	}
 	publishAccountEvent(AccountRemoved, alias)
-	return errtrace.Ok(struct{}{})
+	return result
 }

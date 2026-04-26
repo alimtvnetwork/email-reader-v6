@@ -10,22 +10,27 @@ import (
 )
 
 func TestDiagnose_NoAccounts(t *testing.T) {
-	tmp := t.TempDir()
-	old, _ := os.Getwd()
-	t.Cleanup(func() { _ = os.Chdir(old) })
-	if err := os.Chdir(tmp); err != nil {
-		t.Fatal(err)
-	}
-	// Pre-create an empty data dir so config.Load creates a fresh empty config.
-	_ = os.MkdirAll(filepath.Join(tmp, "data"), 0o755)
+	// Use withIsolatedConfig so config.json is actually isolated —
+	// the old inline chdir was a no-op (config.Path resolves via
+	// os.Executable, not cwd) and let prior tests' atto account
+	// leak in under `-count>1`.
+	withIsolatedConfig(t, func() {
+		tmp := t.TempDir()
+		old, _ := os.Getwd()
+		t.Cleanup(func() { _ = os.Chdir(old) })
+		if err := os.Chdir(tmp); err != nil {
+			t.Fatal(err)
+		}
+		_ = os.MkdirAll(filepath.Join(tmp, "data"), 0o755)
 
-	res := Diagnose("", nil)
-	if !res.HasError() {
-		t.Fatal("expected error for no configured accounts")
-	}
-	if !strings.Contains(res.Error().Error(), "no accounts configured") {
-		t.Fatalf("unexpected error: %v", res.Error())
-	}
+		res := Diagnose("", nil)
+		if !res.HasError() {
+			t.Fatal("expected error for no configured accounts")
+		}
+		if !strings.Contains(res.Error().Error(), "no accounts configured") {
+			t.Fatalf("unexpected error: %v", res.Error())
+		}
+	})
 }
 
 func TestSummarize(t *testing.T) {
