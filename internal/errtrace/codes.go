@@ -103,6 +103,20 @@ const (
 	ErrSettingsDetectChromeStat Code = "ER-SET-21780"
 	ErrSettingsEventDropped     Code = "ER-SET-21781"
 
+	// ER-TLS (Tools) — block 21750–21769
+	ErrToolsInvalidArgument     Code = "ER-TLS-21750"
+	ErrToolsReadFetchFailed     Code = "ER-TLS-21751"
+	ErrToolsDiagnoseAborted     Code = "ER-TLS-21752"
+	ErrToolsExportPathExists    Code = "ER-TLS-21753"
+	ErrToolsOpenUrlEmpty        Code = "ER-TLS-21760"
+	ErrToolsOpenUrlTooLong      Code = "ER-TLS-21761"
+	ErrToolsOpenUrlMalformed    Code = "ER-TLS-21762"
+	ErrToolsOpenUrlScheme       Code = "ER-TLS-21763"
+	ErrToolsOpenUrlLocalhost    Code = "ER-TLS-21764"
+	ErrToolsOpenUrlPrivateIp    Code = "ER-TLS-21765"
+	ErrToolsOpenUrlNoBrowser    Code = "ER-TLS-21766"
+	ErrToolsOpenUrlLaunchFailed Code = "ER-TLS-21767"
+
 	// Fallback — used by Err[T](nil) defensive path and as last resort.
 	ErrUnknown Code = "ER-UNKNOWN-21999"
 )
