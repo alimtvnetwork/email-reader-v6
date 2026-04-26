@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/lovable/email-read/internal/errtrace"
+	"github.com/lovable/email-read/internal/store/queries"
 )
 
 // AnalyzeThreshold is the row-count at which cumulative deletes trigger
