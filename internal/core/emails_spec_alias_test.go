@@ -54,10 +54,10 @@ func TestEmails_MethodsReachableViaSpecName(t *testing.T) {
 	// Production wiring isn't exercised; we only need the binding to
 	// type-check and the bound values to be non-nil.
 	res := NewEmails()
-	svc, err := res.Unwrap()
-	if err != nil {
-		t.Fatalf("NewEmails: %v", err)
+	if res.HasError() {
+		t.Fatalf("NewEmails: %v", res.Error())
 	}
+	svc := res.Value()
 	var e *Emails = svc
 
 	listFn := e.List
