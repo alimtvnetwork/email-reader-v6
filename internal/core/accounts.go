@@ -23,6 +23,7 @@ import (
 type AccountInput struct {
 	Alias          string
 	Email          string
+	DisplayName    string // optional human label persisted on the account
 	PlainPassword  string
 	ImapHost       string // optional — auto-derived from email domain when empty
 	ImapPort       int    // optional — defaults to imapdef lookup or 993
@@ -110,6 +111,7 @@ func buildAccount(in AccountInput, cleanPassword string) config.Account {
 	return config.Account{
 		Alias:       in.Alias,
 		Email:       in.Email,
+		DisplayName: strings.TrimSpace(in.DisplayName),
 		PasswordB64: config.EncodePassword(cleanPassword),
 		ImapHost:    host,
 		ImapPort:    port,

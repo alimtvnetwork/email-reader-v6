@@ -35,13 +35,14 @@ type AddAccountFormOptions struct {
 // 15-statement limit (AC-PROJ-20) by hiding a long sequence of NewEntry /
 // NewCheck calls behind one helper.
 type accountFormEntries struct {
-	alias    *widget.Entry
-	email    *widget.Entry
-	password *widget.Entry
-	host     *widget.Entry
-	port     *widget.Entry
-	useTLS   *widget.Check
-	mailbox  *widget.Entry
+	alias       *widget.Entry
+	email       *widget.Entry
+	displayName *widget.Entry
+	password    *widget.Entry
+	host        *widget.Entry
+	port        *widget.Entry
+	useTLS      *widget.Check
+	mailbox     *widget.Entry
 }
 
 // BuildAddAccountForm returns the inline Add Account form widget.
@@ -52,21 +53,24 @@ func BuildAddAccountForm(opts AddAccountFormOptions) fyne.CanvasObject {
 	e := newAccountFormEntries()
 	status := newStatusLabel()
 	autodiscover := newAutodiscoverButton(e, status)
-	form := buildAccountForm(e, autodiscover)
-	clear := func() { resetAccountEntries(e) }
+	revealPw := newPasswordRevealButton(e.password)
+	form := buildAccountForm(e, autodiscover, revealPw)
+	clear := func() { resetAccountEntries(e); revealPw.SetText("Show"); e.password.Password = true; e.password.Refresh() }
 	submit := newAccountSubmitButton(opts, e, status, clear)
 	clearBtn := widget.NewButton("Clear", func() { clear(); status.SetText("") })
 	actions := container.NewHBox(submit, clearBtn)
 	return container.NewPadded(container.NewVBox(form, widget.NewSeparator(), actions, status))
 }
 
-// newAccountFormEntries constructs the seven entry widgets with their
+// newAccountFormEntries constructs the entry widgets with their
 // placeholders. Returning a struct keeps BuildAddAccountForm flat.
 func newAccountFormEntries() *accountFormEntries {
 	alias := widget.NewEntry()
 	alias.SetPlaceHolder("e.g. work-gmail")
 	email := widget.NewEntry()
 	email.SetPlaceHolder("you@example.com")
+	displayName := widget.NewEntry()
+	displayName.SetPlaceHolder("optional — e.g. Work — Sales inbox")
 	password := widget.NewPasswordEntry()
 	password.SetPlaceHolder("IMAP password or app-specific token")
 	host := widget.NewEntry()
@@ -77,7 +81,24 @@ func newAccountFormEntries() *accountFormEntries {
 	useTLS.SetChecked(true)
 	mailbox := widget.NewEntry()
 	mailbox.SetPlaceHolder("INBOX")
-	return &accountFormEntries{alias, email, password, host, port, useTLS, mailbox}
+	return &accountFormEntries{alias, email, displayName, password, host, port, useTLS, mailbox}
+}
+
+// newPasswordRevealButton toggles the password Entry between hidden
+// (default) and visible. Re-creating the underlying Entry would lose the
+// typed value, so we mutate Password in place and refresh.
+func newPasswordRevealButton(pw *widget.Entry) *widget.Button {
+	btn := widget.NewButton("Show", nil)
+	btn.OnTapped = func() {
+		pw.Password = !pw.Password
+		if pw.Password {
+			btn.SetText("Show")
+		} else {
+			btn.SetText("Hide")
+		}
+		pw.Refresh()
+	}
+	return btn
 }
 
 // newStatusLabel returns a wrap-on-word label used to show inline form
@@ -104,12 +125,15 @@ func newAutodiscoverButton(e *accountFormEntries, status *widget.Label) *widget.
 	})
 }
 
-// buildAccountForm composes the widget.Form rows from the seven entries.
-func buildAccountForm(e *accountFormEntries, autodiscover *widget.Button) *widget.Form {
+// buildAccountForm composes the widget.Form rows from the entries. The
+// password row gets a trailing "Show/Hide" button so users can verify
+// what they typed without committing it to clipboard.
+func buildAccountForm(e *accountFormEntries, autodiscover, revealPw *widget.Button) *widget.Form {
 	return widget.NewForm(
 		widget.NewFormItem("Alias", e.alias),
+		widget.NewFormItem("Display name", e.displayName),
 		widget.NewFormItem("Email", e.email),
-		widget.NewFormItem("Password", e.password),
+		widget.NewFormItem("Password", container.NewBorder(nil, nil, nil, revealPw, e.password)),
 		widget.NewFormItem("IMAP host", container.NewBorder(nil, nil, nil, autodiscover, e.host)),
 		widget.NewFormItem("Port", e.port),
 		widget.NewFormItem("TLS", e.useTLS),
@@ -121,6 +145,7 @@ func buildAccountForm(e *accountFormEntries, autodiscover *widget.Button) *widge
 func resetAccountEntries(e *accountFormEntries) {
 	e.alias.SetText("")
 	e.email.SetText("")
+	e.displayName.SetText("")
 	e.password.SetText("")
 	e.host.SetText("")
 	e.port.SetText("")
@@ -156,13 +181,14 @@ func newAccountSubmitButton(opts AddAccountFormOptions, e *accountFormEntries, s
 // validation input struct.
 func accountFormInputFromEntries(e *accountFormEntries) AccountFormInput {
 	return AccountFormInput{
-		Alias:    e.alias.Text,
-		Email:    e.email.Text,
-		Password: e.password.Text,
-		Host:     e.host.Text,
-		Port:     e.port.Text,
-		UseTLS:   e.useTLS.Checked,
-		Mailbox:  e.mailbox.Text,
+		Alias:       e.alias.Text,
+		Email:       e.email.Text,
+		DisplayName: e.displayName.Text,
+		Password:    e.password.Text,
+		Host:        e.host.Text,
+		Port:        e.port.Text,
+		UseTLS:      e.useTLS.Checked,
+		Mailbox:     e.mailbox.Text,
 	}
 }
 
@@ -172,6 +198,7 @@ func accountInputFromValid(v AccountFormResult) core.AccountInput {
 	return core.AccountInput{
 		Alias:          v.Alias,
 		Email:          v.Email,
+		DisplayName:    v.DisplayName,
 		PlainPassword:  v.Password,
 		ImapHost:       v.Host,
 		ImapPort:       v.Port,
