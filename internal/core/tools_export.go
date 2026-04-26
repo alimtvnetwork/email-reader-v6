@@ -90,11 +90,7 @@ func preflightExport(spec ExportSpec) error {
 }
 
 func openExportStore() (*store.Store, error) {
-	cfg, err := config.Load()
-	if err != nil {
-		return nil, errtrace.WrapCode(err, errtrace.ErrToolsInvalidArgument, "config.Load")
-	}
-	st, err := store.Open(cfg.DataDir)
+	st, err := store.Open()
 	if err != nil {
 		return nil, errtrace.WrapCode(err, errtrace.ErrToolsInvalidArgument, "store.Open")
 	}
