@@ -67,6 +67,43 @@ func Test_Color_KnownTokens(t *testing.T) {
 	}
 }
 
+// Test_Color_RawLogBadgeCodeTokens locks every spec value in §2.6, §2.7,
+// §2.8 (resolves OI-1 second half + AC-DS-04). Both modes exercised so a
+// drift in either palette fails the build.
+func Test_Color_RawLogBadgeCodeTokens(t *testing.T) {
+	t.Cleanup(resetForTest)
+	cases := []struct {
+		mode  core.ThemeMode
+		name  ColorName
+		want  color.NRGBA
+	}{
+		// §2.6 raw log — dark
+		{core.ThemeDark, ColorRawLogHeartbeat, color.NRGBA{90, 96, 110, 255}},
+		{core.ThemeDark, ColorRawLogNewMail, color.NRGBA{235, 237, 242, 255}},
+		{core.ThemeDark, ColorRawLogError, color.NRGBA{240, 90, 105, 255}},
+		{core.ThemeDark, ColorRawLogTimestamp, color.NRGBA{120, 125, 135, 255}},
+		// §2.7 badges — dark
+		{core.ThemeDark, ColorRuleMatchBadge, color.NRGBA{170, 130, 255, 255}},
+		{core.ThemeDark, ColorBadgeNeutralBg, color.NRGBA{46, 49, 58, 255}},
+		{core.ThemeDark, ColorBadgeNeutralFg, color.NRGBA{200, 205, 215, 255}},
+		// §2.8 code — dark
+		{core.ThemeDark, ColorCodeBg, color.NRGBA{19, 21, 26, 255}},
+		{core.ThemeDark, ColorCodeBorder, color.NRGBA{46, 49, 58, 255}},
+		{core.ThemeDark, ColorCodeLineHighlight, color.NRGBA{30, 33, 40, 255}},
+		{core.ThemeDark, ColorCodeSelection, color.NRGBA{46, 72, 130, 255}},
+		// light-mode spot checks (one per group)
+		{core.ThemeLight, ColorRawLogNewMail, color.NRGBA{15, 17, 21, 255}},
+		{core.ThemeLight, ColorRuleMatchBadge, color.NRGBA{122, 82, 220, 255}},
+		{core.ThemeLight, ColorCodeBg, color.NRGBA{244, 245, 248, 255}},
+	}
+	for _, tc := range cases {
+		_ = Apply(tc.mode)
+		if got := Color(tc.name); got != tc.want {
+			t.Errorf("[%v] %s = %v, want %v", tc.mode, tc.name, got, tc.want)
+		}
+	}
+}
+
 // Test_Color_UnknownFallback confirms the no-panic contract: any
 // undefined token returns ColorForeground for the active mode and logs
 // ER-UI-21900 (we don't assert log output here — visual smoke only).
