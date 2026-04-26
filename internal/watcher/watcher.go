@@ -29,6 +29,11 @@ type Options struct {
 	Logger      *log.Logger // optional; defaults to stdout
 	Verbose     bool        // if true, log every poll step. Default: only state changes.
 	Bus         *Bus        // optional; structured event stream for the UI. CLI leaves nil.
+	// PollSecondsCh, when non-nil, lets a Settings consumer push live
+	// PollSeconds updates. Values are clamped to 1..60 and applied on the
+	// NEXT loop iteration (in-flight polls are not interrupted). Per
+	// spec/21-app/02-features/07-settings/01-backend.md §8 (CF-W1).
+	PollSecondsCh <-chan int
 }
 
 // ts returns the compact HH:MM:SS prefix we put on every line. The CLI
