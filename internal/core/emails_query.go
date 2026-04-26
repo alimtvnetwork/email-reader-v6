@@ -175,6 +175,6 @@ func (s *EmailsService) ListPage(ctx context.Context, q EmailQuery) errtrace.Res
 // storeQueryFromCore is the trivial conversion: the only fields the
 // store understands today are Alias + Search. The new filters happen
 // in-process inside ListPage.
-func storeQueryFromCore(q EmailQuery) storeEmailQueryShim {
-	return storeEmailQueryShim{Alias: q.Alias, Search: q.Search}
+func storeQueryFromCore(q EmailQuery) store.EmailQuery {
+	return store.EmailQuery{Alias: q.Alias, Search: q.Search}
 }
