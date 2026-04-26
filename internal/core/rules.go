@@ -1,3 +1,33 @@
+// rules.go — typed *RulesService + thin package-level wrappers.
+//
+// **Phase 2.6 refactor.** The old shape exposed `AddRule`, `ListRules`,
+// `GetRule`, `SetRuleEnabled`, `RemoveRule` as package-level funcs
+// that each called `config.Load()` + `config.Save()` (process-globals
+// reaching for `~/.config/email-read/config.json`). That made rule
+// CRUD impossible to test without writing real files and made it
+// impossible to share an in-memory config across services in a single
+// UI tick.
+//
+// The new shape mirrors `core.DashboardService` / `core.EmailsService`
+// (see `dashboard.go`, `emails.go`):
+//
+//   - `RulesService` struct holds two injected deps:
+//       * `loadCfg configLoader` — read side (already declared in
+//         dashboard.go and reused here verbatim)
+//       * `saveCfg cfgWriter`    — write side, declared below
+//     Read and write are split so tests can fake-write to memory
+//     and so a future read-only consumer can construct a service
+//     that explicitly cannot mutate config.
+//   - `NewRulesService` is the explicit constructor; nil in either
+//     slot → ErrCoreInvalidArgument.
+//   - `Add`/`List`/`Get`/`SetEnabled`/`Remove` are the typed methods
+//     that replace the old package funcs. Same error envelope, same
+//     semantics, only the dependency source changed.
+//   - The package-level `AddRule` / `ListRules` / `GetRule` /
+//     `SetRuleEnabled` / `RemoveRule` stay as deprecated thin
+//     wrappers that build a default-injected service per call.
+//     Wrappers go away in P2.8.
+//   - `CountEnabledRules` stays as a pure helper (no deps to inject).
 package core
 
 import (
@@ -27,10 +57,49 @@ type AddRuleResult struct {
 	Replaced   bool // true if an existing rule with the same name was overwritten
 }
 
-// AddRule validates input, compiles regex patterns to catch syntax errors
-// before persisting, and writes the rule to config.json. If a rule with the
-// same name exists it is replaced (upsert semantics).
-func AddRule(in RuleInput) errtrace.Result[*AddRuleResult] {
+// cfgWriter persists a config snapshot. Functional shape (matching
+// `configLoader` in dashboard.go) so tests can write to memory in a
+// one-line closure.
+type cfgWriter func(*config.Config) error
+
+// cfgPathFn returns the on-disk path of the active config (used by
+// AddRuleResult so the UI can echo "wrote to ..."). Functional shape;
+// tests typically return a fixed string.
+type cfgPathFn func() (string, error)
+
+// RulesService performs CRUD on configured rules via injected
+// load/save/path deps. Stateless — concurrent method calls each
+// load + save independently (config.Save is itself the locking
+// boundary).
+type RulesService struct {
+	loadCfg configLoader
+	saveCfg cfgWriter
+	cfgPath cfgPathFn
+}
+
+// NewRulesService constructs a RulesService. All three deps are
+// required; nil in any slot returns ErrCoreInvalidArgument (no
+// defensive default-injection — bootstrap is the right place).
+func NewRulesService(loadCfg configLoader, saveCfg cfgWriter, cfgPath cfgPathFn) errtrace.Result[*RulesService] {
+	if loadCfg == nil {
+		return errtrace.Err[*RulesService](errtrace.NewCoded(
+			errtrace.ErrCoreInvalidArgument, "NewRulesService: loadCfg is nil"))
+	}
+	if saveCfg == nil {
+		return errtrace.Err[*RulesService](errtrace.NewCoded(
+			errtrace.ErrCoreInvalidArgument, "NewRulesService: saveCfg is nil"))
+	}
+	if cfgPath == nil {
+		return errtrace.Err[*RulesService](errtrace.NewCoded(
+			errtrace.ErrCoreInvalidArgument, "NewRulesService: cfgPath is nil"))
+	}
+	return errtrace.Ok(&RulesService{loadCfg: loadCfg, saveCfg: saveCfg, cfgPath: cfgPath})
+}
+
+// Add validates input, compiles regex patterns to catch syntax errors
+// before persisting, and writes the rule. Upsert semantics: a rule
+// with the same name is replaced.
+func (s *RulesService) Add(in RuleInput) errtrace.Result[*AddRuleResult] {
 	in.Name = strings.TrimSpace(in.Name)
 	in.UrlRegex = strings.TrimSpace(in.UrlRegex)
 	if in.Name == "" || in.UrlRegex == "" {
@@ -57,7 +126,7 @@ func AddRule(in RuleInput) errtrace.Result[*AddRuleResult] {
 		}
 	}
 
-	cfg, err := config.Load()
+	cfg, err := s.loadCfg()
 	if err != nil {
 		return errtrace.Err[*AddRuleResult](errtrace.WrapCode(err,
 			errtrace.ErrConfigOpen, "load config"))
@@ -77,18 +146,18 @@ func AddRule(in RuleInput) errtrace.Result[*AddRuleResult] {
 	} else {
 		cfg.Rules = append(cfg.Rules, r)
 	}
-	if err := config.Save(cfg); err != nil {
+	if err := s.saveCfg(cfg); err != nil {
 		return errtrace.Err[*AddRuleResult](errtrace.WrapCode(err,
 			errtrace.ErrConfigEncode, "save config").
 			WithContext("rule", in.Name))
 	}
-	p, _ := config.Path()
+	p, _ := s.cfgPath()
 	return errtrace.Ok(&AddRuleResult{Rule: r, ConfigPath: p, Replaced: replaced})
 }
 
-// ListRules returns all configured rules (a copy — safe to mutate).
-func ListRules() errtrace.Result[[]config.Rule] {
-	cfg, err := config.Load()
+// List returns all configured rules (a copy — safe to mutate).
+func (s *RulesService) List() errtrace.Result[[]config.Rule] {
+	cfg, err := s.loadCfg()
 	if err != nil {
 		return errtrace.Err[[]config.Rule](errtrace.WrapCode(err,
 			errtrace.ErrConfigOpen, "load config"))
@@ -98,9 +167,9 @@ func ListRules() errtrace.Result[[]config.Rule] {
 	return errtrace.Ok(out)
 }
 
-// GetRule returns the rule with the given name or an error.
-func GetRule(name string) errtrace.Result[config.Rule] {
-	cfg, err := config.Load()
+// Get returns the rule with the given name or ErrRuleNotFound.
+func (s *RulesService) Get(name string) errtrace.Result[config.Rule] {
+	cfg, err := s.loadCfg()
 	if err != nil {
 		return errtrace.Err[config.Rule](errtrace.WrapCode(err,
 			errtrace.ErrConfigOpen, "load config"))
@@ -114,9 +183,9 @@ func GetRule(name string) errtrace.Result[config.Rule] {
 	return errtrace.Ok(*r)
 }
 
-// SetRuleEnabled flips the enabled flag of an existing rule.
-func SetRuleEnabled(name string, enabled bool) errtrace.Result[struct{}] {
-	cfg, err := config.Load()
+// SetEnabled flips the enabled flag of an existing rule.
+func (s *RulesService) SetEnabled(name string, enabled bool) errtrace.Result[struct{}] {
+	cfg, err := s.loadCfg()
 	if err != nil {
 		return errtrace.Err[struct{}](errtrace.WrapCode(err,
 			errtrace.ErrConfigOpen, "load config"))
@@ -128,7 +197,7 @@ func SetRuleEnabled(name string, enabled bool) errtrace.Result[struct{}] {
 			WithContext("name", name))
 	}
 	r.Enabled = enabled
-	if err := config.Save(cfg); err != nil {
+	if err := s.saveCfg(cfg); err != nil {
 		return errtrace.Err[struct{}](errtrace.WrapCode(err,
 			errtrace.ErrConfigEncode, "save config").
 			WithContext("name", name))
@@ -136,10 +205,10 @@ func SetRuleEnabled(name string, enabled bool) errtrace.Result[struct{}] {
 	return errtrace.Ok(struct{}{})
 }
 
-// RemoveRule deletes the rule with the given name. Returns an error if
-// no such rule exists.
-func RemoveRule(name string) errtrace.Result[struct{}] {
-	cfg, err := config.Load()
+// Remove deletes the rule with the given name. Returns
+// ErrRuleNotFound if no such rule exists.
+func (s *RulesService) Remove(name string) errtrace.Result[struct{}] {
+	cfg, err := s.loadCfg()
 	if err != nil {
 		return errtrace.Err[struct{}](errtrace.WrapCode(err,
 			errtrace.ErrConfigOpen, "load config"))
@@ -147,7 +216,7 @@ func RemoveRule(name string) errtrace.Result[struct{}] {
 	for i := range cfg.Rules {
 		if cfg.Rules[i].Name == name {
 			cfg.Rules = append(cfg.Rules[:i], cfg.Rules[i+1:]...)
-			if err := config.Save(cfg); err != nil {
+			if err := s.saveCfg(cfg); err != nil {
 				return errtrace.Err[struct{}](errtrace.WrapCode(err,
 					errtrace.ErrConfigEncode, "save config").
 					WithContext("name", name))
@@ -160,8 +229,52 @@ func RemoveRule(name string) errtrace.Result[struct{}] {
 		WithContext("name", name))
 }
 
+// ============================================================
+// Deprecated package-level wrappers — preserved for back-compat
+// during the Phase 2 view migration. Removed in P2.8 once every
+// caller goes through an injected *RulesService.
+// ============================================================
+
+// Deprecated: use (*RulesService).Add. See NewRulesService.
+func AddRule(in RuleInput) errtrace.Result[*AddRuleResult] {
+	return mustDefaultRulesService().Add(in)
+}
+
+// Deprecated: use (*RulesService).List. See NewRulesService.
+func ListRules() errtrace.Result[[]config.Rule] {
+	return mustDefaultRulesService().List()
+}
+
+// Deprecated: use (*RulesService).Get. See NewRulesService.
+func GetRule(name string) errtrace.Result[config.Rule] {
+	return mustDefaultRulesService().Get(name)
+}
+
+// Deprecated: use (*RulesService).SetEnabled. See NewRulesService.
+func SetRuleEnabled(name string, enabled bool) errtrace.Result[struct{}] {
+	return mustDefaultRulesService().SetEnabled(name, enabled)
+}
+
+// Deprecated: use (*RulesService).Remove. See NewRulesService.
+func RemoveRule(name string) errtrace.Result[struct{}] {
+	return mustDefaultRulesService().Remove(name)
+}
+
+// mustDefaultRulesService builds a default-injected service backed by
+// the real config package. Constructor cannot fail — all three deps
+// are non-nil — so we panic on the impossible branch to keep wrapper
+// signatures clean. Removed with the wrappers in P2.8.
+func mustDefaultRulesService() *RulesService {
+	res := NewRulesService(config.Load, config.Save, config.Path)
+	if res.HasError() {
+		panic("core: default RulesService construction failed: " + res.Error().Error())
+	}
+	return res.Value()
+}
+
 // CountEnabledRules reports how many rules in the slice are enabled.
-// Used by watch/read to decide whether to seed a default open-any-url rule.
+// Used by watch/read to decide whether to seed a default open-any-url
+// rule. Pure helper — no service needed.
 func CountEnabledRules(rs []config.Rule) int {
 	n := 0
 	for _, r := range rs {
