@@ -130,23 +130,6 @@ func applyInitialRuleToEntries(r config.Rule, e *ruleFormEntries) {
 	e.enabled.SetChecked(r.Enabled)
 }
 
-// ruleClearLabel returns the label for the secondary button — "Reset" in
-// edit mode (restores the original values), "Clear" in add mode.
-func ruleClearLabel(editing bool) string {
-	if editing {
-		return "Reset"
-	}
-	return "Clear"
-}
-
-// ruleSubmitLabel returns the primary button label.
-func ruleSubmitLabel(editing bool) string {
-	if editing {
-		return "Update rule"
-	}
-	return "Save rule"
-}
-
 // newRuleSubmitButton wires the primary button: validate → call opts.Save
 // → render status → run OnSaved hook on success.
 func newRuleSubmitButton(opts AddRuleFormOptions, e *ruleFormEntries, status *widget.Label, clear func(), editing bool) *widget.Button {
