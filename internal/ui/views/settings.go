@@ -87,7 +87,7 @@ func settingsFormItems(w *settingsWidgets) []*widget.FormItem {
 		{Text: "Theme", Widget: w.themeSelect, HintText: "Restart not required — repaints live."},
 		{Text: "Poll interval (seconds)", Widget: w.pollEntry, HintText: "1–60. Applied to running watcher live."},
 		{Text: "Chrome / Chromium path", Widget: w.chromeEntry, HintText: "Leave blank to auto-detect."},
-		{Text: "Density", Widget: w.densitySelect, HintText: "Compact tightens paddings (process-local)."},
+		{Text: "Density", Widget: w.densitySelect, HintText: "Compact tightens paddings. Persists across restarts."},
 		{Text: "Opened-URLs retention (days)", Widget: w.retentionEntry, HintText: "0–3650. 0 = never prune."},
 		{Text: "Weekly VACUUM weekday", Widget: w.weekdaySelect, HintText: "Day of week for the weekly VACUUM."},
 		{Text: "Weekly VACUUM hour (local)", Widget: w.vacHourEntry, HintText: "0–23. 24-hour clock; default 03."},
