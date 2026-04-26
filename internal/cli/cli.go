@@ -305,20 +305,9 @@ func runWatch(parent context.Context, alias string, verbose bool) error {
 	if err != nil {
 		return errtrace.Wrap(err, "load config")
 	}
-	if len(cfg.Accounts) == 0 {
-		return errtrace.New("no accounts configured. Run `email-read add` first")
-	}
-
-	var acct config.Account
-	if alias == "" {
-		acct = cfg.Accounts[0]
-		fmt.Printf("No alias given — using first configured account %q\n", acct.Alias)
-	} else {
-		p := cfg.FindAccount(alias)
-		if p == nil {
-			return errtrace.New(fmt.Sprintf("no account with alias %q (run `email-read list`)", alias))
-		}
-		acct = *p
+	acct, err := resolveWatchAccount(cfg, alias)
+	if err != nil {
+		return err
 	}
 
 	st, err := store.Open()
@@ -327,45 +316,13 @@ func runWatch(parent context.Context, alias string, verbose bool) error {
 	}
 	defer st.Close()
 
-	// Auto-seed a default "open-any-url" rule if the user has zero enabled
-	// rules. This makes the tool work out-of-the-box: any http(s) link in
-	// any incoming email body will be opened in incognito. The user can
-	// disable or replace it later with `rules disable` / `rules add`.
-	if countEnabledRules(cfg.Rules) == 0 {
-		seeded := config.Rule{
-			Name:     "default-open-any-url",
-			Enabled:  true,
-			UrlRegex: `https?://[^\s<>"'\)\]]+`,
-		}
-		cfg.Rules = append(cfg.Rules, seeded)
-		if err := config.Save(cfg); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: could not save seeded rule: %v\n", err)
-		} else {
-			p, _ := config.Path()
-			fmt.Printf("ℹ no enabled rules found — seeded default rule %q (matches any http(s) URL) in %s\n",
-				seeded.Name, p)
-		}
-	}
+	seedDefaultRuleIfMissing(cfg)
+	engine, launcher := buildWatchEngineAndLauncher(cfg)
 
-	engine, ruleErr := rules.New(cfg.Rules)
-	if ruleErr != nil {
-		fmt.Fprintf(os.Stderr, "warning: %v\n", ruleErr)
-	}
-	launcher := browser.New(cfg.Browser)
-	if _, err := launcher.Path(); err != nil {
-		fmt.Fprintf(os.Stderr, "warning: %v (URLs will be skipped)\n", err)
-	}
-
-	if parent == nil {
-		parent = context.Background()
-	}
-	ctx, stop := signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
+	ctx, stop := newWatchContext(parent)
 	defer stop()
 
-	// Plain logger — the watcher prepends its own compact HH:MM:SS prefix
-	// so we don't want Go's default "2026/04/22 20:17:00" noise on every line.
 	logger := log.New(os.Stdout, "", 0)
-
 	return watcher.Run(ctx, watcher.Options{
 		Account:     acct,
 		PollSeconds: cfg.Watch.PollSeconds,
@@ -375,6 +332,66 @@ func runWatch(parent context.Context, alias string, verbose bool) error {
 		Logger:      logger,
 		Verbose:     verbose,
 	})
+}
+
+// resolveWatchAccount picks the watch target by alias (or first when empty).
+func resolveWatchAccount(cfg *config.Config, alias string) (config.Account, error) {
+	if len(cfg.Accounts) == 0 {
+		return config.Account{}, errtrace.New("no accounts configured. Run `email-read add` first")
+	}
+	if alias == "" {
+		acct := cfg.Accounts[0]
+		fmt.Printf("No alias given — using first configured account %q\n", acct.Alias)
+		return acct, nil
+	}
+	p := cfg.FindAccount(alias)
+	if p == nil {
+		return config.Account{}, errtrace.New(fmt.Sprintf("no account with alias %q (run `email-read list`)", alias))
+	}
+	return *p, nil
+}
+
+// seedDefaultRuleIfMissing inserts a permissive default rule when the user
+// has zero enabled rules, so the tool works out-of-the-box.
+func seedDefaultRuleIfMissing(cfg *config.Config) {
+	if countEnabledRules(cfg.Rules) != 0 {
+		return
+	}
+	seeded := config.Rule{
+		Name:     "default-open-any-url",
+		Enabled:  true,
+		UrlRegex: `https?://[^\s<>"'\)\]]+`,
+	}
+	cfg.Rules = append(cfg.Rules, seeded)
+	if err := config.Save(cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not save seeded rule: %v\n", err)
+		return
+	}
+	p, _ := config.Path()
+	fmt.Printf("ℹ no enabled rules found — seeded default rule %q (matches any http(s) URL) in %s\n",
+		seeded.Name, p)
+}
+
+// buildWatchEngineAndLauncher initializes the rules engine and browser launcher,
+// printing warnings (but not failing) if either has setup issues.
+func buildWatchEngineAndLauncher(cfg *config.Config) (*rules.Engine, *browser.Launcher) {
+	engine, ruleErr := rules.New(cfg.Rules)
+	if ruleErr != nil {
+		fmt.Fprintf(os.Stderr, "warning: %v\n", ruleErr)
+	}
+	launcher := browser.New(cfg.Browser)
+	if _, err := launcher.Path(); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: %v (URLs will be skipped)\n", err)
+	}
+	return engine, launcher
+}
+
+// newWatchContext wraps the parent context with SIGINT/SIGTERM cancellation.
+func newWatchContext(parent context.Context) (context.Context, context.CancelFunc) {
+	if parent == nil {
+		parent = context.Background()
+	}
+	return signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
 }
 
 func newAddCmd() *cobra.Command {
