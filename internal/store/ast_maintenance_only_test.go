@@ -36,9 +36,23 @@ var maintenanceAllowlist = map[string]bool{
 	"internal/store/vacuum.go": true,
 }
 
-// maintenanceSQLRe matches VACUUM / ANALYZE as whole upper-case words
-// and the wal_checkpoint pragma in any case.
-var maintenanceSQLRe = regexp.MustCompile(`\b(VACUUM|ANALYZE)\b|(?i)PRAGMA\s+wal_checkpoint`)
+// looksLikeMaintenanceSQL reports whether a Go string literal value
+// (still wrapped in its surrounding quotes / backticks) is an actual
+// SQLite maintenance statement, as opposed to incidental prose like a
+// UI label "Weekly VACUUM weekday". A statement must be the *whole*
+// payload of the literal after stripping quotes, optional trailing
+// semicolons, and surrounding whitespace.
+func looksLikeMaintenanceSQL(literal string) bool {
+	body := strings.Trim(literal, "`\"")
+	body = strings.TrimSpace(body)
+	body = strings.TrimRight(body, ";")
+	body = strings.TrimSpace(body)
+	if body == "VACUUM" || body == "ANALYZE" {
+		return true
+	}
+	lower := strings.ToLower(body)
+	return strings.HasPrefix(lower, "pragma wal_checkpoint")
+}
 
 func Test_AST_MaintenanceOnly(t *testing.T) {
 	root := repoRootForMaintenanceGuard(t)
