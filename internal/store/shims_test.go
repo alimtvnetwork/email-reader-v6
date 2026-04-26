@@ -7,7 +7,6 @@ package store
 
 import (
 	"context"
-	"strings"
 	"testing"
 	"time"
 )
