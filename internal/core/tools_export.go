@@ -10,13 +10,11 @@ package core
 
 import (
 	"context"
-	"database/sql"
 	"encoding/csv"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/lovable/email-read/internal/errtrace"
