@@ -118,6 +118,11 @@ type realLoop struct {
 // account (alias not found at New time) is surfaced as
 // ErrWatchAccountNotFound so Watch.runLoop publishes a typed
 // WatchError event instead of a generic shutdown message.
+//
+// CF-W1: when a PollChanProvider is wired, we Acquire a per-alias
+// channel before the loop runs and defer Release after watcher.Run
+// returns — this is the precise lifetime the provider needs to know
+// to stop publishing into a dead channel.
 func (l *realLoop) Run(ctx context.Context) error {
 	if l.acct == nil {
 		return errtrace.NewCoded(
@@ -125,19 +130,20 @@ func (l *realLoop) Run(ctx context.Context) error {
 			"watch: account "+l.opts.Alias+" not found",
 		)
 	}
+	var pollCh <-chan int
+	if l.deps.PollChans != nil {
+		pollCh = l.deps.PollChans.Acquire(l.opts.Alias)
+		defer l.deps.PollChans.Release(l.opts.Alias)
+	}
 	return watcher.Run(ctx, watcher.Options{
-		Account:     *l.acct,
-		PollSeconds: l.opts.PollSeconds,
-		Engine:      l.deps.Engine,
-		Launcher:    l.deps.Launcher,
-		Store:       l.deps.Store,
-		Logger:      l.deps.Logger,
-		Verbose:     l.deps.Verbose,
-		Bus:         l.deps.Bus,
-		// PollSecondsCh is intentionally nil here: live cadence updates
-		// are out of scope for the Watch wiring slice. CF-W1 (Settings
-		// → live PollSeconds) lands when Settings.Subscribe is wired
-		// through Watch in a follow-up.
-		PollSecondsCh: nil,
+		Account:       *l.acct,
+		PollSeconds:   l.opts.PollSeconds,
+		Engine:        l.deps.Engine,
+		Launcher:      l.deps.Launcher,
+		Store:         l.deps.Store,
+		Logger:        l.deps.Logger,
+		Verbose:       l.deps.Verbose,
+		Bus:           l.deps.Bus,
+		PollSecondsCh: pollCh,
 	})
 }
