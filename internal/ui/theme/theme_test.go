@@ -73,9 +73,9 @@ func Test_Color_KnownTokens(t *testing.T) {
 func Test_Color_RawLogBadgeCodeTokens(t *testing.T) {
 	t.Cleanup(resetForTest)
 	cases := []struct {
-		mode  core.ThemeMode
-		name  ColorName
-		want  color.NRGBA
+		mode core.ThemeMode
+		name ColorName
+		want color.NRGBA
 	}{
 		// §2.6 raw log — dark
 		{core.ThemeDark, ColorRawLogHeartbeat, color.NRGBA{90, 96, 110, 255}},

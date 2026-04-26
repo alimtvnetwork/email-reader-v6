@@ -19,12 +19,12 @@ type ColorName string
 // Sidebar tokens — 01-tokens.md §2.4. Cited by Delta #4 of the project
 // consistency report as one of the two MVP groups.
 const (
-	ColorSidebar                      ColorName = "Sidebar"
-	ColorSidebarForeground            ColorName = "SidebarForeground"
-	ColorSidebarItemHover             ColorName = "SidebarItemHover"
-	ColorSidebarItemActive            ColorName = "SidebarItemActive"
-	ColorSidebarItemActiveForeground  ColorName = "SidebarItemActiveForeground"
-	ColorSidebarBorder                ColorName = "SidebarBorder"
+	ColorSidebar                     ColorName = "Sidebar"
+	ColorSidebarForeground           ColorName = "SidebarForeground"
+	ColorSidebarItemHover            ColorName = "SidebarItemHover"
+	ColorSidebarItemActive           ColorName = "SidebarItemActive"
+	ColorSidebarItemActiveForeground ColorName = "SidebarItemActiveForeground"
+	ColorSidebarBorder               ColorName = "SidebarBorder"
 )
 
 // Watch status-dot tokens — 01-tokens.md §2.5. Resolves OI-1 ("watch dot

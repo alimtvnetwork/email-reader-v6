@@ -47,15 +47,15 @@ func Test_Size_CompactScale(t *testing.T) {
 	t.Cleanup(resetDensityForTest)
 	SetDensity(DensityCompact)
 	cases := map[SizeName]float32{
-		SizeTextBody:         12,  // 14 * 0.875 = 12.25 → 12
-		SizeTextPageTitle:    26,  // 30 * 0.875 = 26.25 → 26
-		SizeTextSectionTitle: 18,  // 20 * 0.875 = 17.50 → 18
-		SizeTextCardTitle:    14,  // 16 * 0.875 = 14.00 → 14
-		SizeTextCaption:      11,  // 12 * 0.875 = 10.50 → 11 (banker → away-from-zero)
+		SizeTextBody:         12, // 14 * 0.875 = 12.25 → 12
+		SizeTextPageTitle:    26, // 30 * 0.875 = 26.25 → 26
+		SizeTextSectionTitle: 18, // 20 * 0.875 = 17.50 → 18
+		SizeTextCardTitle:    14, // 16 * 0.875 = 14.00 → 14
+		SizeTextCaption:      11, // 12 * 0.875 = 10.50 → 11 (banker → away-from-zero)
 		SizeSpacing0:         0,
-		SizeSpacing2:         7,   //  8 * 0.875 = 7.00
-		SizeSpacing4:         14,  // 16 * 0.875 = 14.00
-		SizeSpacing7:         42,  // 48 * 0.875 = 42.00
+		SizeSpacing2:         7,  //  8 * 0.875 = 7.00
+		SizeSpacing4:         14, // 16 * 0.875 = 14.00
+		SizeSpacing7:         42, // 48 * 0.875 = 42.00
 	}
 	for name, want := range cases {
 		if got := Size(name); got != want {

@@ -30,8 +30,8 @@ var fontFS embed.FS
 // Keeping these as constants (instead of inline strings) makes asset
 // rename refactors a one-liner and lets tests assert the wiring.
 const (
-	fontPathInter    = "fonts/Inter-Variable.ttf"
-	fontPathJBMono   = "fonts/JetBrainsMono-Variable.ttf"
+	fontPathInter  = "fonts/Inter-Variable.ttf"
+	fontPathJBMono = "fonts/JetBrainsMono-Variable.ttf"
 )
 
 // TextFont returns the embedded Inter Variable resource, or nil if the
