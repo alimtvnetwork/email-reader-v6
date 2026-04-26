@@ -18,33 +18,33 @@ import (
 
 // DashboardOptions wires the dashboard to app state + actions.
 //
-// **Phase 2.3 migration.** The old shape defaulted `LoadStats` to the
-// deprecated package-level `core.LoadDashboardStats`. The new shape
-// requires a typed `*core.DashboardService` (constructed once at app
-// boot via `core.NewDashboardService`). `LoadStats` survives as an
-// optional override used exclusively by tests to inject deterministic
-// counts without standing up a real service. When `LoadStats` is nil
-// we delegate to `Service.LoadStats`. When both are nil we render a
-// degraded card row (status: "dashboard service not wired") rather
-// than panicking — keeps headless / partial-bootstrap previews safe.
+// **Phase 3.5 rename.** The transitional `LoadStats` seam (and the
+// `*core.DashboardService.LoadStats` method it shadowed) have both
+// been deleted. Production wiring uses `Service.Summary` (the
+// spec-aligned name); tests inject deterministic counts via the
+// `Summary` field on this Options struct. When `Summary` is nil and
+// `Service` is non-nil we bind `Service.Summary`. When both are nil
+// we render a degraded card row (status: "dashboard service not
+// wired") rather than panicking — keeps headless / partial-bootstrap
+// previews safe.
 type DashboardOptions struct {
 	Alias        string
 	OnStartWatch func()
 	OnRefresh    func()
 	Service      *core.DashboardService // production seam — constructed in app bootstrap
-	LoadStats    LoadStatsFunc          // test-only override; takes precedence over Service when non-nil
+	Summary      SummaryFunc            // test-only override; takes precedence over Service when non-nil
 	Bus          *watcher.Bus           // optional; live counter row when non-nil
 }
 
-// LoadStatsFunc is the seam used by tests to inject deterministic counts.
+// SummaryFunc is the seam used by tests to inject deterministic counts.
 // Returns a Result envelope so failures carry an error code (Delta #2).
-type LoadStatsFunc func(ctx context.Context, alias string) errtrace.Result[core.DashboardStats]
+type SummaryFunc func(ctx context.Context, alias string) errtrace.Result[core.DashboardSummary]
 
 func BuildDashboard(opts DashboardOptions) fyne.CanvasObject {
-	if opts.LoadStats == nil && opts.Service != nil {
-		// Bind the service's typed method to the LoadStatsFunc shape so
+	if opts.Summary == nil && opts.Service != nil {
+		// Bind the service's typed method to the SummaryFunc shape so
 		// downstream code (refresh closure, tests) sees one uniform seam.
-		opts.LoadStats = opts.Service.LoadStats
+		opts.Summary = opts.Service.Summary
 	}
 	heading := widget.NewLabelWithStyle("Dashboard", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	subtitle := widget.NewLabel("Live counts from data/config.json + data/emails.db.")
@@ -136,16 +136,16 @@ func newDashboardCards() dashboardCards {
 // makeDashboardRefresh returns a closure that reloads stats and updates the cards.
 func makeDashboardRefresh(opts DashboardOptions, cards dashboardCards, status *widget.Label) func() {
 	return func() {
-		if opts.LoadStats == nil {
+		if opts.Summary == nil {
 			// Degraded path: bootstrap didn't wire a *DashboardService
 			// and no test override was supplied. Surface the wiring
 			// gap in the status line instead of panicking.
-			status.SetText("⚠ Dashboard service not wired (no Service or LoadStats injected)")
+			status.SetText("⚠ Dashboard service not wired (no Service or Summary injected)")
 			return
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		res := opts.LoadStats(ctx, opts.Alias)
+		res := opts.Summary(ctx, opts.Alias)
 		if res.HasError() {
 			status.SetText("⚠ Failed to load stats: " + res.Error().Error())
 			return
