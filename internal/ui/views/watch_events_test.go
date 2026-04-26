@@ -208,13 +208,15 @@ func TestAppendBounded_NewestFirst_TrimsToCap(t *testing.T) {
 }
 
 // TestTruncURL_LongInputClipped: keeps the Raw log tidy when verify
-// links push past 200 chars.
+// links push past 200 chars. The ellipsis is a 3-byte UTF-8 rune so
+// the byte length is `max-1 + 3` = 92 when max=90.
 func TestTruncURL_LongInputClipped(t *testing.T) {
 	t.Parallel()
 	long := "https://example.com/" + repeat("a", 200)
 	got := truncURL(long)
-	if len(got) != 90 {
-		t.Fatalf("len: got %d, want 90", len(got))
+	const wantBytes = 92 // 89 ASCII + 3-byte "…"
+	if len(got) != wantBytes {
+		t.Fatalf("len: got %d, want %d", len(got), wantBytes)
 	}
 	if got[len(got)-len("…"):] != "…" {
 		t.Fatalf("missing ellipsis: %q", got)
