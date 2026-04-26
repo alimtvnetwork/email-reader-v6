@@ -94,9 +94,12 @@ type storeOpener func() (s emailsStore, close func() error, err error)
 
 // EmailsService renders email summaries / details / counts from an
 // injected store opener. Stateless — concurrent method calls open
-// independent store handles.
+// independent store handles. The optional `refresher` dep, set via
+// `(*EmailsService).WithRefresher` at bootstrap, powers the P4.4
+// `Refresh(ctx, alias)` method (defined in emails_refresh.go).
 type EmailsService struct {
 	openStore storeOpener
+	refresher Refresher // optional; set via WithRefresher (P4.4)
 }
 
 // NewEmailsService constructs an EmailsService. The opener dep is
