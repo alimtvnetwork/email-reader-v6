@@ -252,6 +252,17 @@ type EmailQuery struct {
 // ListEmails returns email rows matching the query. Body fields are populated
 // so the UI can render snippets without a second round-trip.
 func (s *Store) ListEmails(ctx context.Context, q EmailQuery) ([]Email, error) {
+	sqlStr, args := buildListEmailsQuery(q)
+	rows, err := s.DB.QueryContext(ctx, sqlStr, args...)
+	if err != nil {
+		return nil, errtrace.Wrap(err, "list emails")
+	}
+	defer rows.Close()
+	return scanEmailRows(rows)
+}
+
+// buildListEmailsQuery composes the SQL string + bound args for ListEmails.
+func buildListEmailsQuery(q EmailQuery) (string, []any) {
 	sqlStr := `SELECT Id, Alias, MessageId, Uid, FromAddr, ToAddr, CcAddr, Subject,
 	                  BodyText, BodyHtml, ReceivedAt, FilePath
 	           FROM Emails`
@@ -278,11 +289,11 @@ func (s *Store) ListEmails(ctx context.Context, q EmailQuery) ([]Email, error) {
 			args = append(args, q.Offset)
 		}
 	}
-	rows, err := s.DB.QueryContext(ctx, sqlStr, args...)
-	if err != nil {
-		return nil, errtrace.Wrap(err, "list emails")
-	}
-	defer rows.Close()
+	return sqlStr, args
+}
+
+// scanEmailRows materializes the result set from ListEmails into []Email.
+func scanEmailRows(rows *sql.Rows) ([]Email, error) {
 	var out []Email
 	for rows.Next() {
 		var e Email
