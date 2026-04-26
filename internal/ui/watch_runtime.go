@@ -127,43 +127,58 @@ func buildWatchRuntime(ctx context.Context) (*WatchRuntime, error) {
 // LoopFactory, then constructs Watch. Split out of buildWatchRuntime
 // to keep the parent function under the project-wide 15-line cap.
 func attachRuntimeServices(ctx context.Context, rt *WatchRuntime) error {
-	settings := initSettings(rt)
-	rt.Settings = settings
-
-	bus := watcher.NewBus(64)
-	rt.Bus = bus
+	rt.Settings = initSettings(rt)
+	rt.Bus = watcher.NewBus(64)
 	rt.PollChans = core.NewPollChanRegistry()
-
 	engine, launcher := buildEngineAndLauncher(rt.cfg)
-	if settings != nil {
-		startSettingsBridge(ctx, settings, launcher, rt)
+	if rt.Settings != nil {
+		startSettingsBridge(ctx, rt.Settings, launcher, rt)
 	}
+	lf, err := buildLoopFactory(rt, engine, launcher)
+	if err != nil {
+		return err
+	}
+	return attachWatchAndBridge(ctx, rt, lf)
+}
 
+// buildLoopFactory wires the resolver closure + RealLoopFactoryDeps and
+// returns the constructed factory. Resolver reads `rt.cfg` under the
+// runtime's RWMutex so a future config-reload path can swap accounts
+// safely between Start calls.
+func buildLoopFactory(rt *WatchRuntime, engine *rules.Engine, launcher *browser.Launcher) (core.LoopFactory, error) {
 	resolver := func(alias string) *config.Account {
 		rt.cfgMu.RLock()
 		defer rt.cfgMu.RUnlock()
 		return rt.cfg.FindAccount(alias)
 	}
-	lfRes := core.NewRealLoopFactory(core.RealLoopFactoryDeps{
+	res := core.NewRealLoopFactory(core.RealLoopFactoryDeps{
 		Resolver:  resolver,
 		Engine:    engine,
 		Launcher:  launcher,
 		Store:     rt.Store,
-		Bus:       bus,
+		Bus:       rt.Bus,
 		Logger:    log.New(os.Stdout, "watch ", log.LstdFlags),
 		Verbose:   false,
 		PollChans: rt.PollChans,
 	})
-	if lfRes.HasError() {
-		return errtrace.Wrap(lfRes.Error(), "build loop factory")
+	if res.HasError() {
+		return nil, errtrace.Wrap(res.Error(), "build loop factory")
 	}
+	return res.Value(), nil
+}
+
+// attachWatchAndBridge constructs core.Watch with its own destination
+// event bus and wires the watcher.Bus → WatchEvent bridge so a single
+// `core.Watch.Subscribe()` returns the unified stream (lifecycle +
+// runtime signals). The bridge stop is deferred to runtime Close.
+func attachWatchAndBridge(ctx context.Context, rt *WatchRuntime, lf core.LoopFactory) error {
 	dstBus := eventbus.New[core.WatchEvent](32)
-	wRes := core.NewWatch(lfRes.Value(), dstBus, time.Now)
+	wRes := core.NewWatch(lf, dstBus, time.Now)
 	if wRes.HasError() {
 		return errtrace.Wrap(wRes.Error(), "build watch")
 	}
 	rt.Watch = wRes.Value()
-	stopBridge := core.BridgeWatcherBus(ctx, bus, dstBus)
+	stopBridge := core.BridgeWatcherBus(ctx, rt.Bus, dstBus)
 	rt.closers = append(rt.closers, func() error { stopBridge(); return nil })
 	return nil
 }
