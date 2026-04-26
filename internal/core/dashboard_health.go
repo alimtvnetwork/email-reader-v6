@@ -98,6 +98,17 @@ func ComputeHealth(row AccountHealthRow, now time.Time) HealthLevel {
 // "Warning" rows for aliases the source omits (spec §2.3).
 type accountHealthSource func(ctx context.Context) errtrace.Result[[]AccountHealthRow]
 
+// AccountHealthSource is the **exported** alias for the
+// `accountHealthSource` function-type dep, introduced in Slice #103
+// so the UI bootstrap (`internal/ui`) can name the production
+// adapter returned by `NewStoreAccountHealthSource` and pass it
+// into `(*DashboardService).AccountHealth` via a typed `Services`
+// bundle field. The unexported alias is preserved verbatim so all
+// existing call-sites and the test seam stay byte-identical; the
+// exported alias adds zero runtime cost (Go aliases compile to the
+// same underlying type).
+type AccountHealthSource = accountHealthSource
+
 // AccountHealth returns one AccountHealthRow per **configured**
 // alias. Aliases present in the source are returned with their live
 // counters; aliases configured but absent from the source surface as

@@ -31,9 +31,10 @@ type DashboardOptions struct {
 	Alias        string
 	OnStartWatch func()
 	OnRefresh    func()
-	Service      *core.DashboardService // production seam — constructed in app bootstrap
-	Summary      SummaryFunc            // test-only override; takes precedence over Service when non-nil
-	Bus          *watcher.Bus           // optional; live counter row when non-nil
+	Service      *core.DashboardService     // production seam — constructed in app bootstrap
+	Summary      SummaryFunc                // test-only override; takes precedence over Service when non-nil
+	Bus          *watcher.Bus               // optional; live counter row when non-nil
+	HealthSource core.AccountHealthSource   // Slice #103 production seam — per-account health rollup; nil → row hidden
 }
 
 // SummaryFunc is the seam used by tests to inject deterministic counts.
@@ -53,18 +54,78 @@ func BuildDashboard(opts DashboardOptions) fyne.CanvasObject {
 	status := widget.NewLabel("Loaded just now.")
 	status.Wrapping = fyne.TextWrapWord
 
+	// Slice #103: per-account health rollup row. Hidden when neither
+	// the Service nor a HealthSource is wired (degraded boot).
+	health := widget.NewLabel("")
+	health.Wrapping = fyne.TextWrapWord
+	health.Hide()
+
 	autoStart := newAutoStartIndicator()
 	refresh := makeDashboardRefresh(opts, cards, status)
-	refresh()
+	refreshHealth := makeDashboardHealthRefresh(opts, health)
+	combined := func() {
+		refresh()
+		refreshHealth()
+	}
+	combined()
 
-	actions := newDashboardActions(opts, refresh)
-	live := newDashboardLiveRow(opts, refresh)
+	actions := newDashboardActions(opts, combined)
+	live := newDashboardLiveRow(opts, combined)
 	return container.NewVBox(
 		heading, subtitle, widget.NewSeparator(),
 		cards.Row, widget.NewSeparator(),
+		health,
 		live, widget.NewSeparator(),
 		actions, autoStart, status,
 	)
+}
+
+// makeDashboardHealthRefresh returns a closure that loads per-account
+// health rows and renders them as a one-line summary on `lbl`. When
+// neither `opts.Service` nor `opts.HealthSource` is wired the label
+// stays hidden (degraded boot — Slice #103 wiring may not yet be
+// active if WatchRuntime failed to open the store).
+//
+// Errors surface inline with a "⚠" prefix so a transient store
+// failure doesn't blank the whole dashboard.
+func makeDashboardHealthRefresh(opts DashboardOptions, lbl *widget.Label) func() {
+	return func() {
+		if opts.Service == nil || opts.HealthSource == nil {
+			lbl.Hide()
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		res := opts.Service.AccountHealth(ctx, opts.HealthSource)
+		if res.HasError() {
+			lbl.SetText("⚠ Health: " + res.Error().Error())
+			lbl.Show()
+			return
+		}
+		lbl.SetText(formatHealthRollup(res.Value()))
+		lbl.Show()
+	}
+}
+
+// formatHealthRollup renders a one-line "Health: 3 ● healthy · 1 ◐ warn · 0 ✗ error"
+// summary across all configured accounts. Empty input → "Health: (no accounts)".
+func formatHealthRollup(rows []core.AccountHealthRow) string {
+	if len(rows) == 0 {
+		return "Health: (no accounts configured)"
+	}
+	var healthy, warn, errCount int
+	for _, r := range rows {
+		switch r.Health {
+		case core.HealthHealthy:
+			healthy++
+		case core.HealthWarning:
+			warn++
+		case core.HealthError:
+			errCount++
+		}
+	}
+	return fmt.Sprintf("Health: %d ● healthy · %d ◐ warning · %d ✗ error",
+		healthy, warn, errCount)
 }
 
 // newAutoStartIndicator returns a label that shows the current

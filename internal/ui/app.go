@@ -232,10 +232,19 @@ func BuildShell(aliases []string) fyne.CanvasObject {
 func viewFor(item NavItem, state *AppState, services *Services, gotoNav func(NavKind), onAccountsChanged func()) fyne.CanvasObject {
 	switch item.Kind {
 	case NavDashboard:
+		// Slice #103: lazily attach the production AccountHealth
+		// source the first time the dashboard renders with a healthy
+		// WatchRuntime. Mirrors the AttachRefresher pattern below
+		// (NavEmails) — keeps boot fast and avoids opening SQLite
+		// twice when the runtime owns the *store.Store.
+		if rt := WatchRuntimeOrNil(); rt != nil && rt.Store != nil {
+			services.AttachHealthSource(rt.Store)
+		}
 		dashOpts := views.DashboardOptions{
 			Alias:        state.Alias(),
 			OnStartWatch: func() { gotoNav(NavWatch) },
 			Service:      services.Dashboard,
+			HealthSource: services.HealthSource,
 		}
 		if rt := WatchRuntimeOrNil(); rt != nil {
 			dashOpts.Bus = rt.Bus
