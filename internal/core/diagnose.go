@@ -44,19 +44,10 @@ type DiagnoseEvent struct {
 // first configured account is used. Each step is reported via emit so the
 // caller (CLI / UI) can render incrementally. emit may be nil.
 func Diagnose(alias string, emit func(DiagnoseEvent)) error {
-	if emit == nil {
-		emit = func(DiagnoseEvent) {}
-	}
-	cfg, err := config.Load()
-	if err != nil {
-		return errtrace.Wrap(err, "load config")
-	}
-
-	acct, err := resolveAccount(cfg, alias)
+	cfg, acct, err := loadConfigAndAccount(alias, emit)
 	if err != nil {
 		return err
 	}
-	emit(DiagnoseEvent{Kind: DiagnoseEventStart, Account: &acct})
 
 	mc, err := probeConnect(acct, emit)
 	if err != nil {
@@ -79,6 +70,23 @@ func Diagnose(alias string, emit func(DiagnoseEvent)) error {
 	}
 
 	return runFolderScanAndSummarize(mc, folders, stats, emit)
+}
+
+// loadConfigAndAccount loads config, resolves the account, and initializes emit.
+func loadConfigAndAccount(alias string, emit func(DiagnoseEvent)) (*config.Config, config.Account, error) {
+	if emit == nil {
+		emit = func(DiagnoseEvent) {}
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		return nil, config.Account{}, errtrace.Wrap(err, "load config")
+	}
+	acct, err := resolveAccount(cfg, alias)
+	if err != nil {
+		return nil, config.Account{}, err
+	}
+	emit(DiagnoseEvent{Kind: DiagnoseEventStart, Account: &acct})
+	return cfg, acct, nil
 }
 
 // runFolderScanAndSummarize scans all folders and emits the summary event.
