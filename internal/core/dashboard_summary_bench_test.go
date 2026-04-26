@@ -1,6 +1,6 @@
 // dashboard_summary_bench_test.go — P3.8 perf gate for
 // `(*DashboardService).Summary` per spec/21-app/02-features/01-dashboard/01-backend.md §2.1
-// ("Total p95 budget: 40 ms at 100 000 emails / 10 accounts" — we
+// ("Total p95 budget: 40 ms at 100 000 emails / 10 accounts — we
 // ratchet a looser-but-meaningful 100 ms gate at 10 k emails so the
 // suite stays fast on developer laptops; the dedicated 100k bench
 // follows in a later slice once we tune fixtures).
@@ -15,9 +15,10 @@
 //      build if the p95 exceeds 100 ms. Skipped under `testing.Short`
 //      so unit-test runs stay snappy; runs by default in `go test`.
 //
-// Both reuse the `openGoldenStore` + `seedGoldenEmails` helpers from
-// `dashboard_golden_test.go` (P3.6) — keeps the seed pattern in one
-// place.
+// Both reuse `openGoldenStore` + `seedGoldenEmails` from
+// `dashboard_golden_test.go` (P3.6); those helpers were widened to
+// `testing.TB` in the same slice so a single fixture builder serves
+// both `*testing.T` and `*testing.B`.
 package core
 
 import (
@@ -37,10 +38,10 @@ import (
 // gate at 10 k that absorbs CI noise without going slack.
 const summaryPerfBudget = 100 * time.Millisecond
 
-// summaryPerfFixtureSize defines the workload: 10 000 emails
-// across 10 aliases (1 000 each). Matches the spec's account
-// dimension exactly; emails dimension is 1/10 of the spec target
-// to keep dev-laptop fixture seeding under ~1 s.
+// summaryPerfFixtureSize defines the workload: 10 000 emails across
+// 10 aliases (1 000 each). Matches the spec's account dimension
+// exactly; emails dimension is 1/10 of the spec target to keep
+// dev-laptop fixture seeding under ~1 s.
 const (
 	summaryPerfAccounts       = 10
 	summaryPerfEmailsPerAlias = 1_000
@@ -48,24 +49,19 @@ const (
 
 // buildSummaryPerfFixture seeds a fresh store with 10 aliases ×
 // 1 000 emails each, builds the matching `*DashboardService`, and
-// returns a closure that runs one full `Summary` call. The closure
-// is what the bench / perf gate iterate over — no setup cost
-// inside the timed loop.
-func buildSummaryPerfFixture(t testing.TB) (run func() errtrace.Result[DashboardSummary], cleanup func()) {
+// returns a closure that runs one full alias-scoped Summary call.
+// The closure is what the bench / perf gate iterate over — no
+// fixture-build cost inside the timed loop.
+func buildSummaryPerfFixture(t testing.TB) func() errtrace.Result[DashboardSummary] {
 	t.Helper()
-	st := openGoldenStore(t.(interface { // bench supports same TB API
-		Helper()
-		TempDir() string
-		Cleanup(func())
-		Fatalf(string, ...any)
-	}).(*testing.T))
+	st := openGoldenStore(t)
 	ctx := context.Background()
 
 	accounts := make([]config.Account, summaryPerfAccounts)
 	for i := 0; i < summaryPerfAccounts; i++ {
 		alias := "acc" + strconv.Itoa(i)
 		accounts[i] = config.Account{Alias: alias}
-		seedGoldenEmails(ctx, t.(*testing.T), st, alias, summaryPerfEmailsPerAlias)
+		seedGoldenEmails(ctx, t, st, alias, summaryPerfEmailsPerAlias)
 	}
 	cfg := &config.Config{
 		Accounts: accounts,
@@ -88,22 +84,20 @@ func buildSummaryPerfFixture(t testing.TB) (run func() errtrace.Result[Dashboard
 	}
 	svc := res.Value()
 	return func() errtrace.Result[DashboardSummary] {
-			return svc.Summary(ctx, "acc0")
-		}, func() {
-			// Store cleanup is registered via t.Cleanup in
-			// openGoldenStore — nothing extra needed here.
-		}
+		return svc.Summary(ctx, "acc0")
+	}
 }
 
 func TestDashboard_Summary_10kEmails_PerfGate(t *testing.T) {
 	if testing.Short() {
 		t.Skip("perf gate skipped under -short")
 	}
-	run, _ := buildSummaryPerfFixture(t)
+	t.Parallel()
+	run := buildSummaryPerfFixture(t)
 
 	// Sanity: one warmup call to populate page cache + SQLite plan
 	// cache. Without this the first iteration eats the cold-cache
-	// hit and skews the p95 upward by ~30%.
+	// hit and skews the p95 upward by ~30 %.
 	if r := run(); r.HasError() {
 		t.Fatalf("warmup: %v", r.Error())
 	}
@@ -133,35 +127,11 @@ func BenchmarkDashboard_Summary_10kEmails(b *testing.B) {
 	// Bench fixture seeding is expensive (~10 k INSERTs).
 	// Stop the timer until we're inside the iteration loop.
 	b.StopTimer()
-	run := mustBuildPerfFixtureForBench(b)
+	run := buildSummaryPerfFixture(b)
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		if r := run(); r.HasError() {
 			b.Fatalf("Summary: %v", r.Error())
 		}
 	}
-}
-
-// mustBuildPerfFixtureForBench is the bench-flavoured equivalent of
-// buildSummaryPerfFixture. We keep them split because
-// `openGoldenStore` is `*testing.T`-typed (uses `t.TempDir`/`t.Cleanup`
-// which both `*testing.T` and `*testing.B` implement via `testing.TB`,
-// but the helper signature in dashboard_golden_test.go takes the
-// concrete type). Rather than churn that signature, we replicate
-// minimal seeding here.
-func mustBuildPerfFixtureForBench(b *testing.B) func() errtrace.Result[DashboardSummary] {
-	b.Helper()
-	// We piggy-back on a short-lived *testing.T spawned for the
-	// helper's signature. Since we never call its Fail/Fatal paths
-	// (errors land in b.Fatalf below) this is a benign adapter; if
-	// the helper does fail, the panic still surfaces as a bench
-	// failure in the runner output.
-	t := &testing.T{}
-	defer func() {
-		if r := recover(); r != nil {
-			b.Fatalf("fixture build: %v", r)
-		}
-	}()
-	run, _ := buildSummaryPerfFixture(t)
-	return run
 }
