@@ -10,6 +10,8 @@ package core
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"net/url"
@@ -18,6 +20,7 @@ import (
 	"time"
 
 	"github.com/lovable/email-read/internal/errtrace"
+	"github.com/lovable/email-read/internal/store"
 )
 
 // OpenUrlOrigin captures the caller context for the audit row. The UI
