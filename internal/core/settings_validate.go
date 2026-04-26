@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/lovable/email-read/internal/errtrace"
 )
@@ -27,13 +28,22 @@ var (
 )
 
 // normalizeInput trims whitespace, lower-cases schemes, dedupes + sorts them,
-// and trims the BrowserOverride strings. It does NOT validate and does NOT
-// substitute defaults — that responsibility lives with DefaultSettingsInput
-// and the caller.
+// and trims the BrowserOverride strings. It also substitutes defaults for the
+// zero-valued maintenance knobs so callers (and existing tests) that construct
+// a partial SettingsInput don't trip the §5 range validators on fields they
+// never touched. It does NOT validate.
 func normalizeInput(in SettingsInput) SettingsInput {
 	in.BrowserOverride.ChromePath = strings.TrimSpace(in.BrowserOverride.ChromePath)
 	in.BrowserOverride.IncognitoArg = strings.TrimSpace(in.BrowserOverride.IncognitoArg)
 	in.OpenUrlAllowedSchemes = canonSchemes(in.OpenUrlAllowedSchemes)
+	defaults := DefaultSettingsInput()
+	if in.WalCheckpointHours == 0 {
+		in.WalCheckpointHours = defaults.WalCheckpointHours
+	}
+	if in.PruneBatchSize == 0 {
+		in.PruneBatchSize = defaults.PruneBatchSize
+	}
+	// WeeklyVacuumOn/HourLocal: zero is valid (Sunday/midnight); leave as-is.
 	return in
 }
 
@@ -76,6 +86,9 @@ func validateInput(in SettingsInput) error {
 	if err := validateRetentionDays(in.OpenUrlsRetentionDays); err != nil {
 		return err
 	}
+	if err := validateMaintenanceKnobs(in); err != nil {
+		return err
+	}
 	return validateLocalhostComposite(in)
 }
 
@@ -88,6 +101,35 @@ func validateRetentionDays(v uint16) error {
 			WithContext("value", v).
 			WithContext("min", 0).
 			WithContext("max", 3650)
+	}
+	return nil
+}
+
+// validateMaintenanceKnobs enforces the spec/23-app-database/04 §5 ranges.
+// All four rows share ER-SET-21778 per the spec table.
+func validateMaintenanceKnobs(in SettingsInput) error {
+	if in.WeeklyVacuumOn < time.Sunday || in.WeeklyVacuumOn > time.Saturday {
+		return errtrace.NewCoded(errtrace.ErrSettingsPersist,
+			"weekly vacuum weekday out of range").
+			WithContext("value", int(in.WeeklyVacuumOn))
+	}
+	if in.WeeklyVacuumHourLocal > 23 {
+		return errtrace.NewCoded(errtrace.ErrSettingsPersist,
+			"weekly vacuum hour out of range").
+			WithContext("value", in.WeeklyVacuumHourLocal).
+			WithContext("min", 0).WithContext("max", 23)
+	}
+	if in.WalCheckpointHours < 1 || in.WalCheckpointHours > 168 {
+		return errtrace.NewCoded(errtrace.ErrSettingsPersist,
+			"wal checkpoint hours out of range").
+			WithContext("value", in.WalCheckpointHours).
+			WithContext("min", 1).WithContext("max", 168)
+	}
+	if in.PruneBatchSize < 100 || in.PruneBatchSize > 50000 {
+		return errtrace.NewCoded(errtrace.ErrSettingsPersist,
+			"prune batch size out of range").
+			WithContext("value", in.PruneBatchSize).
+			WithContext("min", 100).WithContext("max", 50000)
 	}
 	return nil
 }

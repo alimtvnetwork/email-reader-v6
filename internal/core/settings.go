@@ -41,7 +41,11 @@ type settingsExtension struct {
 	AllowLocalhostUrls    bool     `json:"allowLocalhostUrls"`
 	AutoStartWatch        bool     `json:"autoStartWatch"`
 	OpenUrlsRetentionDays uint16   `json:"openUrlsRetentionDays"`
-	UpdatedAt             string   `json:"updatedAt"` // RFC3339; "" when never written
+	WeeklyVacuumOn        string   `json:"weeklyVacuumOn"`        // "Sunday".."Saturday"
+	WeeklyVacuumHourLocal uint8    `json:"weeklyVacuumHourLocal"` // 0..23
+	WalCheckpointHours    uint8    `json:"walCheckpointHours"`    // 1..168
+	PruneBatchSize        uint32   `json:"pruneBatchSize"`        // 100..50000
+	UpdatedAt             string   `json:"updatedAt"`             // RFC3339; "" when never written
 }
 
 // rawConfigWithSettings extends the on-disk JSON with the optional settings
@@ -318,6 +322,10 @@ func applyInputToRaw(raw *rawConfigWithSettings, in SettingsInput, now time.Time
 	raw.ext.AllowLocalhostUrls = in.AllowLocalhostUrls
 	raw.ext.AutoStartWatch = in.AutoStartWatch
 	raw.ext.OpenUrlsRetentionDays = in.OpenUrlsRetentionDays
+	raw.ext.WeeklyVacuumOn = in.WeeklyVacuumOn.String()
+	raw.ext.WeeklyVacuumHourLocal = in.WeeklyVacuumHourLocal
+	raw.ext.WalCheckpointHours = in.WalCheckpointHours
+	raw.ext.PruneBatchSize = in.PruneBatchSize
 	raw.ext.UpdatedAt = now.UTC().Format(time.RFC3339Nano)
 }
 
@@ -341,6 +349,10 @@ func snapshotFromRaw(raw *rawConfigWithSettings) (SettingsSnapshot, error) {
 		AllowLocalhostUrls:    raw.ext.AllowLocalhostUrls,
 		AutoStartWatch:        ext.autoStart,
 		OpenUrlsRetentionDays: ext.retention,
+		WeeklyVacuumOn:        ext.weekday,
+		WeeklyVacuumHourLocal: ext.vacHour,
+		WalCheckpointHours:    ext.walHours,
+		PruneBatchSize:        ext.batchSize,
 		ConfigPath:            paths.cfg,
 		DataDir:               paths.data,
 		EmailArchiveDir:       paths.email,
@@ -377,6 +389,10 @@ type projectedExtension struct {
 	schemes   []string
 	autoStart bool
 	retention uint16
+	weekday   time.Weekday
+	vacHour   uint8
+	walHours  uint8
+	batchSize uint32
 }
 
 // projectExtension layers DefaultSettingsInput defaults over an extension
@@ -398,7 +414,26 @@ func projectExtension(ext settingsExtension) projectedExtension {
 		autoStart = defaults.AutoStartWatch
 		retention = defaults.OpenUrlsRetentionDays
 	}
-	return projectedExtension{theme: theme, schemes: schemes, autoStart: autoStart, retention: retention}
+	weekday, ok := ParseWeekday(ext.WeeklyVacuumOn)
+	if !ok {
+		weekday = defaults.WeeklyVacuumOn
+	}
+	vacHour := ext.WeeklyVacuumHourLocal
+	if ext.UpdatedAt == "" || vacHour > 23 {
+		vacHour = defaults.WeeklyVacuumHourLocal
+	}
+	walHours := ext.WalCheckpointHours
+	if ext.UpdatedAt == "" || walHours == 0 {
+		walHours = defaults.WalCheckpointHours
+	}
+	batchSize := ext.PruneBatchSize
+	if ext.UpdatedAt == "" || batchSize == 0 {
+		batchSize = defaults.PruneBatchSize
+	}
+	return projectedExtension{
+		theme: theme, schemes: schemes, autoStart: autoStart, retention: retention,
+		weekday: weekday, vacHour: vacHour, walHours: walHours, batchSize: batchSize,
+	}
 }
 
 // clampPollSeconds projects an int from the legacy schema into the uint16

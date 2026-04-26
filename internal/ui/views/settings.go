@@ -68,15 +68,7 @@ func buildSettingsForm(svc *core.Settings, snap core.SettingsSnapshot) fyne.Canv
 	status := widget.NewLabel("Loaded at " + time.Now().Format("15:04:05") + ".")
 	status.Wrapping = fyne.TextWrapWord
 
-	form := &widget.Form{
-		Items: []*widget.FormItem{
-			{Text: "Theme", Widget: w.themeSelect, HintText: "Restart not required — repaints live."},
-			{Text: "Poll interval (seconds)", Widget: w.pollEntry, HintText: "1–60. Applied to running watcher live."},
-			{Text: "Chrome / Chromium path", Widget: w.chromeEntry, HintText: "Leave blank to auto-detect."},
-			{Text: "Density", Widget: w.densitySelect, HintText: "Compact tightens paddings (process-local)."},
-			{Text: "Opened-URLs retention (days)", Widget: w.retentionEntry, HintText: "0–3650. 0 = never prune."},
-		},
-	}
+	form := &widget.Form{Items: settingsFormItems(w)}
 	actions := newSettingsActions(svc, w, status)
 	heading := widget.NewLabelWithStyle("Settings", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	paths := newSettingsPaths(snap)
@@ -87,6 +79,23 @@ func buildSettingsForm(svc *core.Settings, snap core.SettingsSnapshot) fyne.Canv
 	)
 }
 
+// settingsFormItems composes the labelled input rows. Split out of
+// buildSettingsForm to keep it under the 15-statement linter cap once the
+// maintenance knobs grew the row count.
+func settingsFormItems(w *settingsWidgets) []*widget.FormItem {
+	return []*widget.FormItem{
+		{Text: "Theme", Widget: w.themeSelect, HintText: "Restart not required — repaints live."},
+		{Text: "Poll interval (seconds)", Widget: w.pollEntry, HintText: "1–60. Applied to running watcher live."},
+		{Text: "Chrome / Chromium path", Widget: w.chromeEntry, HintText: "Leave blank to auto-detect."},
+		{Text: "Density", Widget: w.densitySelect, HintText: "Compact tightens paddings (process-local)."},
+		{Text: "Opened-URLs retention (days)", Widget: w.retentionEntry, HintText: "0–3650. 0 = never prune."},
+		{Text: "Weekly VACUUM weekday", Widget: w.weekdaySelect, HintText: "Day of week for the weekly VACUUM."},
+		{Text: "Weekly VACUUM hour (local)", Widget: w.vacHourEntry, HintText: "0–23. 24-hour clock; default 03."},
+		{Text: "WAL checkpoint cadence (hours)", Widget: w.walHoursEntry, HintText: "1–168. Default 6h."},
+		{Text: "Prune batch size (rows)", Widget: w.batchEntry, HintText: "100–50000. Default 5000."},
+	}
+}
+
 // settingsWidgets bundles the editable inputs so action handlers can read
 // them without a long parameter list.
 type settingsWidgets struct {
@@ -95,6 +104,10 @@ type settingsWidgets struct {
 	chromeEntry    *widget.Entry
 	densitySelect  *widget.Select
 	retentionEntry *widget.Entry
+	weekdaySelect  *widget.Select
+	vacHourEntry   *widget.Entry
+	walHoursEntry  *widget.Entry
+	batchEntry     *widget.Entry
 	initial        core.SettingsSnapshot
 }
 
@@ -119,7 +132,25 @@ func newSettingsWidgets(snap core.SettingsSnapshot) *settingsWidgets {
 
 	w.retentionEntry = widget.NewEntry()
 	w.retentionEntry.SetText(strconv.Itoa(int(snap.OpenUrlsRetentionDays)))
+
+	populateMaintenanceWidgets(w, snap)
 	return w
+}
+
+// populateMaintenanceWidgets fills the four §5 maintenance inputs. Split
+// out so newSettingsWidgets stays under the 15-statement linter cap.
+func populateMaintenanceWidgets(w *settingsWidgets, snap core.SettingsSnapshot) {
+	w.weekdaySelect = widget.NewSelect(WeekdayLabels(), nil)
+	w.weekdaySelect.SetSelected(snap.WeeklyVacuumOn.String())
+
+	w.vacHourEntry = widget.NewEntry()
+	w.vacHourEntry.SetText(strconv.Itoa(int(snap.WeeklyVacuumHourLocal)))
+
+	w.walHoursEntry = widget.NewEntry()
+	w.walHoursEntry.SetText(strconv.Itoa(int(snap.WalCheckpointHours)))
+
+	w.batchEntry = widget.NewEntry()
+	w.batchEntry.SetText(strconv.Itoa(int(snap.PruneBatchSize)))
 }
 
 // newSettingsActions builds the Save + Reset button row and wires their
@@ -168,10 +199,9 @@ func newSettingsPaths(snap core.SettingsSnapshot) fyne.CanvasObject {
 }
 
 // readSettingsInput validates + projects widget state into a SettingsInput.
-// Returns a friendly error for the status line when poll seconds or
-// retention days are out of range or non-numeric. Delegates pure logic to
-// ParsePollSeconds / ParseRetentionDays / ProjectSettingsInput so the
-// headless test suite can exercise both.
+// Returns a friendly error for the status line when any numeric field is out
+// of range or non-numeric. Delegates pure logic to the Parse* helpers and
+// ProjectSettingsInput so the headless test suite can exercise both.
 func readSettingsInput(w *settingsWidgets) (core.SettingsInput, error) {
 	poll, err := ParsePollSeconds(w.pollEntry.Text)
 	if err != nil {
@@ -181,7 +211,34 @@ func readSettingsInput(w *settingsWidgets) (core.SettingsInput, error) {
 	if err != nil {
 		return core.SettingsInput{}, err
 	}
-	return ProjectSettingsInput(w.themeSelect.Selected, poll, w.chromeEntry.Text, retention, w.initial), nil
+	maint, err := readMaintenanceFields(w)
+	if err != nil {
+		return core.SettingsInput{}, err
+	}
+	return ProjectSettingsInput(w.themeSelect.Selected, poll, w.chromeEntry.Text, retention, maint, w.initial), nil
+}
+
+// readMaintenanceFields parses the four §5 inputs as a unit. Pulled out
+// so readSettingsInput stays under the 15-statement cap.
+func readMaintenanceFields(w *settingsWidgets) (MaintenanceFields, error) {
+	hour, err := ParseVacuumHourLocal(w.vacHourEntry.Text)
+	if err != nil {
+		return MaintenanceFields{}, err
+	}
+	wal, err := ParseWalCheckpointHours(w.walHoursEntry.Text)
+	if err != nil {
+		return MaintenanceFields{}, err
+	}
+	batch, err := ParsePruneBatchSize(w.batchEntry.Text)
+	if err != nil {
+		return MaintenanceFields{}, err
+	}
+	return MaintenanceFields{
+		WeekdayLabel:   w.weekdaySelect.Selected,
+		HourLocal:      hour,
+		WalHours:       wal,
+		PruneBatchSize: batch,
+	}, nil
 }
 
 // repopulateWidgets refreshes the form after a Reset so the user sees the
@@ -192,4 +249,8 @@ func repopulateWidgets(w *settingsWidgets, snap core.SettingsSnapshot) {
 	w.pollEntry.SetText(strconv.Itoa(int(snap.PollSeconds)))
 	w.chromeEntry.SetText(snap.BrowserOverride.ChromePath)
 	w.retentionEntry.SetText(strconv.Itoa(int(snap.OpenUrlsRetentionDays)))
+	w.weekdaySelect.SetSelected(snap.WeeklyVacuumOn.String())
+	w.vacHourEntry.SetText(strconv.Itoa(int(snap.WeeklyVacuumHourLocal)))
+	w.walHoursEntry.SetText(strconv.Itoa(int(snap.WalCheckpointHours)))
+	w.batchEntry.SetText(strconv.Itoa(int(snap.PruneBatchSize)))
 }
