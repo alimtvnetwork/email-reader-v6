@@ -41,6 +41,7 @@ func BuildTools(opts ToolsOptions) fyne.CanvasObject {
 			OnSaved: opts.OnAccountsChanged,
 		})),
 		container.NewTabItem("Add rule", BuildAddRuleForm(AddRuleFormOptions{
+			Service: opts.RulesService,
 			OnSaved: opts.OnRulesChanged,
 		})),
 		container.NewTabItem("Doctor", BuildDoctorTab()),
