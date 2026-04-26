@@ -7,6 +7,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/lovable/email-read/internal/config"
@@ -17,6 +18,10 @@ import (
 type RulesOptions struct {
 	List   func() errtrace.Result[[]config.Rule]
 	Toggle func(name string, enabled bool) errtrace.Result[struct{}]
+	Remove func(name string) errtrace.Result[struct{}]
+	// OnRulesChanged fires after a successful Edit/Delete so the shell can
+	// refresh dependent views (Tools tab counts, dashboard tile, etc.).
+	OnRulesChanged func()
 }
 
 func BuildRules(opts RulesOptions) fyne.CanvasObject {
@@ -26,9 +31,12 @@ func BuildRules(opts RulesOptions) fyne.CanvasObject {
 	if opts.Toggle == nil {
 		opts.Toggle = core.SetRuleEnabled
 	}
+	if opts.Remove == nil {
+		opts.Remove = core.RemoveRule
+	}
 
 	heading := widget.NewLabelWithStyle("Rules", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-	subtitle := widget.NewLabel("Toggle to enable/disable. Add or remove via the Tools view.")
+	subtitle := widget.NewLabel("Toggle to enable/disable, or Edit/Delete inline. Add via Tools → Add rule.")
 	status := widget.NewLabel("")
 	status.Wrapping = fyne.TextWrapWord
 
@@ -54,11 +62,12 @@ func BuildRules(opts RulesOptions) fyne.CanvasObject {
 			return
 		}
 
-		header := container.NewGridWithColumns(4,
+		header := container.NewGridWithColumns(5,
 			widget.NewLabelWithStyle("Name", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 			widget.NewLabelWithStyle("URL pattern", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 			widget.NewLabelWithStyle("Filters", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 			widget.NewLabelWithStyle("Enabled", fyne.TextAlignTrailing, fyne.TextStyle{Bold: true}),
+			widget.NewLabelWithStyle("Actions", fyne.TextAlignTrailing, fyne.TextStyle{Bold: true}),
 		)
 		rows := []fyne.CanvasObject{header, widget.NewSeparator()}
 		enabledCount := 0
@@ -66,7 +75,7 @@ func BuildRules(opts RulesOptions) fyne.CanvasObject {
 			if r.Enabled {
 				enabledCount++
 			}
-			rows = append(rows, ruleRow(r, opts.Toggle, status, reload))
+			rows = append(rows, ruleRow(r, opts, status, reload))
 		}
 		body.Objects = rows
 		body.Refresh()
@@ -84,7 +93,7 @@ func BuildRules(opts RulesOptions) fyne.CanvasObject {
 	)
 }
 
-func ruleRow(r config.Rule, toggle func(string, bool) errtrace.Result[struct{}], status *widget.Label, reload func()) fyne.CanvasObject {
+func ruleRow(r config.Rule, opts RulesOptions, status *widget.Label, reload func()) fyne.CanvasObject {
 	name := widget.NewLabel(r.Name)
 	urlLbl := widget.NewLabel(r.UrlRegex)
 	urlLbl.Wrapping = fyne.TextWrapBreak
@@ -93,11 +102,11 @@ func ruleRow(r config.Rule, toggle func(string, bool) errtrace.Result[struct{}],
 	check := widget.NewCheck("", nil)
 	check.SetChecked(r.Enabled)
 	check.OnChanged = func(on bool) {
-		if res := toggle(r.Name, on); res.HasError() {
+		if res := opts.Toggle(r.Name, on); res.HasError() {
 			status.SetText("⚠ Toggle failed: " + res.Error().Error())
 			check.OnChanged = nil
 			check.SetChecked(r.Enabled)
-			check.OnChanged = func(b bool) { _ = toggle(r.Name, b); reload() }
+			check.OnChanged = func(b bool) { _ = opts.Toggle(r.Name, b); reload() }
 			return
 		}
 		state := "enabled"
@@ -108,5 +117,63 @@ func ruleRow(r config.Rule, toggle func(string, bool) errtrace.Result[struct{}],
 		reload()
 	}
 	checkCell := container.NewHBox(widget.NewLabel(""), check)
-	return container.NewGridWithColumns(4, name, urlLbl, filters, checkCell)
+
+	editBtn := widget.NewButton("Edit", func() { openEditRuleDialog(r, opts, status, reload) })
+	delBtn := widget.NewButton("Delete", func() { confirmDeleteRule(r, opts, status, reload) })
+	delBtn.Importance = widget.DangerImportance
+	actions := container.NewHBox(editBtn, delBtn)
+
+	return container.NewGridWithColumns(5, name, urlLbl, filters, checkCell, actions)
+}
+
+// openEditRuleDialog shows the Add Rule form in edit mode inside a modal
+// dialog. On successful Update the dialog closes and the table reloads
+// via OnRulesChanged + the local reload.
+func openEditRuleDialog(r config.Rule, opts RulesOptions, status *widget.Label, reload func()) {
+	parent := currentParentWindow()
+	if parent == nil {
+		status.SetText("⚠ Cannot open Edit dialog: no parent window.")
+		return
+	}
+	var d dialog.Dialog
+	form := BuildAddRuleForm(AddRuleFormOptions{
+		Initial: &r,
+		OnSaved: func() {
+			if d != nil {
+				d.Hide()
+			}
+			if opts.OnRulesChanged != nil {
+				opts.OnRulesChanged()
+			}
+			reload()
+		},
+	})
+	d = dialog.NewCustom("Edit rule: "+r.Name, "Close", form, parent)
+	d.Resize(fyne.NewSize(560, 440))
+	d.Show()
+}
+
+// confirmDeleteRule shows a yes/no confirm before calling Remove.
+func confirmDeleteRule(r config.Rule, opts RulesOptions, status *widget.Label, reload func()) {
+	parent := currentParentWindow()
+	if parent == nil {
+		status.SetText("⚠ Cannot open Delete confirm: no parent window.")
+		return
+	}
+	msg := fmt.Sprintf("Permanently remove rule %q? This cannot be undone.", r.Name)
+	dialog.ShowConfirm("Delete rule", msg, func(yes bool) {
+		if !yes {
+			return
+		}
+		res := opts.Remove(r.Name)
+		if res.HasError() {
+			status.SetText("⚠ Delete failed: " + res.Error().Error())
+			return
+		}
+		status.SetText("✓ Removed rule " + r.Name)
+		if opts.OnRulesChanged != nil {
+			opts.OnRulesChanged()
+		}
+		reload()
+	}, parent)
 }
