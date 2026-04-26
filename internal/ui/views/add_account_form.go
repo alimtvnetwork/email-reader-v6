@@ -18,6 +18,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/lovable/email-read/internal/config"
 	"github.com/lovable/email-read/internal/core"
 	"github.com/lovable/email-read/internal/errtrace"
 )
@@ -26,10 +27,17 @@ import (
 // to core.AddAccount and TestConn defaults to core.TestAccountConnection;
 // tests inject stubs. OnSaved is called after a successful save so the
 // shell can refresh the sidebar account picker.
+//
+// Edit mode: when Initial is non-nil the form starts pre-filled with that
+// account, the Alias entry is locked (alias is the immutable key), the
+// password placeholder explains "leave blank to keep current", and Save
+// defaults to core.UpdateAccount instead of core.AddAccount. Callers
+// using edit mode typically also override OnSaved to close their dialog.
 type AddAccountFormOptions struct {
 	Save     func(in core.AccountInput) errtrace.Result[*core.AddAccountResult]
 	TestConn func(in core.AccountInput) errtrace.Result[core.TestConnectionResult]
 	OnSaved  func()
+	Initial  *config.Account // nil ⇒ Add mode; non-nil ⇒ Edit mode
 }
 
 // accountFormEntries holds the Fyne widgets that make up the Add Account
@@ -49,31 +57,79 @@ type accountFormEntries struct {
 }
 
 // BuildAddAccountForm returns the inline Add Account form widget.
+// In Edit mode (opts.Initial != nil) the same widget is used but
+// pre-filled and bound to UpdateAccount.
 func BuildAddAccountForm(opts AddAccountFormOptions) fyne.CanvasObject {
+	editing := opts.Initial != nil
+	opts = applyFormDefaults(opts, editing)
+	e := newAccountFormEntries()
+	status := newStatusLabel()
+	autodiscover := newAutodiscoverButton(e, status)
+	revealPw := newPasswordRevealButton(e.password)
+	form := buildAccountForm(e, autodiscover, revealPw)
+	if editing {
+		applyInitialToEntries(*opts.Initial, e)
+	}
+	clear := func() {
+		resetAccountEntries(e)
+		revealPw.SetText("Show")
+		e.password.Password = true
+		e.password.Refresh()
+		if editing {
+			applyInitialToEntries(*opts.Initial, e)
+		}
+	}
+	submit := newAccountSubmitButton(opts, e, status, clear, editing)
+	testBtn := newTestConnectionButton(opts, e, status)
+	clearBtn := widget.NewButton(clearLabel(editing), func() { clear(); status.SetText("") })
+	actions := container.NewHBox(submit, testBtn, clearBtn)
+	return container.NewPadded(container.NewVBox(form, widget.NewSeparator(), actions, status))
+}
+
+// applyFormDefaults fills in Save/TestConn defaults. In edit mode Save
+// routes to UpdateAccount; in add mode it routes to AddAccount.
+func applyFormDefaults(opts AddAccountFormOptions, editing bool) AddAccountFormOptions {
 	if opts.Save == nil {
-		opts.Save = core.AddAccount
+		if editing {
+			opts.Save = core.UpdateAccount
+		} else {
+			opts.Save = core.AddAccount
+		}
 	}
 	if opts.TestConn == nil {
 		opts.TestConn = func(in core.AccountInput) errtrace.Result[core.TestConnectionResult] {
 			return core.TestAccountConnection(in, 0)
 		}
 	}
-	e := newAccountFormEntries()
-	status := newStatusLabel()
-	autodiscover := newAutodiscoverButton(e, status)
-	revealPw := newPasswordRevealButton(e.password)
-	form := buildAccountForm(e, autodiscover, revealPw)
-	clear := func() {
-		resetAccountEntries(e)
-		revealPw.SetText("Show")
-		e.password.Password = true
-		e.password.Refresh()
+	return opts
+}
+
+// applyInitialToEntries pre-fills the form widgets from an existing
+// account. Locks the Alias entry (alias is the immutable key) and
+// updates the password placeholder so the user knows blank == keep.
+func applyInitialToEntries(a config.Account, e *accountFormEntries) {
+	e.alias.SetText(a.Alias)
+	e.alias.Disable()
+	e.email.SetText(a.Email)
+	e.displayName.SetText(a.DisplayName)
+	e.password.SetText("")
+	e.password.SetPlaceHolder("(leave blank to keep current password)")
+	e.host.SetText(a.ImapHost)
+	if a.ImapPort > 0 {
+		e.port.SetText(strconv.Itoa(a.ImapPort))
 	}
-	submit := newAccountSubmitButton(opts, e, status, clear)
-	testBtn := newTestConnectionButton(opts, e, status)
-	clearBtn := widget.NewButton("Clear", func() { clear(); status.SetText("") })
-	actions := container.NewHBox(submit, testBtn, clearBtn)
-	return container.NewPadded(container.NewVBox(form, widget.NewSeparator(), actions, status))
+	e.useTLS.SetChecked(a.UseTLS)
+	e.mailbox.SetText(a.Mailbox)
+}
+
+// clearLabel returns the button label appropriate for the form mode.
+// "Reset" reads better than "Clear" when editing because it implies
+// reverting to the loaded account, not blanking out fields.
+func clearLabel(editing bool) string {
+	if editing {
+		return "Reset"
+	}
+	return "Clear"
 }
 
 // newAccountFormEntries constructs the entry widgets with their
@@ -192,11 +248,18 @@ func resetAccountEntries(e *accountFormEntries) {
 	e.mailbox.SetText("")
 }
 
-// newAccountSubmitButton wires the primary "Save account" button: validate
-// → call opts.Save → render status → run OnSaved hook on success.
-func newAccountSubmitButton(opts AddAccountFormOptions, e *accountFormEntries, status *widget.Label, clear func()) *widget.Button {
-	submit := widget.NewButton("Save account", func() {
-		v := ValidateAccountForm(accountFormInputFromEntries(e))
+// newAccountSubmitButton wires the primary Save button: validate → call
+// opts.Save → render status → run OnSaved hook on success. The button
+// label and password-required behaviour both flip based on edit mode.
+func newAccountSubmitButton(opts AddAccountFormOptions, e *accountFormEntries, status *widget.Label, clear func(), editing bool) *widget.Button {
+	label := "Save account"
+	if editing {
+		label = "Update account"
+	}
+	submit := widget.NewButton(label, func() {
+		input := accountFormInputFromEntries(e)
+		input.AllowBlankPassword = editing
+		v := ValidateAccountForm(input)
 		if !v.Valid {
 			status.SetText("⚠ " + strings.Join(v.Errors, " · "))
 			return
@@ -207,7 +270,9 @@ func newAccountSubmitButton(opts AddAccountFormOptions, e *accountFormEntries, s
 			return
 		}
 		status.SetText(formatAccountSavedMessage(r.Value()))
-		clear()
+		if !editing {
+			clear()
+		}
 		if opts.OnSaved != nil {
 			opts.OnSaved()
 		}

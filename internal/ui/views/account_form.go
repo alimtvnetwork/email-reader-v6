@@ -16,14 +16,15 @@ import (
 // widgets — coercion to int / bool happens in ValidateAccountForm so
 // every error surfaces in one pass.
 type AccountFormInput struct {
-	Alias       string
-	Email       string
-	DisplayName string // optional human label
-	Password    string
-	Host        string // optional — auto-suggested from email when blank
-	Port        string // optional — defaults to 993
-	UseTLS      bool
-	Mailbox     string // optional — defaults to "INBOX"
+	Alias              string
+	Email              string
+	DisplayName        string // optional human label
+	Password           string
+	Host               string // optional — auto-suggested from email when blank
+	Port               string // optional — defaults to 993
+	UseTLS             bool
+	Mailbox            string // optional — defaults to "INBOX"
+	AllowBlankPassword bool   // edit mode: blank password ⇒ keep existing
 }
 
 // AccountFormResult holds the cleaned values ready to feed into
@@ -66,7 +67,7 @@ func ValidateAccountForm(in AccountFormInput) AccountFormResult {
 	} else if !strings.Contains(out.Email, "@") {
 		errs = append(errs, "email must contain @")
 	}
-	if strings.TrimSpace(in.Password) == "" {
+	if !in.AllowBlankPassword && strings.TrimSpace(in.Password) == "" {
 		errs = append(errs, "password is required")
 	}
 

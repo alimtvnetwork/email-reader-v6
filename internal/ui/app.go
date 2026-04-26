@@ -203,7 +203,9 @@ func viewFor(item NavItem, state *AppState, gotoNav func(NavKind), onAccountsCha
 	case NavRules:
 		return views.BuildRules(views.RulesOptions{})
 	case NavAccounts:
-		return views.BuildAccounts(views.AccountsOptions{})
+		return views.BuildAccounts(views.AccountsOptions{
+			OnAccountsChanged: onAccountsChanged,
+		})
 	case NavWatch:
 		rt := WatchRuntimeOrNil()
 		opts := views.WatchOptions{Alias: state.Alias()}
