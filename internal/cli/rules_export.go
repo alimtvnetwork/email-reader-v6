@@ -117,7 +117,11 @@ Examples:
 }
 
 func runRulesList() error {
-	res := core.ListRules()
+	svc, err := rulesService()
+	if err != nil {
+		return err
+	}
+	res := svc.List()
 	if res.HasError() {
 		return res.PropagateError()
 	}
