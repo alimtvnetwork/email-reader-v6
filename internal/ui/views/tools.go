@@ -40,6 +40,7 @@ func BuildTools(opts ToolsOptions) fyne.CanvasObject {
 		container.NewTabItem("Read", BuildReadTab()),
 		container.NewTabItem("Export CSV", BuildExportTab()),
 		container.NewTabItem("OpenUrl", BuildOpenUrlTab()),
+		container.NewTabItem("Recent opens", BuildRecentOpensTab()),
 	)
 	tabs.SetTabLocation(container.TabLocationTop)
 
