@@ -157,11 +157,14 @@ func attachRuntimeServices(ctx context.Context, rt *WatchRuntime) error {
 	if lfRes.HasError() {
 		return errtrace.Wrap(lfRes.Error(), "build loop factory")
 	}
-	wRes := core.NewWatch(lfRes.Value(), eventbus.New[core.WatchEvent](32), time.Now)
+	dstBus := eventbus.New[core.WatchEvent](32)
+	wRes := core.NewWatch(lfRes.Value(), dstBus, time.Now)
 	if wRes.HasError() {
 		return errtrace.Wrap(wRes.Error(), "build watch")
 	}
 	rt.Watch = wRes.Value()
+	stopBridge := core.BridgeWatcherBus(ctx, bus, dstBus)
+	rt.closers = append(rt.closers, func() error { stopBridge(); return nil })
 	return nil
 }
 
