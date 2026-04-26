@@ -125,11 +125,8 @@ func TestValidateOpenedUrlListSpec(t *testing.T) {
 	if spec.Limit != 100 || spec.Before.IsZero() {
 		t.Fatalf("defaults not applied: %+v", spec)
 	}
-	for _, lim := range []int{-1, 0, 1001, 99999} {
+	for _, lim := range []int{-1, 1001, 99999} {
 		s := OpenedUrlListSpec{Limit: lim}
-		if lim == 0 {
-			continue // 0 is the default-trigger, not an error
-		}
 		err := validateOpenedUrlListSpec(&s)
 		if err == nil {
 			t.Fatalf("Limit=%d should fail", lim)
@@ -139,9 +136,62 @@ func TestValidateOpenedUrlListSpec(t *testing.T) {
 			t.Fatalf("Limit=%d: expected ErrToolsInvalidArgument, got %v", lim, err)
 		}
 	}
+	// Origin filter validation (Delta #1).
+	if err := validateOpenedUrlListSpec(&OpenedUrlListSpec{Origin: "bogus"}); err == nil {
+		t.Fatal("invalid Origin must fail")
+	}
+	for _, o := range []OpenUrlOrigin{"", OriginManual, OriginRule, OriginCli} {
+		if err := validateOpenedUrlListSpec(&OpenedUrlListSpec{Origin: o}); err != nil {
+			t.Fatalf("Origin=%q must pass: %v", o, err)
+		}
+	}
+}
+
+// TestBuildOpenedUrlsQuery covers the Delta-#1 filter activation:
+// alias-only, origin-only, both, and the bare-cursor baseline.
+func TestBuildOpenedUrlsQuery(t *testing.T) {
+	now := time.Now()
+	cases := []struct {
+		name     string
+		spec     OpenedUrlListSpec
+		wantArgs int
+		wantSubs []string
+	}{
+		{"baseline", OpenedUrlListSpec{Limit: 50, Before: now}, 2, []string{"OpenedAt < ?", "LIMIT ?"}},
+		{"alias", OpenedUrlListSpec{Limit: 50, Before: now, Alias: "work"}, 3, []string{"Alias = ?"}},
+		{"origin", OpenedUrlListSpec{Limit: 50, Before: now, Origin: OriginRule}, 3, []string{"Origin = ?"}},
+		{"both", OpenedUrlListSpec{Limit: 50, Before: now, Alias: "w", Origin: OriginManual}, 4, []string{"Alias = ?", "Origin = ?"}},
+	}
+	for _, c := range cases {
+		q, args := buildOpenedUrlsQuery(c.spec)
+		if len(args) != c.wantArgs {
+			t.Errorf("%s: want %d args, got %d (%v)", c.name, c.wantArgs, len(args), args)
+		}
+		for _, sub := range c.wantSubs {
+			if !contains(q, sub) {
+				t.Errorf("%s: query missing %q in %s", c.name, sub, q)
+			}
+		}
+	}
+}
+
+func contains(haystack, needle string) bool {
+	return len(needle) == 0 || (len(haystack) >= len(needle) && stringIndex(haystack, needle) >= 0)
+}
+
+// stringIndex is a trivial substring search to keep this test free of
+// the strings package import noise.
+func stringIndex(h, n string) int {
+	for i := 0; i+len(n) <= len(h); i++ {
+		if h[i:i+len(n)] == n {
+			return i
+		}
+	}
+	return -1
 }
 
 // fakeRows satisfies the inline interface scanOpenedUrlRows expects.
+// Updated for Delta #1: 11 columns including 2 ints (IsDeduped, IsIncognito).
 type fakeRows struct {
 	rows  [][]any
 	idx   int
@@ -159,6 +209,8 @@ func (f *fakeRows) Scan(dest ...any) error {
 		switch d := dest[i].(type) {
 		case *int64:
 			*d = src[i].(int64)
+		case *int:
+			*d = src[i].(int)
 		case *string:
 			*d = src[i].(string)
 		case *time.Time:
@@ -171,16 +223,27 @@ func (f *fakeRows) Err() error { return f.final }
 
 func TestScanOpenedUrlRows_HappyPath(t *testing.T) {
 	now := time.Now()
+	// 11 columns: Id, EmailId, Alias, RuleName, Origin, Url, OriginalUrl,
+	//             IsDeduped (int), IsIncognito (int), TraceId, OpenedAt
 	rows := &fakeRows{rows: [][]any{
-		{int64(1), int64(10), "rule-A", "https://x.test/1", now},
-		{int64(2), int64(11), "", "https://y.test/2", now.Add(-time.Hour)},
+		{int64(1), int64(10), "work", "rule-A", "manual", "https://x.test/1", "", 0, 1, "trace-1", now},
+		{int64(2), int64(11), "", "", "rule", "https://y.test/2", "https://y.test/2?token=x", 1, 1, "trace-2", now.Add(-time.Hour)},
 	}}
 	out, err := scanOpenedUrlRows(rows)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(out) != 2 || out[0].Url != "https://x.test/1" || out[1].RuleName != "" {
-		t.Fatalf("unexpected: %+v", out)
+	if len(out) != 2 {
+		t.Fatalf("want 2 rows, got %d", len(out))
+	}
+	if out[0].Url != "https://x.test/1" || out[0].Alias != "work" || out[0].Origin != OriginManual {
+		t.Fatalf("row[0] mismatch: %+v", out[0])
+	}
+	if !out[1].IsDeduped || !out[1].IsIncognito || out[1].OriginalUrl == "" {
+		t.Fatalf("row[1] Delta-#1 fields not surfaced: %+v", out[1])
+	}
+	if out[0].TraceId != "trace-1" {
+		t.Fatalf("TraceId not scanned: %+v", out[0])
 	}
 }
 
