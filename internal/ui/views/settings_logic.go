@@ -43,6 +43,53 @@ func ParseRetentionDays(raw string) (uint16, error) {
 	return uint16(n), nil
 }
 
+// ParseVacuumHourLocal validates the weekly-VACUUM hour-of-day entry.
+// Range [0, 23] per spec/23-app-database/04 §5.
+func ParseVacuumHourLocal(raw string) (uint8, error) {
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 0 || n > 23 {
+		return 0, fmt.Errorf("vacuum hour must be 0–23 (24-hour clock)")
+	}
+	return uint8(n), nil
+}
+
+// ParseWalCheckpointHours validates the WAL-checkpoint cadence entry.
+// Range [1, 168] per spec/23-app-database/04 §5.
+func ParseWalCheckpointHours(raw string) (uint8, error) {
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 1 || n > 168 {
+		return 0, fmt.Errorf("WAL checkpoint hours must be 1–168 (1h..1 week)")
+	}
+	return uint8(n), nil
+}
+
+// ParsePruneBatchSize validates the per-batch row count for chunked
+// retention deletes. Range [100, 50000] per spec/23-app-database/04 §5.
+func ParsePruneBatchSize(raw string) (uint32, error) {
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 100 || n > 50000 {
+		return 0, fmt.Errorf("prune batch size must be 100–50000")
+	}
+	return uint32(n), nil
+}
+
+// WeekdayLabels returns the canonical Sunday-first weekday names used by
+// the Settings dropdown. Matches core.ParseWeekday.
+func WeekdayLabels() []string {
+	return []string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}
+}
+
+// ParseWeekdayLabel maps a dropdown label back to time.Weekday's int form
+// (Sunday=0..Saturday=6). Unknown labels default to 0 (Sunday).
+func ParseWeekdayLabel(label string) int {
+	for i, w := range WeekdayLabels() {
+		if w == label {
+			return i
+		}
+	}
+	return 0
+}
+
 // DensityLabelFor maps an internal density code (theme.Density's int form)
 // to the Select label. We accept an int rather than the theme.Density type
 // to keep this file fyne-free.
@@ -62,6 +109,15 @@ func ParseDensityChoice(label string) int {
 	return 0
 }
 
+// MaintenanceFields bundles the four §5 knobs to keep ProjectSettingsInput
+// readable and to give the Settings view a single value to thread through.
+type MaintenanceFields struct {
+	WeekdayLabel    string
+	HourLocal       uint8
+	WalHours        uint8
+	PruneBatchSize  uint32
+}
+
 // ProjectSettingsInput merges user-edited fields with the invariant slice
 // of the previous snapshot to produce a SettingsInput suitable for Save.
 // Pure: no IO, no globals, no widget references.
@@ -75,9 +131,14 @@ func ProjectSettingsInput(
 	pollSecs uint16,
 	chromePath string,
 	retentionDays uint16,
+	maint MaintenanceFields,
 	prev core.SettingsSnapshot,
 ) core.SettingsInput {
 	mode, _ := core.ParseThemeMode(themeLabel)
+	weekday, ok := core.ParseWeekday(maint.WeekdayLabel)
+	if !ok {
+		weekday = prev.WeeklyVacuumOn
+	}
 	return core.SettingsInput{
 		PollSeconds: pollSecs,
 		Theme:       mode,
@@ -89,5 +150,9 @@ func ProjectSettingsInput(
 		AllowLocalhostUrls:    prev.AllowLocalhostUrls,
 		AutoStartWatch:        prev.AutoStartWatch,
 		OpenUrlsRetentionDays: retentionDays,
+		WeeklyVacuumOn:        weekday,
+		WeeklyVacuumHourLocal: maint.HourLocal,
+		WalCheckpointHours:    maint.WalHours,
+		PruneBatchSize:        maint.PruneBatchSize,
 	}
 }
