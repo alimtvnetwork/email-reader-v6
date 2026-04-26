@@ -18,6 +18,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/lovable/email-read/internal/config"
 	"github.com/lovable/email-read/internal/core"
 	"github.com/lovable/email-read/internal/ui/theme"
 	"github.com/lovable/email-read/internal/ui/views"
@@ -228,6 +229,7 @@ func viewFor(item NavItem, state *AppState, gotoNav func(NavKind), onAccountsCha
 		dashOpts := views.DashboardOptions{
 			Alias:        state.Alias(),
 			OnStartWatch: func() { gotoNav(NavWatch) },
+			Service:      buildDashboardService(),
 		}
 		if rt := WatchRuntimeOrNil(); rt != nil {
 			dashOpts.Bus = rt.Bus
@@ -274,4 +276,25 @@ func placeholderView(item NavItem, state *AppState) fyne.CanvasObject {
 	body := widget.NewLabel(item.Placeholder)
 	body.Wrapping = fyne.TextWrapWord
 	return container.NewVBox(heading, widget.NewSeparator(), ctx, body)
+}
+
+// buildDashboardService constructs a typed *core.DashboardService
+// for the dashboard view (Phase 2.3 wiring). The service is stateless
+// so building it on each viewFor(NavDashboard) switch is cheap and
+// avoids hidden lifetime coupling between app boot and individual view
+// constructions. Both injected deps point at the still-deprecated
+// package-level wrappers — that's fine: the wrappers go away in P2.8
+// when bootstrap moves to fully-injected `*EmailsService` /
+// `*RulesService` plumbing.
+//
+// Returns nil on construction failure (impossible given non-nil deps,
+// but the type is a Result envelope so we honor it). The dashboard
+// view's degraded path takes over when Service is nil.
+func buildDashboardService() *core.DashboardService {
+	res := core.NewDashboardService(config.Load, core.CountEmails)
+	if res.HasError() {
+		log.Printf("dashboard: NewDashboardService failed: %v", res.Error())
+		return nil
+	}
+	return res.Value()
 }
