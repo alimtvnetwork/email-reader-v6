@@ -11,8 +11,8 @@ import (
 
 func TestReadEmail_UnknownAccount(t *testing.T) {
 	withIsolatedConfig(t, func() {
-		err := ReadEmail(context.Background(), "ghost", 1, nil)
-		if err == nil {
+		r := ReadEmail(context.Background(), "ghost", 1, nil)
+		if !r.HasError() {
 			t.Fatal("expected error for unknown alias")
 		}
 	})

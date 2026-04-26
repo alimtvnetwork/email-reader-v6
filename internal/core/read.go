@@ -66,19 +66,22 @@ type ReadEvent struct {
 func loadEmailDetail(ctx context.Context, alias string, uid uint32) (*config.Config, *store.Store, *store.Email, EmailDetail, error) {
 	cfg, err := config.Load()
 	if err != nil {
-		return nil, nil, nil, EmailDetail{}, errtrace.Wrap(err, "load config")
+		return nil, nil, nil, EmailDetail{}, errtrace.WrapCode(err, errtrace.ErrConfigOpen, "load config")
 	}
 	if cfg.FindAccount(alias) == nil {
-		return cfg, nil, nil, EmailDetail{}, errtrace.New(fmt.Sprintf("no account with alias %q", alias))
+		return cfg, nil, nil, EmailDetail{}, errtrace.NewCoded(
+			errtrace.ErrConfigAccountMissing, fmt.Sprintf("no account with alias %q", alias)).
+			WithContext("alias", alias)
 	}
 	st, err := store.Open()
 	if err != nil {
-		return cfg, nil, nil, EmailDetail{}, errtrace.Wrap(err, "open store")
+		return cfg, nil, nil, EmailDetail{}, errtrace.WrapCode(err, errtrace.ErrDbOpen, "open store")
 	}
 	row, err := st.GetEmailByUid(ctx, alias, uid)
 	if err != nil {
 		st.Close()
-		return cfg, nil, nil, EmailDetail{}, errtrace.Wrapf(err, "load email alias=%s uid=%d", alias, uid)
+		return cfg, nil, nil, EmailDetail{}, errtrace.WrapCode(err, errtrace.ErrDbQueryEmail, "load email").
+			WithContext("alias", alias).WithContext("uid", uid)
 	}
 	detail := EmailDetail{
 		EmailSummary: toSummary(*row),
@@ -123,7 +126,7 @@ func buildEngineAndLauncher(cfg config.Config, emit func(ReadEvent)) (*rules.Eng
 	launcher := browser.New(cfg.Browser)
 	path, err := launcher.Path()
 	if err != nil {
-		return nil, nil, errtrace.Wrap(err, "resolve browser")
+		return nil, nil, errtrace.WrapCode(err, errtrace.ErrBrowserNotFound, "resolve browser")
 	}
 	emit(ReadEvent{Kind: ReadEventBrowserResolved, BrowserPath: path, IncognitoArg: launcher.IncognitoArg()})
 	return engine, launcher, nil
@@ -180,12 +183,12 @@ func openOneMatch(ctx context.Context, st *store.Store, launcher *browser.Launch
 func openMatches(ctx context.Context, st *store.Store, launcher *browser.Launcher, emailId int64, matches []rules.Match, emit func(ReadEvent)) error {
 	for i, match := range matches {
 		if err := ctx.Err(); err != nil {
-			return errtrace.Wrap(err, "cancelled mid-batch")
+			return errtrace.WrapCode(err, errtrace.ErrCoreContextCancelled, "cancelled mid-batch")
 		}
 		if i > 0 {
 			emit(ReadEvent{Kind: ReadEventCooldown, CooldownFor: 10 * time.Second})
 			if err := sleepCtx(ctx, 10*time.Second); err != nil {
-				return errtrace.Wrap(err, "cooldown between URLs")
+				return errtrace.WrapCode(err, errtrace.ErrCoreContextCancelled, "cooldown between URLs")
 			}
 		}
 		openOneMatch(ctx, st, launcher, emailId, match, i, len(matches), emit)
@@ -202,7 +205,7 @@ func openMatches(ctx context.Context, st *store.Store, launcher *browser.Launche
 // error only for fatal setup failures (missing account, browser unresolved,
 // store I/O); per-URL launch failures are reported via OpenFailed events
 // and do not abort the loop.
-func ReadEmail(ctx context.Context, alias string, uid uint32, emit func(ReadEvent)) error {
+func ReadEmail(ctx context.Context, alias string, uid uint32, emit func(ReadEvent)) errtrace.Result[struct{}] {
 	if emit == nil {
 		emit = func(ReadEvent) {}
 	}
@@ -211,27 +214,27 @@ func ReadEmail(ctx context.Context, alias string, uid uint32, emit func(ReadEven
 	}
 	cfg, st, row, detail, err := loadEmailDetail(ctx, alias, uid)
 	if err != nil {
-		return err
+		return errtrace.Err[struct{}](err)
 	}
 	defer st.Close()
 	emit(ReadEvent{Kind: ReadEventStart, Email: &detail})
 	ensureSeededRule(cfg, emit)
 	engine, launcher, err := buildEngineAndLauncher(*cfg, emit)
 	if err != nil {
-		return err
+		return errtrace.Err[struct{}](err)
 	}
 	if engine == nil {
-		return nil
+		return errtrace.Ok(struct{}{})
 	}
 	matches := evaluateMatches(engine, rowToMessage(row), emit)
 	if matches == nil {
-		return nil
+		return errtrace.Ok(struct{}{})
 	}
 	if err := openMatches(ctx, st, launcher, row.Id, matches, emit); err != nil {
-		return err
+		return errtrace.Err[struct{}](err)
 	}
 	emit(ReadEvent{Kind: ReadEventDone})
-	return nil
+	return errtrace.Ok(struct{}{})
 }
 
 // sleepCtx pauses for d or returns early when ctx is cancelled.

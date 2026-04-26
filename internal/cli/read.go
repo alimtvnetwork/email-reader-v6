@@ -59,7 +59,11 @@ func runRead(parent context.Context, alias string, uid uint32) error {
 
 	logger := log.New(os.Stdout, "", 0)
 	emit := func(ev core.ReadEvent) { renderReadEvent(logger, alias, ev) }
-	return core.ReadEmail(ctx, alias, uid, emit)
+	r := core.ReadEmail(ctx, alias, uid, emit)
+	if r.HasError() {
+		return r.PropagateError()
+	}
+	return nil
 }
 
 // renderReadEvent prints one event in the existing CLI log style. Kept here
