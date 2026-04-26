@@ -145,9 +145,10 @@ func NewMaintenance(opts MaintenanceOptions) errtrace.Result[*Maintenance] {
 	if opts.WalCheckpointHours <= 0 {
 		opts.WalCheckpointHours = 6
 	}
-	// VacuumHourLocal: only override out-of-range values; 0 is the
-	// legitimate "midnight" choice if a caller wants it.
-	if opts.VacuumHourLocal < 0 || opts.VacuumHourLocal > 23 {
+	// Spec/23-app-database/04 §5: WeeklyVacuumHourLocal default 3, range 0..23.
+	// Treat "<= 0" as unset to match the zero-value-friendly Options pattern;
+	// out-of-range high values clamp to 3.
+	if opts.VacuumHourLocal <= 0 || opts.VacuumHourLocal > 23 {
 		opts.VacuumHourLocal = 3
 	}
 	// time.Sunday is the zero value of time.Weekday, so no defaulting needed.
