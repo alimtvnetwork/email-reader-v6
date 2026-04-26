@@ -5,10 +5,10 @@
 //
 // Spec: spec/21-app/02-features/07-settings/02-frontend.md (sections 1–8).
 //
-// Density is intentionally kept process-local (not persisted in
-// SettingsInput) — the spec marks the persisted-density story as deferred
-// (§8). When persistence lands, swap the OnChanged handler for a Settings
-// field write — no other callers depend on the local in-memory toggle.
+// Density is now persisted to core.SettingsInput.Density (Slice #42). The
+// Select pre-fills from the loaded snapshot, OnChanged still applies the
+// theme-level density immediately for live preview, and Save round-trips
+// it through SettingsInput so the next cold start restores the choice.
 //go:build !nofyne
 
 package views
@@ -126,9 +126,9 @@ func newSettingsWidgets(snap core.SettingsSnapshot) *settingsWidgets {
 	w.chromeEntry.SetText(snap.BrowserOverride.ChromePath)
 
 	w.densitySelect = widget.NewSelect([]string{"Comfortable", "Compact"}, func(v string) {
-		theme.SetDensity(theme.Density(ParseDensityChoice(v)))
+		theme.SetDensity(theme.Density(CoreDensityToThemeDensity(ParseDensityChoice(v))))
 	})
-	w.densitySelect.SetSelected(DensityLabelFor(int(theme.ActiveDensity())))
+	w.densitySelect.SetSelected(DensityLabelFor(int(snap.Density)))
 
 	w.retentionEntry = widget.NewEntry()
 	w.retentionEntry.SetText(strconv.Itoa(int(snap.OpenUrlsRetentionDays)))
@@ -215,7 +215,7 @@ func readSettingsInput(w *settingsWidgets) (core.SettingsInput, error) {
 	if err != nil {
 		return core.SettingsInput{}, err
 	}
-	return ProjectSettingsInput(w.themeSelect.Selected, poll, w.chromeEntry.Text, retention, maint, w.initial), nil
+	return ProjectSettingsInput(w.themeSelect.Selected, poll, w.chromeEntry.Text, retention, maint, w.initial, w.densitySelect.Selected), nil
 }
 
 // readMaintenanceFields parses the four §5 inputs as a unit. Pulled out
@@ -248,6 +248,7 @@ func repopulateWidgets(w *settingsWidgets, snap core.SettingsSnapshot) {
 	w.themeSelect.SetSelected(snap.Theme.String())
 	w.pollEntry.SetText(strconv.Itoa(int(snap.PollSeconds)))
 	w.chromeEntry.SetText(snap.BrowserOverride.ChromePath)
+	w.densitySelect.SetSelected(DensityLabelFor(int(snap.Density)))
 	w.retentionEntry.SetText(strconv.Itoa(int(snap.OpenUrlsRetentionDays)))
 	w.weekdaySelect.SetSelected(snap.WeeklyVacuumOn.String())
 	w.vacHourEntry.SetText(strconv.Itoa(int(snap.WeeklyVacuumHourLocal)))
