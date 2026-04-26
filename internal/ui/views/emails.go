@@ -107,8 +107,8 @@ func buildEmailsToolbar(opts EmailsOptions, onRefresh func()) fyne.CanvasObject 
 		status.SetText("Refreshing…")
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		if err := opts.Service.Refresh(ctx, opts.Alias); err != nil {
-			status.SetText("⚠ Refresh failed: " + err.Error())
+		if res := opts.Service.Refresh(ctx, opts.Alias); res.HasError() {
+			status.SetText("⚠ Refresh failed: " + res.Error().Error())
 			return
 		}
 		status.SetText("")
