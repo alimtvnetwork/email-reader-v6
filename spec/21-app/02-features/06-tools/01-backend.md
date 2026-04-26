@@ -647,4 +647,69 @@ All fakes implement the same interfaces consumed by `Tools` (no `interface{}`).
 
 ---
 
+## N. Symbol Map (AC → Go symbol)
+
+Authoritative bridge between the tools `97-acceptance-criteria.md` table and the production Go identifiers an AI implementer must touch. AC tables already name the Go test functions in their right column; this map covers the **service surface, types, and store shims** an implementer needs to satisfy them. **Status legend:** ✅ shipped on `main` · ⏳ planned · 🧪 test-only · 🟡 partial.
+
+### N.1 Service surface (`core.Tools`)
+
+| AC IDs                | Go symbol                                                                            | File                                   | Status |
+|-----------------------|--------------------------------------------------------------------------------------|----------------------------------------|:------:|
+| F-01..F-07            | `core.Tools` + `NewTools(...) *Tools`                                                | `internal/core/tools.go`               |   ✅   |
+| F-10..F-18            | `(*Tools).OpenUrl(ctx, OpenUrlSpec) errtrace.Result[OpenUrlReport]`                  | `internal/core/tools.go`               |   ✅   |
+| F-20..F-27            | `(*Tools).RecentOpenedUrls(ctx, OpenedUrlListSpec) errtrace.Result[[]OpenedUrlRow]`  | `internal/core/tools_diagnose.go`      |   ✅   |
+| F-30..F-39            | `(*Tools).ExportCsv(ctx, ExportSpec, progress chan<- ExportProgress) errtrace.Result[ExportReport]` | `internal/core/tools_export.go` |   ✅   |
+| F-40..F-50            | `(*Tools).Diagnose(ctx, DiagnoseSpec, emit func(DiagnoseEvent)) errtrace.Result[DiagnosticsReport]` | `internal/core/tools_diagnose.go` |   ✅   |
+| F-40..F-50            | `(*Tools).CachedDiagnose(...)` *(memoised wrapper)*                                  | `internal/core/tools_diagnose.go`      |   ✅   |
+| L-01..L-06            | `(*Tools).WatchAccountEvents(ctx) (stop func())` *(invalidator)*                     | `internal/core/tools_invalidate.go`    |   ✅   |
+| F-01..F-07            | `(*Tools).ReadOnce(ctx, ReadSpec, progress chan<- string) errtrace.Result[ReadResult]` | `internal/core/tools_read.go`        |   ✅   |
+
+### N.2 Projection / spec types
+
+| AC IDs              | Go symbol                                                  | File                                | Status |
+|---------------------|------------------------------------------------------------|-------------------------------------|:------:|
+| F-10..F-18          | `core.OpenUrlSpec`, `core.OpenUrlReport`                   | `internal/core/tools.go`            |   ✅   |
+| F-20..F-27          | `core.OpenedUrlListSpec`, `core.OpenedUrlRow`              | `internal/core/tools_diagnose.go`   |   ✅   |
+| F-30..F-39          | `core.ExportSpec`, `core.ExportProgress`, `core.ExportReport` | `internal/core/tools_export.go` |   ✅   |
+| F-40..F-50          | `core.DiagnoseSpec`, `core.DiagnoseEvent`, `core.DiagnosticsReport` | `internal/core/tools_diagnose.go` | ✅ |
+| F-01..F-07          | `core.ReadSpec`, `core.ReadResult`                         | `internal/core/tools_read.go`       |   ✅   |
+
+### N.3 Store / SQL surface
+
+| AC IDs            | Go symbol / SQL artefact                                                          | File                                  | Status |
+|-------------------|-----------------------------------------------------------------------------------|---------------------------------------|:------:|
+| F-10..F-18, D-01  | `OpenedUrl` table + Delta #1 PascalCase columns + `TraceId`                       | `internal/store/store.go`             |   ✅   |
+| F-30..F-39        | `Store.QueryEmailExportRows(ctx, EmailExportFilter) (RowsScanner, error)`         | `internal/store/shims.go`             |   ✅   |
+| F-30..F-39        | `Store.CountEmailsFiltered(ctx, EmailExportFilter) (int, error)`                  | `internal/store/shims.go`             |   ✅   |
+| F-20..F-27        | `Store.QueryOpenedUrls(ctx, OpenedUrlListFilter) ([]OpenedUrlRow, error)`         | `internal/store/shims.go`             |   ✅   |
+| D-01..D-05, Y-01..Y-04 | `store.PruneOpenedUrlsBeforeBatched(ctx, cutoff, batchSize)`                | `internal/store/vacuum.go`            |   ✅   |
+| Y-01..Y-04        | `store.Vacuum`, `WalCheckpointTruncate`, `Analyze`, `ShouldAnalyze`               | `internal/store/vacuum.go`            |   ✅   |
+
+### N.4 Redaction & PII
+
+| AC IDs        | Go symbol                                                              | File                                    | Status |
+|---------------|------------------------------------------------------------------------|-----------------------------------------|:------:|
+| X-01..X-06, S-01..S-08 | `core.redactUrl`, `core.redactCredentials` *(used by every log path)* | `internal/core/tools_redact.go`     |   ✅   |
+| X-01..X-06    | `Test_LogScan_NoOriginalUrlLeak` *(slog buffering guard)*              | `internal/core/tools_log_scan_test.go`  |   ✅   |
+
+### N.5 Errors & logging
+
+| AC IDs        | Go symbol                                                              | File                                    | Status |
+|---------------|------------------------------------------------------------------------|-----------------------------------------|:------:|
+| E-01..E-08    | Codes 21750..21769 per §8 (e.g. `ErrToolsOpenUrlBlockedHost` = 21755)  | `internal/errtrace/codes_gen.go`        |   ⏳   |
+| L-01..L-06    | `toolsSlog` (`component=tools`) + `FormatTools*` helpers               | `internal/ui/tools_log.go`              |   ⏳   |
+
+### N.6 Test contract (named tests already declared in AC tables)
+
+| AC IDs           | Test symbol                                                           | File                                            | Status |
+|------------------|-----------------------------------------------------------------------|-------------------------------------------------|:------:|
+| F-10..F-18       | `TestCF_T1_*`, `TestCF_T2_*`, `TestCF_T3_*`, `TestCF_T4_*`            | `internal/core/cf_acceptance_*.go`              |   ✅   |
+| F-20..F-27, L-01..L-06 | `TestCF_AT1_*`, `TestCF_AT2_*`, `TestCF_AT3_*`                  | `internal/core/cf_acceptance_tools_invalidate_test.go` | ✅ |
+| F-30..F-39       | `TestExportCsv_*` (per §11 test list)                                 | `internal/core/tools_export_test.go`            |   ✅   |
+| F-40..F-50       | `TestDiagnose_*`, `TestCachedDiagnose_*`                              | `internal/core/tools_diagnose_test.go`          |   ✅   |
+| P-01..P-11       | `BenchmarkExportCsv_100k`, `BenchmarkOpenUrl_Audit`                   | `internal/core/tools_bench_test.go`             |   ⏳   |
+| Q-01..Q-11       | `TestAST_CoreUsesStoreOnly` *(AC-DB-52)*                              | `internal/store/ast_core_uses_store_only_test.go` | ✅   |
+
+---
+
 **End of `06-tools/01-backend.md`**
