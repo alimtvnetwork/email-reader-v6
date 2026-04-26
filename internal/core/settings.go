@@ -257,19 +257,35 @@ func loadRaw() (*rawConfigWithSettings, error) {
 	return &rawConfigWithSettings{cfg: cfg, ext: ext}, nil
 }
 
-// saveRaw writes both the config and the extension back to disk. The
-// extension is encoded as a sibling top-level key by leveraging
-// json.Marshal on a combined map. We use config.Save for the bulk write to
-// reuse its atomic tmp+rename path.
+// saveRaw writes both the typed config fields and the extension block in a
+// single atomic file write. We use a generic map round-trip so unknown
+// top-level keys (anything other than accounts/rules/watch/browser/settings)
+// survive untouched — important once additional consumers start adding
+// their own top-level objects.
 func saveRaw(raw *rawConfigWithSettings) error {
-	// Persist the extension first (best-effort — failure is a hard error).
-	if err := saveExtension(raw.ext); err != nil {
+	p, err := config.Path()
+	if err != nil {
+		return errtrace.WrapCode(err, errtrace.ErrConfigOpen, "save raw path")
+	}
+	root, err := readConfigAsMap(p)
+	if err != nil {
 		return err
 	}
-	if err := config.Save(raw.cfg); err != nil {
-		return errtrace.WrapCode(err, errtrace.ErrConfigEncode, "save config")
+	// Marshal the typed config and merge its top-level keys into root so we
+	// preserve unknown keys.
+	cfgBytes, err := json.Marshal(raw.cfg)
+	if err != nil {
+		return errtrace.WrapCode(err, errtrace.ErrConfigEncode, "encode typed config")
 	}
-	return nil
+	var typed map[string]any
+	if err := json.Unmarshal(cfgBytes, &typed); err != nil {
+		return errtrace.WrapCode(err, errtrace.ErrConfigEncode, "round-trip typed config")
+	}
+	for k, v := range typed {
+		root[k] = v
+	}
+	root["settings"] = raw.ext
+	return writeConfigMap(p, root)
 }
 
 // applyInputToRaw mutates raw with the values from in. The on-disk
