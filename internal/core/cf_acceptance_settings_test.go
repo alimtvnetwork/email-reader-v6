@@ -130,15 +130,14 @@ func TestCF_A2_Concurrent_Settings_Accounts_NoLoss(t *testing.T) {
 		}()
 		go func() {
 			defer wg.Done()
-			ctx := context.Background()
 			for i := 0; i < iters; i++ {
-				_ = AddAccount(ctx, addAccountSpec("durable"))
+				_ = AddAccount(addAccountSpec("durable"))
 				if i%2 == 0 {
-					_ = RemoveAccount(ctx, "durable")
+					_ = RemoveAccount("durable")
 				}
 			}
 			// Final state: ensure the account exists.
-			_ = AddAccount(ctx, addAccountSpec("durable"))
+			_ = AddAccount(addAccountSpec("durable"))
 		}()
 		wg.Wait()
 
@@ -170,12 +169,12 @@ func TestCF_A2_Concurrent_Settings_Accounts_NoLoss(t *testing.T) {
 	})
 }
 
-// addAccountSpec builds a minimal-valid AddAccountInput for the
+// addAccountSpec builds a minimal-valid AccountInput for the
 // concurrency test. Kept tiny so the test body stays readable.
-func addAccountSpec(alias string) AddAccountInput {
-	return AddAccountInput{
+func addAccountSpec(alias string) AccountInput {
+	return AccountInput{
 		Alias: alias, Email: alias + "@x.test",
-		ImapHost: "imap.x.test", ImapPort: 993, UseTLS: true,
-		Mailbox: "INBOX", Password: "secret",
+		ImapHost: "imap.x.test", ImapPort: 993, UseTLS: true, UseTLSExplicit: true,
+		Mailbox: "INBOX", PlainPassword: "secret",
 	}
 }
