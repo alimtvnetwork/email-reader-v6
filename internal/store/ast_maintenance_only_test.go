@@ -136,7 +136,7 @@ func scanFileForMaintenanceSQL(path, rel string) []string {
 		if !ok || lit.Kind != token.STRING {
 			return true
 		}
-		if maintenanceSQLRe.MatchString(lit.Value) {
+		if looksLikeMaintenanceSQL(lit.Value) {
 			hits = append(hits, rel+": "+lit.Value)
 		}
 		return true
