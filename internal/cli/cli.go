@@ -494,7 +494,7 @@ func runAdd() error {
 	if err != nil {
 		return errtrace.Wrap(err, "load config")
 	}
-	email, alias, password, defs, err := promptAddIdentity(cfg)
+	email, alias, password, defs, err := promptAddIdentity(*cfg)
 	if err != nil {
 		return err
 	}
