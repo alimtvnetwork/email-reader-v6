@@ -12,6 +12,7 @@ import (
 
 	"github.com/lovable/email-read/internal/config"
 	"github.com/lovable/email-read/internal/errtrace"
+	"github.com/lovable/email-read/internal/store/migrate"
 	"github.com/lovable/email-read/internal/store/queries"
 )
 
@@ -75,89 +76,28 @@ func OpenAt(path string) (*Store, error) {
 // Close shuts the DB down.
 func (s *Store) Close() error { return s.DB.Close() }
 
-// migrate applies the schema. Idempotent — safe to call on every startup.
-func (s *Store) migrate() error {
-	stmts := []string{
-		`CREATE TABLE IF NOT EXISTS Emails (
-			Id          INTEGER PRIMARY KEY AUTOINCREMENT,
-			Alias       TEXT    NOT NULL,
-			MessageId   TEXT    NOT NULL UNIQUE,
-			Uid         INTEGER NOT NULL,
-			FromAddr    TEXT    NOT NULL DEFAULT '',
-			ToAddr      TEXT    NOT NULL DEFAULT '',
-			CcAddr      TEXT    NOT NULL DEFAULT '',
-			Subject     TEXT    NOT NULL DEFAULT '',
-			BodyText    TEXT    NOT NULL DEFAULT '',
-			BodyHtml    TEXT    NOT NULL DEFAULT '',
-			ReceivedAt  DATETIME,
-			FilePath    TEXT    NOT NULL DEFAULT '',
-			CreatedAt   DATETIME NOT NULL DEFAULT ` + sqliteRFC3339NowExpr + `
-		)`,
-		`CREATE INDEX IF NOT EXISTS IxEmailsAliasUid ON Emails(Alias, Uid)`,
-		`CREATE TABLE IF NOT EXISTS WatchState (
-			Alias          TEXT PRIMARY KEY,
-			LastUid        INTEGER NOT NULL DEFAULT 0,
-			LastSubject    TEXT    NOT NULL DEFAULT '',
-			LastReceivedAt DATETIME,
-			UpdatedAt      DATETIME NOT NULL DEFAULT ` + sqliteRFC3339NowExpr + `
-		)`,
-		`CREATE TABLE IF NOT EXISTS OpenedUrls (
-			Id        INTEGER PRIMARY KEY AUTOINCREMENT,
-			EmailId   INTEGER NOT NULL,
-			RuleName  TEXT    NOT NULL DEFAULT '',
-			Url       TEXT    NOT NULL,
-			OpenedAt  DATETIME DEFAULT ` + sqliteRFC3339NowExpr + `,
-			FOREIGN KEY(EmailId) REFERENCES Emails(Id) ON DELETE CASCADE
-		)`,
-		`CREATE UNIQUE INDEX IF NOT EXISTS IxOpenedUrlsUnique ON OpenedUrls(EmailId, Url)`,
-	}
-	for _, q := range stmts {
-		if _, err := s.DB.Exec(q); err != nil {
-			return errtrace.Wrapf(err, "migrate stmt: %s", q)
-		}
-	}
-	return s.migrateOpenedUrlsDelta1()
-}
-
-// migrateOpenedUrlsDelta1 adds the six PascalCase audit columns specified
-// by Delta #1 (Alias / Origin / OriginalUrl / IsDeduped / IsIncognito /
-// TraceId). SQLite's `ALTER TABLE ADD COLUMN` is non-idempotent, so we
-// introspect `PRAGMA table_info(OpenedUrls)` and emit each ADD only when
-// missing. This keeps fresh DBs and re-migrated existing DBs both happy.
+// migrate applies the schema by delegating to the typed migrate
+// package (slices P1.10–P1.11). Idempotent — safe to call on every
+// startup. Each `m000N_*.go` file under `internal/store/migrate/`
+// registers exactly one schema step; `migrate.Apply` records each
+// successful step in the `_SchemaVersion` ledger and skips rows that
+// are already there.
 //
-// Spec: spec/21-app/02-features/06-tools/01-backend.md §2.5 + Delta #1.
-func (s *Store) migrateOpenedUrlsDelta1() error {
-	have, err := s.openedUrlsColumns()
-	if err != nil {
-		return errtrace.Wrap(err, "introspect OpenedUrls")
-	}
-	adds := []struct{ name, ddl string }{
-		{"Alias", `ALTER TABLE OpenedUrls ADD COLUMN Alias TEXT NOT NULL DEFAULT ''`},
-		{"Origin", `ALTER TABLE OpenedUrls ADD COLUMN Origin TEXT NOT NULL DEFAULT ''`},
-		{"OriginalUrl", `ALTER TABLE OpenedUrls ADD COLUMN OriginalUrl TEXT NOT NULL DEFAULT ''`},
-		{"IsDeduped", `ALTER TABLE OpenedUrls ADD COLUMN IsDeduped INTEGER NOT NULL DEFAULT 0`},
-		{"IsIncognito", `ALTER TABLE OpenedUrls ADD COLUMN IsIncognito INTEGER NOT NULL DEFAULT 0`},
-		{"TraceId", `ALTER TABLE OpenedUrls ADD COLUMN TraceId TEXT NOT NULL DEFAULT ''`},
-	}
-	for _, a := range adds {
-		if have[a.name] {
-			continue
-		}
-		if _, err := s.DB.Exec(a.ddl); err != nil {
-			return errtrace.Wrapf(err, "add column %s", a.name)
-		}
-	}
-	// Helpful (but non-unique) lookup index for the activated filters.
-	if _, err := s.DB.Exec(
-		`CREATE INDEX IF NOT EXISTS IxOpenedUrlsAliasOpenedAt ON OpenedUrls(Alias, OpenedAt)`,
-	); err != nil {
-		return errtrace.Wrap(err, "create IxOpenedUrlsAliasOpenedAt")
-	}
-	return nil
+// On first boot after the P1.11 upgrade, existing user DBs have all
+// six steps present but no `_SchemaVersion` ledger. The harness
+// re-runs every `Up` (which uses `CREATE … IF NOT EXISTS` for DDL or
+// PRAGMA-gated introspection for `ALTER TABLE ADD COLUMN` in m0005)
+// and back-fills the ledger.
+func (s *Store) migrate() error {
+	return migrate.Apply(context.Background(), s.DB)
 }
 
-// openedUrlsColumns returns the set of column names currently present on
-// the OpenedUrls table. Used by Delta #1 to skip already-applied ADDs.
+// openedUrlsColumns returns the set of column names currently present
+// on the OpenedUrls table. Retained as a small introspection helper
+// after the schema migration moved into `internal/store/migrate/` —
+// `TestOpenedUrlsDelta1_Migration_Idempotent` uses it to lock the
+// post-migration column shape without depending on the migrate
+// package's internals.
 func (s *Store) openedUrlsColumns() (map[string]bool, error) {
 	rows, err := s.DB.Query(`PRAGMA table_info(OpenedUrls)`)
 	if err != nil {

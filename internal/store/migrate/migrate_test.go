@@ -205,9 +205,9 @@ func TestRegister_RejectsEmptyName(t *testing.T) {
 
 func TestAll_ReturnsSortedCopy(t *testing.T) {
 	resetRegistry(t)
-	migrate.Register(migrate.Migration{Version: 5, Name: "e", Up: ``})
-	migrate.Register(migrate.Migration{Version: 2, Name: "b", Up: ``})
-	migrate.Register(migrate.Migration{Version: 9, Name: "i", Up: ``})
+	migrate.Register(migrate.Migration{Version: 5, Name: "e", Up: `SELECT 1`})
+	migrate.Register(migrate.Migration{Version: 2, Name: "b", Up: `SELECT 1`})
+	migrate.Register(migrate.Migration{Version: 9, Name: "i", Up: `SELECT 1`})
 
 	got := migrate.All()
 	want := []int{2, 5, 9}
@@ -219,4 +219,61 @@ func TestAll_ReturnsSortedCopy(t *testing.T) {
 			t.Fatalf("All()[%d].Version = %d, want %d", i, m.Version, want[i])
 		}
 	}
+}
+
+func TestApply_UpFunc_RunsAndRecordsLedger(t *testing.T) {
+	resetRegistry(t)
+	db := newDB(t)
+
+	var called int32
+	migrate.Register(migrate.Migration{
+		Version: 1, Name: "imperative",
+		UpFunc: func(ctx context.Context, db *sql.DB) error {
+			atomic.AddInt32(&called, 1)
+			_, err := db.ExecContext(ctx, `CREATE TABLE Imp (Id INTEGER)`)
+			return err
+		},
+	})
+
+	if err := migrate.Apply(context.Background(), db); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if got := atomic.LoadInt32(&called); got != 1 {
+		t.Fatalf("UpFunc called %d times on first Apply, want 1", got)
+	}
+
+	// Idempotent: second Apply must NOT re-invoke UpFunc.
+	if err := migrate.Apply(context.Background(), db); err != nil {
+		t.Fatalf("Apply pass 2: %v", err)
+	}
+	if got := atomic.LoadInt32(&called); got != 1 {
+		t.Fatalf("UpFunc called %d times after 2x Apply, want 1 (ledger short-circuit failed)", got)
+	}
+	if got := countSchemaVersionRows(t, db); got != 1 {
+		t.Fatalf("ledger row count = %d, want 1", got)
+	}
+}
+
+func TestRegister_RejectsBothUpAndUpFunc(t *testing.T) {
+	resetRegistry(t)
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected panic when both Up and UpFunc set, got none")
+		}
+	}()
+	migrate.Register(migrate.Migration{
+		Version: 1, Name: "both",
+		Up:     `SELECT 1`,
+		UpFunc: func(ctx context.Context, db *sql.DB) error { return nil },
+	})
+}
+
+func TestRegister_RejectsNeitherUpNorUpFunc(t *testing.T) {
+	resetRegistry(t)
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected panic when neither Up nor UpFunc set, got none")
+		}
+	}()
+	migrate.Register(migrate.Migration{Version: 1, Name: "empty"})
 }
