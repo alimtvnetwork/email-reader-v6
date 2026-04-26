@@ -172,7 +172,7 @@ func streamFilteredExport(ctx context.Context, st *store.Store, spec ExportSpec,
 	if err := w.Write(exporter.Columns); err != nil {
 		return 0, errtrace.Wrap(err, "write csv header")
 	}
-	rows, err := queryFilteredEmails(ctx, st, spec)
+	rows, err := st.QueryEmailExportRows(ctx, emailExportFilterFromSpec(spec))
 	if err != nil {
 		return 0, err
 	}
@@ -182,8 +182,9 @@ func streamFilteredExport(ctx context.Context, st *store.Store, spec ExportSpec,
 
 // writeFilteredRows iterates the result set, formatting each row with
 // the same column order as exporter.Columns and emitting a tick every
-// progressTickRows.
-func writeFilteredRows(rows *sql.Rows, w *csv.Writer, total int, progress chan<- ExportProgress) (int, error) {
+// progressTickRows. Takes the typed `store.RowsScanner` so this file
+// stays free of `database/sql`.
+func writeFilteredRows(rows store.RowsScanner, w *csv.Writer, total int, progress chan<- ExportProgress) (int, error) {
 	written := 0
 	for rows.Next() {
 		var (
