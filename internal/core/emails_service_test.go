@@ -37,6 +37,11 @@ type fakeEmailsStore struct {
 	count    int
 	countErr error
 
+	// CountUnreadEmails programming + observation (Phase 4 P4.5)
+	unread    int
+	unreadErr error
+	lastUnreadAls string
+
 	// MarkRead programming + observation (Phase 4 P4.2)
 	setReadRows int64
 	setReadErr  error
