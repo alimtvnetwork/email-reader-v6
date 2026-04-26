@@ -157,6 +157,7 @@ func startMaintenance(ctx context.Context, rt *WatchRuntime) {
 	res := core.NewMaintenance(core.MaintenanceOptions{
 		Pruner:    rt.Store.PruneOpenedUrlsBefore,
 		Retention: func() uint16 { return retentionFromSettings(ctx, rt.Settings) },
+		OnSweep:   logRetentionSweep,
 	})
 	if res.HasError() {
 		log.Printf("ui: watch runtime: maintenance init: %v", res.Error())
