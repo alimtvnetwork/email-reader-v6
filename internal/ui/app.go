@@ -30,7 +30,8 @@ const AppVersion = "0.27.0"
 // Run creates the Fyne app, builds the main window, and blocks until close.
 //
 // Bootstrap order matches spec/24-…/02-theme-implementation.md §5:
-//   1. Construct app  →  2. Apply theme  →  3. Build content  →  4. Show.
+//  1. Construct app  →  2. Apply theme  →  3. Build content  →  4. Show.
+//
 // Theme.Apply is called BEFORE BuildShell so the very first paint already
 // uses our palette (no white-flash on dark mode).
 func Run() {
@@ -55,7 +56,7 @@ func Run() {
 // config yet) — the bootstrap theme stays in effect.
 //
 // Spec: spec/21-app/02-features/07-settings/01-backend.md §9 (Subscribe)
-//   + spec/24-app-design-system-and-ui/02-theme-implementation.md §5.
+//   - spec/24-app-design-system-and-ui/02-theme-implementation.md §5.
 func startThemeLiveConsumer(ctx context.Context) {
 	s := core.NewSettings(time.Now)
 	if s.HasError() {
