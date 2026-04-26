@@ -77,6 +77,9 @@ type emailsStore interface {
 	// RowsAffected across all internal batches; (0, nil) for empty
 	// `uids` (the spec's "no SQL" branch).
 	SetEmailRead(ctx context.Context, alias string, uids []uint32, read bool) (int64, error)
+	// CountUnreadEmails is the Phase 4 (P4.5) extension. Counts rows
+	// with `IsRead = 0` matching the alias (empty alias = all).
+	CountUnreadEmails(ctx context.Context, alias string) (int, error)
 }
 
 // storeOpener returns an open emailsStore plus a `close` callback the
