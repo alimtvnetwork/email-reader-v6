@@ -41,3 +41,25 @@ func FormatRetentionSweep(deleted int64, err error) string {
 func logRetentionSweep(deleted int64, err error) {
 	log.Print(FormatRetentionSweep(deleted, err))
 }
+
+// FormatAnalyzeRun returns the canonical log line for a single ANALYZE
+// invocation. `triggeredAt` is the cumulative-delete count that
+// crossed the threshold and fired this run. Format pinned by
+// maintenance_log_test.go.
+func FormatAnalyzeRun(triggeredAt int64, err error) string {
+	if err != nil {
+		return fmt.Sprintf(
+			"ui: maintenance: analyze: triggered_at=%d error=%v",
+			triggeredAt, err)
+	}
+	return fmt.Sprintf(
+		"ui: maintenance: analyze: triggered_at=%d ok",
+		triggeredAt)
+}
+
+// logAnalyzeRun is the production OnAnalyze callback wired by
+// startMaintenance. Mirrors logRetentionSweep so both maintenance
+// observers funnel through the same stdlib `log` sink for grep/audit.
+func logAnalyzeRun(triggeredAt int64, err error) {
+	log.Print(FormatAnalyzeRun(triggeredAt, err))
+}
