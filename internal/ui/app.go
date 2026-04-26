@@ -301,3 +301,22 @@ func buildDashboardService() *core.DashboardService {
 	}
 	return res.Value()
 }
+
+// buildEmailsService constructs a typed *core.EmailsService for the
+// emails view (Phase 2.5 wiring). Mirrors `buildDashboardService`:
+// stateless service so per-`viewFor` construction is cheap and avoids
+// hidden lifetime coupling between app boot and individual view
+// constructions.
+//
+// Returns nil on construction failure (impossible in practice — the
+// default opener is non-nil — but honored because the constructor
+// returns a Result envelope). The emails view's degraded path takes
+// over when Service is nil.
+func buildEmailsService() *core.EmailsService {
+	res := core.NewDefaultEmailsService()
+	if res.HasError() {
+		log.Printf("emails: NewDefaultEmailsService failed: %v", res.Error())
+		return nil
+	}
+	return res.Value()
+}
