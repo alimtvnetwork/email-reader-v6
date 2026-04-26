@@ -38,7 +38,7 @@ func ExportCSV(ctx context.Context, st *store.Store) (string, error) {
 	if err := w.Write(Columns); err != nil {
 		return "", errtrace.Wrap(err, "write csv header")
 	}
-	rows, err := st.DB.QueryContext(ctx, exportQuery)
+	rows, err := st.QueryEmailExportRows(ctx, store.EmailExportFilter{})
 	if err != nil {
 		return "", errtrace.Wrap(err, "query emails")
 	}
@@ -48,11 +48,6 @@ func ExportCSV(ctx context.Context, st *store.Store) (string, error) {
 	}
 	return path, nil
 }
-
-const exportQuery = `
-		SELECT Id, Alias, MessageId, Uid, FromAddr, ToAddr, CcAddr,
-		       Subject, BodyText, BodyHtml, ReceivedAt, FilePath, CreatedAt
-		FROM Emails ORDER BY Id ASC`
 
 // prepareExportPath ensures ./data exists under cwd and returns the timestamped
 // CSV file path to write.
