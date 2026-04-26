@@ -183,3 +183,55 @@ func (s *Store) CountUnreadEmails(ctx context.Context, alias string) (int, error
 	return n, nil
 }
 
+
+// SetEmailDeletedAt sets `Emails.DeletedAt` for every (alias, uid) in
+// `uids`. Returns cumulative RowsAffected across all batches.
+//
+// **Polarity**: `deletedAt == nil` writes SQL NULL ("undelete"); a
+// non-nil pointer writes the dereferenced unix-seconds timestamp
+// ("delete with this stamp"). Caller passes a `*int64` (rather than
+// two separate methods or a sentinel like `0` meaning NULL) so the
+// Delete and Undelete code paths in `*core.EmailsService` share one
+// store seam — see `core.EmailsService.Delete`/`Undelete` in
+// `internal/core/emails_lifecycle.go`.
+//
+// **Batching**: same contract as `SetEmailRead` — each UPDATE binds
+// at most `queries.SetEmailDeletedAtMaxBatch` (999) UID placeholders;
+// larger inputs are chunked inside one transaction so callers see
+// all-or-nothing semantics.
+//
+// **Empty `uids`**: returns (0, nil) without opening a transaction
+// — mirrors `SetEmailRead` and keeps `Delete([]uint32{})` a clean
+// no-op at every layer.
+func (s *Store) SetEmailDeletedAt(ctx context.Context, alias string, uids []uint32, deletedAt *int64) (int64, error) {
+	if len(uids) == 0 {
+		return 0, nil
+	}
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, errtrace.Wrap(err, "SetEmailDeletedAt.Begin")
+	}
+	var total int64
+	for off := 0; off < len(uids); off += queries.SetEmailDeletedAtMaxBatch {
+		end := off + queries.SetEmailDeletedAtMaxBatch
+		if end > len(uids) {
+			end = len(uids)
+		}
+		q, args := queries.SetEmailDeletedAt(deletedAt, alias, uids[off:end])
+		res, err := tx.ExecContext(ctx, q, args...)
+		if err != nil {
+			_ = tx.Rollback()
+			return 0, errtrace.Wrap(err, "SetEmailDeletedAt.Exec")
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			_ = tx.Rollback()
+			return 0, errtrace.Wrap(err, "SetEmailDeletedAt.RowsAffected")
+		}
+		total += n
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, errtrace.Wrap(err, "SetEmailDeletedAt.Commit")
+	}
+	return total, nil
+}
