@@ -26,28 +26,39 @@ import (
 func BuildReadTab() fyne.CanvasObject {
 	heading := widget.NewLabelWithStyle("Read — one-shot fetch",
 		fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-	subtitle := widget.NewLabel("Connects once, fetches the most recent N headers, and returns. Nothing is saved or marked seen.")
-	subtitle.Wrapping = fyne.TextWrapWord
-
-	aliasEntry := widget.NewEntry()
-	aliasEntry.SetPlaceHolder("alias (empty = first configured account)")
-	limitEntry := widget.NewEntry()
-	limitEntry.SetPlaceHolder("10")
-	output := widget.NewMultiLineEntry()
-	output.SetMinRowsVisible(18)
-	output.Disable()
-	status := widget.NewLabel("Click Run to fetch.")
-
+	subtitle := newReadSubtitle()
+	aliasEntry, limitEntry := newReadInputs()
+	output, status := newReadOutputs()
 	runBtn := widget.NewButton("Run", func() {
 		runReadIntoUI(aliasEntry.Text, limitEntry.Text, output, status)
 	})
 	runBtn.Importance = widget.HighImportance
-
 	form := container.NewGridWithColumns(2,
 		container.NewBorder(nil, nil, widget.NewLabel("Alias:"), nil, aliasEntry),
 		container.NewBorder(nil, nil, widget.NewLabel("Limit:"), runBtn, limitEntry))
 	header := container.NewVBox(heading, subtitle, form, status, widget.NewSeparator())
 	return container.NewBorder(header, nil, nil, nil, container.NewVScroll(output))
+}
+
+func newReadSubtitle() *widget.Label {
+	l := widget.NewLabel("Connects once, fetches the most recent N headers, and returns. Nothing is saved or marked seen.")
+	l.Wrapping = fyne.TextWrapWord
+	return l
+}
+
+func newReadInputs() (*widget.Entry, *widget.Entry) {
+	a := widget.NewEntry()
+	a.SetPlaceHolder("alias (empty = first configured account)")
+	l := widget.NewEntry()
+	l.SetPlaceHolder("10")
+	return a, l
+}
+
+func newReadOutputs() (*widget.Entry, *widget.Label) {
+	o := widget.NewMultiLineEntry()
+	o.SetMinRowsVisible(18)
+	o.Disable()
+	return o, widget.NewLabel("Click Run to fetch.")
 }
 
 // runReadIntoUI invokes core.Tools.ReadOnce and reflects progress + result.
