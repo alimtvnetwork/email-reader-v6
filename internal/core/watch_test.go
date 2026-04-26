@@ -296,3 +296,69 @@ func (stuckLoop) Run(_ context.Context) error {
 	time.Sleep(time.Hour)
 	return nil
 }
+
+// Test_Watch_AutoStart_RuntimeToggle_NoEffect locks CF-W2: toggling
+// AutoStartWatch at runtime via Settings.Save MUST NOT stop a runner
+// that's already in flight. Spec: spec/21-app/02-features/07-settings/
+// 99-consistency-report.md (CF-W2). The structural guarantee is that
+// `core.Watch` does NOT subscribe to Settings — this test enforces the
+// behaviour by publishing a real Settings event and asserting the
+// runner survives.
+func Test_Watch_AutoStart_RuntimeToggle_NoEffect(t *testing.T) {
+	withIsolatedConfig(t, func() {
+		w, ff := newWatchForTest(t)
+		if r := w.Start(context.Background(), WatchOptions{Alias: "work", PollSeconds: 3}); r.HasError() {
+			t.Fatalf("Start: %v", r.Error())
+		}
+		t.Cleanup(func() { _ = w.Stop("work", time.Second) })
+		waitFor(t, func() bool { return ff.isRunning("work") }, time.Second, "loop start")
+
+		// Drive a real Settings save flipping AutoStartWatch false.
+		settings := newTestSettings(t)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		events, unsub := settings.Subscribe(ctx)
+		defer unsub()
+
+		input := defaultSettingsInputForTest()
+		input.AutoStartWatch = false
+		if r := settings.Save(context.Background(), input); r.HasError() {
+			t.Fatalf("Save: %v", r.Error())
+		}
+
+		// Drain at least one event to confirm the toggle was published —
+		// proves Settings is wired correctly and the test would catch a
+		// regression that hooked Watch into the bus.
+		select {
+		case ev := <-events:
+			if ev.Snapshot.AutoStartWatch {
+				t.Fatalf("AutoStartWatch should be false after save, got %+v", ev.Snapshot)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("timeout waiting for SettingsEvent")
+		}
+
+		// The CF-W2 invariant: 100 ms after the toggle, the runner is
+		// still alive. (Any subscriber that erroneously called Stop
+		// would have completed by now since Loop.Run honours ctx.)
+		time.Sleep(100 * time.Millisecond)
+		if !w.IsRunning("work") {
+			t.Fatal("CF-W2 violated: AutoStartWatch toggle stopped a running watcher")
+		}
+		if !ff.isRunning("work") {
+			t.Fatal("CF-W2 violated: factory's loop is no longer running")
+		}
+	})
+}
+
+// defaultSettingsInputForTest mirrors the spec defaults so we can mutate
+// one field without re-specifying the rest each call site.
+func defaultSettingsInputForTest() SettingsInput {
+	return SettingsInput{
+		PollSeconds:           3,
+		Theme:                 ThemeDark,
+		OpenUrlAllowedSchemes: []string{"https"},
+		AllowLocalhostUrls:    false,
+		AutoStartWatch:        true,
+	}
+}
