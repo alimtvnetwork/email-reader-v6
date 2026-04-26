@@ -16,9 +16,17 @@ import (
 )
 
 // Launcher launches URLs in private mode using a detected browser.
+//
+// Reload(cfg) replaces the cached cfg + clears the resolved-once cache so
+// the next Path/Open call re-runs the resolver. This is the live-reload
+// seam used by Settings → Tools (CF-T1): a Save in the Settings UI updates
+// `BrowserOverride.ChromePath`, and the next OpenUrl call honours it
+// without restarting the process. Mid-launch calls still use the path
+// they resolved with — never interrupted.
 type Launcher struct {
+	mu           sync.Mutex
 	cfg          config.Browser
-	once         sync.Once
+	resolved     bool
 	resolvedPath string
 	resolvedArg  string
 	resolveErr   error
@@ -27,16 +35,41 @@ type Launcher struct {
 // New builds a Launcher from browser config (chromePath / incognitoArg overrides).
 func New(cfg config.Browser) *Launcher { return &Launcher{cfg: cfg} }
 
-// Path returns the resolved browser executable path (cached).
+// Reload swaps in a new config and clears the resolution cache. The next
+// Path / IncognitoArg / Open call will re-run resolve() against the new
+// values. Safe to call from any goroutine.
+func (l *Launcher) Reload(cfg config.Browser) {
+	l.mu.Lock()
+	l.cfg = cfg
+	l.resolved = false
+	l.resolvedPath = ""
+	l.resolvedArg = ""
+	l.resolveErr = nil
+	l.mu.Unlock()
+}
+
+// Path returns the resolved browser executable path (cached until Reload).
 func (l *Launcher) Path() (string, error) {
-	l.once.Do(l.resolve)
+	l.ensureResolved()
 	return l.resolvedPath, l.resolveErr
 }
 
 // IncognitoArg returns the private-mode flag for the resolved browser.
 func (l *Launcher) IncognitoArg() string {
-	l.once.Do(l.resolve)
+	l.ensureResolved()
 	return l.resolvedArg
+}
+
+// ensureResolved runs resolve() lazily under the lock. Replacement for the
+// previous sync.Once so Reload can re-arm the cache.
+func (l *Launcher) ensureResolved() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.resolved {
+		return
+	}
+	l.resolve()
+	l.resolved = true
 }
 
 // Open spawns `<browser> <incognitoArg> --new-window <url>` and returns immediately.
