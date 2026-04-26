@@ -211,6 +211,15 @@ const WatchStateGet = `SELECT Alias, LastUid, LastSubject, LastReceivedAt, Updat
 // branch's UpdatedAt come from the same SQLite RFC3339 "now" expression
 // — caller passes that expression in (declared in store/datetime.go) so
 // the queries package stays free of dialect drift.
+//
+// **Why this UPSERT does NOT touch `ConsecutiveFailures`** — the
+// counter (added in m0014) has its own dedicated bump/reset path
+// (`WatchStateBumpFailures` / `WatchStateResetFailures`). Folding it
+// into this UPSERT would force every caller (baseline-set, advance-
+// cursor, finalize-batch) to know whether the call site is a poll
+// outcome boundary, which it is not — the watcher's success/failure
+// pivot lives in `runLoop` after `pollOnce` returns. Keeping the two
+// concerns separate keeps each query single-purpose.
 func WatchStateUpsert(nowExpr string) string {
 	return `INSERT INTO WatchState (Alias, LastUid, LastSubject, LastReceivedAt, UpdatedAt)
        VALUES (?, ?, ?, ?, ` + nowExpr + `)
@@ -219,6 +228,43 @@ func WatchStateUpsert(nowExpr string) string {
            LastSubject    = excluded.LastSubject,
            LastReceivedAt = excluded.LastReceivedAt,
            UpdatedAt      = ` + nowExpr
+}
+
+// WatchStateBumpFailures increments the m0014 `ConsecutiveFailures`
+// counter for one alias and refreshes `UpdatedAt`. Caller binds:
+// (1) the alias. The function takes the same `nowExpr` shape as
+// `WatchStateUpsert` so the queries package stays dialect-agnostic.
+//
+// **Why an UPSERT (not a plain UPDATE)** — the watcher may emit a
+// poll error before any successful poll has ever inserted a
+// WatchState row (e.g. first-boot connect failure). A plain UPDATE
+// would silently affect zero rows in that case and the counter
+// would never start incrementing. The INSERT branch seeds with
+// `ConsecutiveFailures = 1` (this IS the first failure) and zero
+// values for the cursor columns; subsequent UPSERTs keep the
+// cursor sticky (we deliberately do NOT zero LastUid here — that
+// would lose the watcher's resume position).
+func WatchStateBumpFailures(nowExpr string) string {
+	return `INSERT INTO WatchState (Alias, LastUid, LastSubject, LastReceivedAt, UpdatedAt, ConsecutiveFailures)
+       VALUES (?, 0, '', NULL, ` + nowExpr + `, 1)
+       ON CONFLICT(Alias) DO UPDATE SET
+           ConsecutiveFailures = WatchState.ConsecutiveFailures + 1,
+           UpdatedAt           = ` + nowExpr
+}
+
+// WatchStateResetFailures zeroes the m0014 counter on a successful
+// poll. Plain UPDATE is sufficient: a successful poll always runs
+// after `loadWatchState`, which has already inserted (or read) the
+// row. If the row is somehow missing the UPDATE is a harmless no-op
+// — the next poll will create it via `WatchStateUpsert`.
+//
+// Caller binds: (1) the alias. UpdatedAt is refreshed so dashboard
+// "last activity" projections that key off this column tick.
+func WatchStateResetFailures(nowExpr string) string {
+	return `UPDATE WatchState SET
+              ConsecutiveFailures = 0,
+              UpdatedAt           = ` + nowExpr + `
+            WHERE Alias = ?`
 }
 
 // ---------------- OpenedUrls (reads) ----------------
