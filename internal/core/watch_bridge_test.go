@@ -33,8 +33,8 @@ func Test_TranslateWatcherEvent_Mapping(t *testing.T) {
 		{watcher.EventPollOK, want{true, WatchHeartbeat}},
 		{watcher.EventBaseline, want{true, WatchHeartbeat}},
 		{watcher.EventHeartbeat, want{true, WatchHeartbeat}},
-		{watcher.EventNewMail, want{true, WatchHeartbeat}},
-		{watcher.EventRuleMatch, want{true, WatchHeartbeat}},
+		{watcher.EventNewMail, want{true, WatchEmailStored}},
+		{watcher.EventRuleMatch, want{true, WatchRuleMatched}},
 		{watcher.EventUrlOpened, want{true, WatchHeartbeat}},
 		{watcher.EventUidValReset, want{true, WatchHeartbeat}},
 	}
