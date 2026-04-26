@@ -44,8 +44,8 @@ func Test_ValidateMaintenanceKnobs_Bounds(t *testing.T) {
 			if err == nil {
 				t.Fatalf("%s: expected error, got nil", tc.name)
 			}
-			var coded *errtrace.CodedError
-			if !errors.As(err, &coded) || coded.Code() != errtrace.ErrSettingsPersist {
+			var coded *errtrace.Coded
+			if !errors.As(err, &coded) || coded.Code != errtrace.ErrSettingsPersist {
 				t.Fatalf("%s: expected ER-SET-21778 (ErrSettingsPersist), got %v", tc.name, err)
 			}
 		})
