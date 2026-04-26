@@ -15,24 +15,46 @@ import (
 	"github.com/lovable/email-read/internal/errtrace"
 )
 
+// RulesOptions wires the rules list to data + actions.
+//
+// **Phase 2.7 migration.** The old shape defaulted `List`/`Toggle`/
+// `Remove` to deprecated package-level wrappers (`core.ListRules`,
+// `core.SetRuleEnabled`, `core.RemoveRule`). The new shape accepts a
+// typed `*core.RulesService` (constructed once at app boot via
+// `core.NewDefaultRulesService`). The three callbacks survive as
+// optional test overrides; when nil we delegate to the service.
+// When both Service and the override are nil we render a degraded
+// view rather than panicking — keeps headless / partial-bootstrap
+// previews safe.
 type RulesOptions struct {
-	List   func() errtrace.Result[[]config.Rule]
-	Toggle func(name string, enabled bool) errtrace.Result[struct{}]
-	Remove func(name string) errtrace.Result[struct{}]
+	Service *core.RulesService // production seam — constructed in app bootstrap
+	List    func() errtrace.Result[[]config.Rule]
+	Toggle  func(name string, enabled bool) errtrace.Result[struct{}]
+	Remove  func(name string) errtrace.Result[struct{}]
 	// OnRulesChanged fires after a successful Edit/Delete so the shell can
 	// refresh dependent views (Tools tab counts, dashboard tile, etc.).
 	OnRulesChanged func()
 }
 
 func BuildRules(opts RulesOptions) fyne.CanvasObject {
-	if opts.List == nil {
-		opts.List = core.ListRules
+	if opts.Service != nil {
+		if opts.List == nil {
+			opts.List = opts.Service.List
+		}
+		if opts.Toggle == nil {
+			opts.Toggle = opts.Service.SetEnabled
+		}
+		if opts.Remove == nil {
+			opts.Remove = opts.Service.Remove
+		}
 	}
-	if opts.Toggle == nil {
-		opts.Toggle = core.SetRuleEnabled
-	}
-	if opts.Remove == nil {
-		opts.Remove = core.RemoveRule
+	if opts.List == nil || opts.Toggle == nil || opts.Remove == nil {
+		// Degraded path: bootstrap didn't wire a *RulesService and no
+		// test overrides were supplied. Render an inline error panel
+		// instead of nil-panicking on the first list call.
+		heading := widget.NewLabelWithStyle("Rules", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+		return container.NewVBox(heading,
+			widget.NewLabel("⚠ Rules service not wired (no Service or List/Toggle/Remove overrides injected)"))
 	}
 
 	heading := widget.NewLabelWithStyle("Rules", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
@@ -137,6 +159,7 @@ func openEditRuleDialog(r config.Rule, opts RulesOptions, status *widget.Label, 
 	}
 	var d dialog.Dialog
 	form := BuildAddRuleForm(AddRuleFormOptions{
+		Service: opts.Service, // share the same *RulesService instance
 		Initial: &r,
 		OnSaved: func() {
 			if d != nil {

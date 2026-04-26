@@ -26,11 +26,20 @@ import (
 	"github.com/lovable/email-read/internal/errtrace"
 )
 
-// AddRuleFormOptions wires the form to its side effects. Save defaults to
-// core.AddRule (which already upserts by name, so the same function works
-// for both Add and Edit). Tests inject a stub. OnSaved fires after a
-// successful save so the shell can refresh dependent views.
+// AddRuleFormOptions wires the form to its side effects.
+//
+// **Phase 2.7 migration.** The old shape defaulted `Save` to the
+// deprecated package-level `core.AddRule`. The new shape accepts a
+// typed `*core.RulesService` (constructed once at app boot via
+// `core.NewDefaultRulesService`). `Save` survives as an optional
+// override used exclusively by tests to inject deterministic
+// outcomes; when nil we delegate to `Service.Add`. When both Service
+// and Save are nil we render an inline error banner instead of
+// panicking on submit — keeps headless / partial-bootstrap previews
+// safe. OnSaved fires after a successful save so the shell can
+// refresh dependent views.
 type AddRuleFormOptions struct {
+	Service *core.RulesService // production seam — constructed in app bootstrap
 	Save    func(in core.RuleInput) errtrace.Result[*core.AddRuleResult]
 	OnSaved func()
 	Initial *config.Rule // nil ⇒ Add mode; non-nil ⇒ Edit mode
@@ -53,8 +62,10 @@ type ruleFormEntries struct {
 // pre-filled with the existing rule's values and the Name entry locked.
 func BuildAddRuleForm(opts AddRuleFormOptions) fyne.CanvasObject {
 	editing := opts.Initial != nil
-	if opts.Save == nil {
-		opts.Save = core.AddRule
+	if opts.Save == nil && opts.Service != nil {
+		// Bind the service's typed Add to the Save shape so downstream
+		// submit/clear closures see one uniform seam.
+		opts.Save = opts.Service.Add
 	}
 	e := newRuleFormEntries()
 	status := newStatusLabel()
@@ -137,6 +148,13 @@ func newRuleSubmitButton(opts AddRuleFormOptions, e *ruleFormEntries, status *wi
 		v := ValidateRuleForm(ruleFormInputFromEntries(e))
 		if !v.Valid {
 			status.SetText("⚠ " + strings.Join(v.Errors, " · "))
+			return
+		}
+		if opts.Save == nil {
+			// Degraded path: bootstrap didn't wire a *RulesService and
+			// no test override was supplied. Surface the wiring gap
+			// instead of nil-panicking on submit.
+			status.SetText("⚠ Rules service not wired (no Service or Save injected)")
 			return
 		}
 		r := opts.Save(ruleInputFromValid(v))

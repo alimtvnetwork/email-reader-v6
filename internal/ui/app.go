@@ -241,7 +241,10 @@ func viewFor(item NavItem, state *AppState, gotoNav func(NavKind), onAccountsCha
 			Service: buildEmailsService(),
 		})
 	case NavRules:
-		return views.BuildRules(views.RulesOptions{})
+		return views.BuildRules(views.RulesOptions{
+			Service:        buildRulesService(),
+			OnRulesChanged: onAccountsChanged, // shared shell-rebuild trigger
+		})
 	case NavAccounts:
 		return views.BuildAccounts(views.AccountsOptions{
 			OnAccountsChanged: onAccountsChanged,
@@ -259,6 +262,7 @@ func viewFor(item NavItem, state *AppState, gotoNav func(NavKind), onAccountsCha
 		return views.BuildTools(views.ToolsOptions{
 			OnAccountsChanged: onAccountsChanged,
 			OnRulesChanged:    onAccountsChanged, // same shell-rebuild trigger
+			RulesService:      buildRulesService(),
 		})
 	case NavSettings:
 		return views.BuildSettings(views.SettingsOptions{})
@@ -316,6 +320,24 @@ func buildEmailsService() *core.EmailsService {
 	res := core.NewDefaultEmailsService()
 	if res.HasError() {
 		log.Printf("emails: NewDefaultEmailsService failed: %v", res.Error())
+		return nil
+	}
+	return res.Value()
+}
+
+// buildRulesService constructs a typed *core.RulesService for the
+// Rules view + Tools tab Add Rule form (Phase 2.7 wiring). Mirrors
+// `buildDashboardService` / `buildEmailsService`: stateless service
+// so per-`viewFor` construction is cheap.
+//
+// Returns nil on construction failure (impossible in practice — all
+// three deps are non-nil — but honored because the constructor
+// returns a Result envelope). The rules view's degraded path takes
+// over when Service is nil.
+func buildRulesService() *core.RulesService {
+	res := core.NewDefaultRulesService()
+	if res.HasError() {
+		log.Printf("rules: NewDefaultRulesService failed: %v", res.Error())
 		return nil
 	}
 	return res.Value()

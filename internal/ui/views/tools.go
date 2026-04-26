@@ -11,14 +11,22 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
+
+	"github.com/lovable/email-read/internal/core"
 )
 
 // ToolsOptions wires shared callbacks. OnAccountsChanged fires after the
 // Add Account form saves so the shell can refresh the sidebar picker.
 // OnRulesChanged fires after the Add Rule form saves.
+//
+// **Phase 2.7 migration.** `RulesService` is the typed seam used by
+// the embedded Add Rule form (constructed via `core.NewDefaultRulesService`
+// in app bootstrap). Nil-safe: when absent the form falls back to its
+// own degraded-path message.
 type ToolsOptions struct {
 	OnAccountsChanged func()
 	OnRulesChanged    func()
+	RulesService      *core.RulesService
 }
 
 // BuildTools returns the Tools view with one tab per form / sub-tool.
@@ -33,6 +41,7 @@ func BuildTools(opts ToolsOptions) fyne.CanvasObject {
 			OnSaved: opts.OnAccountsChanged,
 		})),
 		container.NewTabItem("Add rule", BuildAddRuleForm(AddRuleFormOptions{
+			Service: opts.RulesService,
 			OnSaved: opts.OnRulesChanged,
 		})),
 		container.NewTabItem("Doctor", BuildDoctorTab()),
