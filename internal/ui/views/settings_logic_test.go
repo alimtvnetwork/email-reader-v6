@@ -76,7 +76,7 @@ func Test_ProjectSettingsInput_PreservesInvariants(t *testing.T) {
 		AutoStartWatch:        false,
 	}
 	maint := MaintenanceFields{WeekdayLabel: "Sunday", HourLocal: 3, WalHours: 6, PruneBatchSize: 5000}
-	in := ProjectSettingsInput("Light", 7, "/opt/chrome", 30, maint, prev)
+	in := ProjectSettingsInput("Light", 7, "/opt/chrome", 30, maint, prev, "Compact")
 	if in.Theme != core.ThemeLight {
 		t.Errorf("Theme=%v want Light", in.Theme)
 	}
@@ -102,7 +102,7 @@ func Test_ProjectSettingsInput_PreservesInvariants(t *testing.T) {
 
 func Test_ProjectSettingsInput_UnknownThemeFallsBackDark(t *testing.T) {
 	maint := MaintenanceFields{WeekdayLabel: "Sunday", HourLocal: 3, WalHours: 6, PruneBatchSize: 5000}
-	in := ProjectSettingsInput("nonsense", 3, "", 90, maint, core.SettingsSnapshot{})
+	in := ProjectSettingsInput("nonsense", 3, "", 90, maint, core.SettingsSnapshot{}, "Comfortable")
 	if in.Theme != core.ThemeDark {
 		t.Errorf("unknown theme should fall back to Dark, got %v", in.Theme)
 	}
@@ -127,7 +127,7 @@ func Test_ParseRetentionDays_Bounds(t *testing.T) {
 func Test_ProjectSettingsInput_RetentionZeroDisablesPruning(t *testing.T) {
 	// Round-trips the spec semantic that 0 = never prune.
 	maint := MaintenanceFields{WeekdayLabel: "Sunday", HourLocal: 3, WalHours: 6, PruneBatchSize: 5000}
-	in := ProjectSettingsInput("Dark", 3, "", 0, maint, core.SettingsSnapshot{})
+	in := ProjectSettingsInput("Dark", 3, "", 0, maint, core.SettingsSnapshot{}, "Comfortable")
 	if in.OpenUrlsRetentionDays != 0 {
 		t.Errorf("0 should round-trip as 0 (disabled), got %d", in.OpenUrlsRetentionDays)
 	}
@@ -189,7 +189,7 @@ func Test_ParseWeekdayLabel_RoundTrip(t *testing.T) {
 
 func Test_ProjectSettingsInput_MaintenanceFields(t *testing.T) {
 	maint := MaintenanceFields{WeekdayLabel: "Wednesday", HourLocal: 4, WalHours: 12, PruneBatchSize: 2000}
-	in := ProjectSettingsInput("Dark", 3, "", 90, maint, core.SettingsSnapshot{})
+	in := ProjectSettingsInput("Dark", 3, "", 90, maint, core.SettingsSnapshot{}, "Comfortable")
 	if in.WeeklyVacuumOn != 3 { // time.Wednesday
 		t.Errorf("WeeklyVacuumOn=%d want 3 (Wednesday)", in.WeeklyVacuumOn)
 	}
