@@ -169,3 +169,32 @@ func firstLine(s string) string {
 	}
 	return s
 }
+
+// looksLikeSQL classifies a string literal as SQL when it BOTH starts
+// with a SELECT/INSERT/UPDATE/DELETE keyword AND contains a second
+// SQL-structural keyword (FROM, INTO, SET, WHERE, VALUES, JOIN, ORDER,
+// GROUP, ON CONFLICT, LIMIT). This filters UI labels like "Update rule",
+// "Delete account", "Select an email…" while still catching real
+// queries (which always reference a table).
+func looksLikeSQL(raw string) bool {
+	trimmed := strings.TrimLeft(raw, " \t\r\n")
+	upper := strings.ToUpper(trimmed)
+	startsWithSQL := false
+	for _, s := range sqlStarters {
+		if strings.HasPrefix(upper, s) {
+			startsWithSQL = true
+			break
+		}
+	}
+	if !startsWithSQL {
+		return false
+	}
+	hay := " " + upper + " "
+	for _, kw := range []string{" FROM ", " INTO ", " SET ", " WHERE ",
+		" VALUES ", " JOIN ", " ORDER ", " GROUP ", " ON CONFLICT", " LIMIT "} {
+		if strings.Contains(hay, kw) {
+			return true
+		}
+	}
+	return false
+}
