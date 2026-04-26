@@ -32,23 +32,65 @@ const AnalyzeThreshold int64 = 1000
 // Spec/23-app-database/04 §4.
 const VacuumFreelistMinPercent = 5
 
+// DefaultPruneBatchSize mirrors the spec/23-app-database/04 §5 default.
+// Used when callers pass batchSize ≤ 0 to PruneOpenedUrlsBeforeBatched.
+const DefaultPruneBatchSize = 5000
+
 // PruneOpenedUrlsBefore deletes OpenedUrls rows whose OpenedAt is strictly
 // older than `cutoff`. Returns the number of rows deleted. A zero `cutoff`
 // is treated as a no-op (returns 0, nil) so callers can pass time.Time{}
 // to mean "retention disabled".
+//
+// Backwards-compatible single-shot wrapper around
+// PruneOpenedUrlsBeforeBatched(ctx, cutoff, DefaultPruneBatchSize). The
+// batched method is the one wired into the maintenance loop so the user's
+// PruneBatchSize knob takes effect; this entry point stays so existing
+// callers / tests don't break.
 func (s *Store) PruneOpenedUrlsBefore(ctx context.Context, cutoff time.Time) (int64, error) {
+	n, _, err := s.PruneOpenedUrlsBeforeBatched(ctx, cutoff, DefaultPruneBatchSize)
+	return n, err
+}
+
+// PruneOpenedUrlsBeforeBatched deletes in chunks of `batchSize` rows so a
+// huge backlog cannot hold the writer lock for an unbounded duration. It
+// loops until a batch deletes fewer than `batchSize` rows (i.e. the tail
+// is reached) or ctx is cancelled. Returns total rows deleted + the
+// number of batches issued.
+//
+// Spec/23-app-database/04 §5 + AC-DB-43.
+//
+// `batchSize <= 0` falls back to DefaultPruneBatchSize so callers don't
+// have to special-case "knob never set".
+func (s *Store) PruneOpenedUrlsBeforeBatched(ctx context.Context, cutoff time.Time, batchSize int) (int64, int, error) {
 	if cutoff.IsZero() {
-		return 0, nil
+		return 0, 0, nil
 	}
-	res, err := s.DB.ExecContext(ctx,
-		`DELETE FROM OpenedUrls WHERE OpenedAt < ?`,
-		cutoff.UTC(),
-	)
-	if err != nil {
-		return 0, errtrace.Wrap(err, "prune opened urls")
+	if batchSize <= 0 {
+		batchSize = DefaultPruneBatchSize
 	}
-	n, _ := res.RowsAffected()
-	return n, nil
+	var total int64
+	var batches int
+	cutoffUTC := cutoff.UTC()
+	for {
+		if err := ctx.Err(); err != nil {
+			return total, batches, err
+		}
+		res, err := s.DB.ExecContext(ctx,
+			`DELETE FROM OpenedUrls WHERE rowid IN (
+			   SELECT rowid FROM OpenedUrls WHERE OpenedAt < ? LIMIT ?
+			 )`,
+			cutoffUTC, batchSize,
+		)
+		if err != nil {
+			return total, batches, errtrace.Wrap(err, "prune opened urls (batched)")
+		}
+		n, _ := res.RowsAffected()
+		batches++
+		total += n
+		if n < int64(batchSize) {
+			return total, batches, nil
+		}
+	}
 }
 
 // Analyze runs SQLite `ANALYZE` to refresh the stat tables. Cheap on a
