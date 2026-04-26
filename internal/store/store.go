@@ -116,7 +116,69 @@ func (s *Store) migrate() error {
 			return errtrace.Wrapf(err, "migrate stmt: %s", q)
 		}
 	}
+	return s.migrateOpenedUrlsDelta1()
+}
+
+// migrateOpenedUrlsDelta1 adds the six PascalCase audit columns specified
+// by Delta #1 (Alias / Origin / OriginalUrl / IsDeduped / IsIncognito /
+// TraceId). SQLite's `ALTER TABLE ADD COLUMN` is non-idempotent, so we
+// introspect `PRAGMA table_info(OpenedUrls)` and emit each ADD only when
+// missing. This keeps fresh DBs and re-migrated existing DBs both happy.
+//
+// Spec: spec/21-app/02-features/06-tools/01-backend.md §2.5 + Delta #1.
+func (s *Store) migrateOpenedUrlsDelta1() error {
+	have, err := s.openedUrlsColumns()
+	if err != nil {
+		return errtrace.Wrap(err, "introspect OpenedUrls")
+	}
+	adds := []struct{ name, ddl string }{
+		{"Alias", `ALTER TABLE OpenedUrls ADD COLUMN Alias TEXT NOT NULL DEFAULT ''`},
+		{"Origin", `ALTER TABLE OpenedUrls ADD COLUMN Origin TEXT NOT NULL DEFAULT ''`},
+		{"OriginalUrl", `ALTER TABLE OpenedUrls ADD COLUMN OriginalUrl TEXT NOT NULL DEFAULT ''`},
+		{"IsDeduped", `ALTER TABLE OpenedUrls ADD COLUMN IsDeduped INTEGER NOT NULL DEFAULT 0`},
+		{"IsIncognito", `ALTER TABLE OpenedUrls ADD COLUMN IsIncognito INTEGER NOT NULL DEFAULT 0`},
+		{"TraceId", `ALTER TABLE OpenedUrls ADD COLUMN TraceId TEXT NOT NULL DEFAULT ''`},
+	}
+	for _, a := range adds {
+		if have[a.name] {
+			continue
+		}
+		if _, err := s.DB.Exec(a.ddl); err != nil {
+			return errtrace.Wrapf(err, "add column %s", a.name)
+		}
+	}
+	// Helpful (but non-unique) lookup index for the activated filters.
+	if _, err := s.DB.Exec(
+		`CREATE INDEX IF NOT EXISTS IxOpenedUrlsAliasOpenedAt ON OpenedUrls(Alias, OpenedAt)`,
+	); err != nil {
+		return errtrace.Wrap(err, "create IxOpenedUrlsAliasOpenedAt")
+	}
 	return nil
+}
+
+// openedUrlsColumns returns the set of column names currently present on
+// the OpenedUrls table. Used by Delta #1 to skip already-applied ADDs.
+func (s *Store) openedUrlsColumns() (map[string]bool, error) {
+	rows, err := s.DB.Query(`PRAGMA table_info(OpenedUrls)`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]bool{}
+	for rows.Next() {
+		var (
+			cid       int
+			name, typ string
+			notnull   int
+			dflt      sql.NullString
+			pk        int
+		)
+		if err := rows.Scan(&cid, &name, &typ, &notnull, &dflt, &pk); err != nil {
+			return nil, err
+		}
+		out[name] = true
+	}
+	return out, rows.Err()
 }
 
 // UpsertEmail inserts a new email row or returns the existing Id when the
