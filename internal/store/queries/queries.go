@@ -61,14 +61,23 @@ const EmailsCountByAlias = `SELECT COUNT(1) FROM Emails WHERE Alias = ?`
 // Spec: `spec/21-app/02-features/02-emails/01-backend.md` §2.6 / §3.5
 // (`Counts` method, projecting onto `EmailCounts`). The spec's COUNT
 // formula uses a single COALESCE/SUM CASE expression; we emit two
-// independent COUNT queries instead so each can hit its own index
-// (`IxEmailAliasIsRead` from M0010 covers the Unread variant; the
-// existing PK index covers the Total variant). Two round-trips at
-// p99 ≪ 5 ms each beats one full-scan SUM.
+// independent COUNT queries instead so each can be planned + cached
+// separately by SQLite and so the Total variant can hit the PK
+// without paying for the IsRead predicate.
+//
+// **Index footprint (Slice #109 audit).** No dedicated index covers
+// the `IsRead` predicate today — `IxEmailsAliasUid` (m0002) is the
+// only Emails index touching anything beyond the implicit PK. The
+// Unread variants therefore fall back to a full table scan filtered
+// in-memory. Acceptable today (Emails row count ≪ 10⁵ on the
+// current target deployment), but if the dashboard badge ever shows
+// up in the p95 perf gate, add `CREATE INDEX IxEmailsAliasIsRead ON
+// Emails(Alias, IsRead)` in a new migration. Tracked in the
+// post-MVP polish backlog under "Bucket #4 cleanup".
 const EmailsCountUnreadAll = `SELECT COUNT(1) FROM Emails WHERE IsRead = 0`
 
 // EmailsCountUnreadByAlias counts unread rows for one alias. Static
-// query — see EmailsCountUnreadAll for rationale.
+// query — see EmailsCountUnreadAll for rationale and index notes.
 const EmailsCountUnreadByAlias = `SELECT COUNT(1) FROM Emails WHERE Alias = ? AND IsRead = 0`
 
 // EmailsCountDeletedAll counts every Emails row whose `DeletedAt` is
