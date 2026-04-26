@@ -40,46 +40,50 @@ type DiagnoseEvent struct {
 // Diagnose runs the IMAP probe for the given alias. When alias is empty the
 // first configured account is used. Each step is reported via emit so the
 // caller (CLI / UI) can render incrementally. emit may be nil.
-// Diagnose runs the IMAP probe for the given alias. When alias is empty the
-// first configured account is used. Each step is reported via emit so the
-// caller (CLI / UI) can render incrementally. emit may be nil.
-func Diagnose(alias string, emit func(DiagnoseEvent)) error {
+//
+// Returns errtrace.Result[struct{}] per Delta #2 — the value side is empty
+// because Diagnose communicates its results through the streamed `emit`
+// callback rather than a single return value.
+func Diagnose(alias string, emit func(DiagnoseEvent)) errtrace.Result[struct{}] {
 	_, acct, err := loadConfigAndAccount(alias, emit)
 	if err != nil {
-		return err
+		return errtrace.Err[struct{}](err)
 	}
 
 	mc, err := probeConnect(acct, emit)
 	if err != nil {
-		return err
+		return errtrace.Err[struct{}](err)
 	}
 	defer mc.Close()
 
 	folders, err := listFolders(mc, emit)
 	if err != nil {
-		return err
+		return errtrace.Err[struct{}](err)
 	}
 
 	stats, err := fetchInbox(mc, emit)
 	if err != nil {
-		return err
+		return errtrace.Err[struct{}](err)
 	}
 
 	if err := fetchHeaders(mc, stats, emit); err != nil {
-		return err
+		return errtrace.Err[struct{}](err)
 	}
 
-	return runFolderScanAndSummarize(mc, folders, stats, emit)
+	runFolderScanAndSummarize(mc, folders, stats, emit)
+	return errtrace.Ok(struct{}{})
 }
 
 // loadConfigAndAccount loads config, resolves the account, and initializes emit.
+// Errors are returned as *Coded so the surrounding Diagnose Result carries
+// a stable error code (ErrConfigOpen / ErrConfigAccountMissing).
 func loadConfigAndAccount(alias string, emit func(DiagnoseEvent)) (*config.Config, config.Account, error) {
 	if emit == nil {
 		emit = func(DiagnoseEvent) {}
 	}
 	cfg, err := config.Load()
 	if err != nil {
-		return nil, config.Account{}, errtrace.Wrap(err, "load config")
+		return nil, config.Account{}, errtrace.WrapCode(err, errtrace.ErrConfigOpen, "core.Diagnose")
 	}
 	acct, err := resolveAccount(cfg, alias)
 	if err != nil {
@@ -90,23 +94,26 @@ func loadConfigAndAccount(alias string, emit func(DiagnoseEvent)) (*config.Confi
 }
 
 // runFolderScanAndSummarize scans all folders and emits the summary event.
-func runFolderScanAndSummarize(mc *mailclient.Client, folders []mailclient.MailboxName, stats mailclient.MailboxStats, emit func(DiagnoseEvent)) error {
+func runFolderScanAndSummarize(mc *mailclient.Client, folders []mailclient.MailboxName, stats mailclient.MailboxStats, emit func(DiagnoseEvent)) {
 	foundElsewhere := scanFolders(mc, folders, stats, emit)
 	emit(DiagnoseEvent{Kind: DiagnoseEventSummary, Message: summarize(stats, foundElsewhere)})
-	return nil
 }
 
 // resolveAccount picks the target account from config by alias (or first if empty).
 func resolveAccount(cfg *config.Config, alias string) (config.Account, error) {
 	if len(cfg.Accounts) == 0 {
-		return config.Account{}, errtrace.New("no accounts configured. Run `email-read add` first")
+		return config.Account{}, errtrace.WrapCode(
+			errtrace.New("no accounts configured. Run `email-read add` first"),
+			errtrace.ErrConfigAccountMissing, "core.Diagnose")
 	}
 	if alias == "" {
 		return cfg.Accounts[0], nil
 	}
 	p := cfg.FindAccount(alias)
 	if p == nil {
-		return config.Account{}, errtrace.New(fmt.Sprintf("no account with alias %q", alias))
+		return config.Account{}, errtrace.WrapCode(
+			errtrace.New(fmt.Sprintf("no account with alias %q", alias)),
+			errtrace.ErrConfigAccountMissing, "core.Diagnose").WithContext("alias", alias)
 	}
 	return *p, nil
 }
@@ -115,7 +122,8 @@ func resolveAccount(cfg *config.Config, alias string) (config.Account, error) {
 func probeConnect(acct config.Account, emit func(DiagnoseEvent)) (*mailclient.Client, error) {
 	mc, err := mailclient.Dial(acct)
 	if err != nil {
-		return nil, errtrace.Wrap(err, "dial imap")
+		return nil, errtrace.WrapCode(err, errtrace.ErrMailDial, "core.Diagnose").
+			WithContext("alias", acct.Alias)
 	}
 	emit(DiagnoseEvent{Kind: DiagnoseEventLoginOK})
 	return mc, nil
@@ -127,10 +135,11 @@ func listFolders(mc *mailclient.Client, emit func(DiagnoseEvent)) ([]mailclient.
 	switch {
 	case err != nil:
 		emit(DiagnoseEvent{Kind: DiagnoseEventFoldersWarn, Message: err.Error()})
-		return nil, err
+		return nil, errtrace.WrapCode(err, errtrace.ErrMailFetchUid, "core.Diagnose.listFolders")
 	case len(folders) == 0:
 		emit(DiagnoseEvent{Kind: DiagnoseEventFoldersWarn, Message: "server returned no folders"})
-		return nil, errtrace.New("no folders")
+		return nil, errtrace.WrapCode(errtrace.New("no folders"),
+			errtrace.ErrMailFetchUid, "core.Diagnose.listFolders")
 	default:
 		emit(DiagnoseEvent{Kind: DiagnoseEventFolders, Folders: folders})
 		return folders, nil
@@ -141,7 +150,8 @@ func listFolders(mc *mailclient.Client, emit func(DiagnoseEvent)) ([]mailclient.
 func fetchInbox(mc *mailclient.Client, emit func(DiagnoseEvent)) (mailclient.MailboxStats, error) {
 	stats, err := mc.SelectInbox()
 	if err != nil {
-		return mailclient.MailboxStats{}, errtrace.Wrap(err, "select inbox")
+		return mailclient.MailboxStats{}, errtrace.WrapCode(err,
+			errtrace.ErrMailFetchUid, "core.Diagnose.fetchInbox")
 	}
 	emit(DiagnoseEvent{Kind: DiagnoseEventInbox, Stats: &stats})
 	return stats, nil
@@ -151,7 +161,7 @@ func fetchInbox(mc *mailclient.Client, emit func(DiagnoseEvent)) (mailclient.Mai
 func fetchHeaders(mc *mailclient.Client, stats mailclient.MailboxStats, emit func(DiagnoseEvent)) error {
 	headers, err := mc.FetchRecentHeaders(stats, 10)
 	if err != nil {
-		return errtrace.Wrap(err, "fetch recent headers")
+		return errtrace.WrapCode(err, errtrace.ErrMailFetchUid, "core.Diagnose.fetchHeaders")
 	}
 	emit(DiagnoseEvent{Kind: DiagnoseEventHeaders, Headers: headers})
 	return nil
