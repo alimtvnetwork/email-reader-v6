@@ -19,6 +19,7 @@ package core
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/lovable/email-read/internal/config"
@@ -45,7 +46,7 @@ func TestNewDashboardService_RejectsNilDeps(t *testing.T) {
 				!hasCode(res.Error(), errtrace.ErrCoreInvalidArgument) {
 				t.Errorf("error code = %v, want ErrCoreInvalidArgument", codeOf(res.Error()))
 			}
-			if got := res.Error().Error(); !contains(got, tc.wantSubstr) {
+			if got := res.Error().Error(); !containsStr(got, tc.wantSubstr) {
 				t.Errorf("error message %q does not contain %q", got, tc.wantSubstr)
 			}
 		})
@@ -167,18 +168,10 @@ func fakeCounter(perAlias map[string]int) emailsCounter {
 	}
 }
 
-// hasCode walks the Unwrap chain looking for an errtrace.Coded with
-// the given code. Mirrors the helper used elsewhere in core tests.
-func hasCode(err error, want errtrace.Code) bool {
-	for e := err; e != nil; e = errors.Unwrap(e) {
-		var c *errtrace.Coded
-		if errors.As(e, &c) && c.Code == want {
-			return true
-		}
-	}
-	return false
-}
-
+// codeOf returns the first errtrace.Code found by walking the
+// Unwrap chain. Distinct from the existing `hasCode` helper in
+// watch_factory_test.go (which only returns bool); we need the
+// actual Code value for error-message formatting.
 func codeOf(err error) errtrace.Code {
 	for e := err; e != nil; e = errors.Unwrap(e) {
 		var c *errtrace.Coded
@@ -189,16 +182,10 @@ func codeOf(err error) errtrace.Code {
 	return ""
 }
 
-func contains(haystack, needle string) bool {
-	return len(needle) == 0 ||
-		(len(haystack) >= len(needle) && indexOf(haystack, needle) >= 0)
-}
-
-func indexOf(s, sub string) int {
-	for i := 0; i+len(sub) <= len(s); i++ {
-		if s[i:i+len(sub)] == sub {
-			return i
-		}
-	}
-	return -1
+// containsStr is the local alias for strings.Contains kept for
+// readability of the test body. The package-level `contains` helper
+// in settings_test.go has a different signature (rune-based scan)
+// so we use a uniquely-named wrapper to avoid the collision.
+func containsStr(haystack, needle string) bool {
+	return strings.Contains(haystack, needle)
 }
