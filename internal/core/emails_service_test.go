@@ -42,6 +42,11 @@ type fakeEmailsStore struct {
 	unreadErr error
 	lastUnreadAls string
 
+	// CountDeletedEmails programming + observation (Slice #100)
+	deleted    int
+	deletedErr error
+	lastDeletedAls string
+
 	// MarkRead programming + observation (Phase 4 P4.2)
 	setReadRows int64
 	setReadErr  error
@@ -87,6 +92,10 @@ func (f *fakeEmailsStore) SetEmailRead(_ context.Context, alias string, uids []u
 func (f *fakeEmailsStore) CountUnreadEmails(_ context.Context, alias string) (int, error) {
 	f.lastUnreadAls = alias
 	return f.unread, f.unreadErr
+}
+func (f *fakeEmailsStore) CountDeletedEmails(_ context.Context, alias string) (int, error) {
+	f.lastDeletedAls = alias
+	return f.deleted, f.deletedErr
 }
 func (f *fakeEmailsStore) SetEmailDeletedAt(_ context.Context, alias string, uids []uint32, deletedAt *int64) (int64, error) {
 	atomic.AddInt32(&f.setDeletedCalls, 1)
