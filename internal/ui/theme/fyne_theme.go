@@ -45,15 +45,42 @@ func (AppTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color
 	return fynetheme.DefaultTheme().Color(name, variant)
 }
 
-// Font / Icon / Size delegate to Fyne defaults for now. Custom font
-// embedding (Inter, JetBrains Mono) and the Size scale (`SizeText*`,
-// `SizeSpacing*`) land with the typography MVP — tracked outstanding in
-// the consistency report Delta #4 follow-ups.
-func (AppTheme) Font(s fyne.TextStyle) fyne.Resource { return fynetheme.DefaultTheme().Font(s) }
+// Font routes Fyne's text-style request to one of our embedded
+// variable fonts. Monospace + monospace-bold map to JetBrains Mono;
+// every other style (regular, bold, italic, bold-italic) maps to Inter
+// Variable — the variable axis lets a single TTF cover all weights /
+// italics. When the embedded asset is absent (fresh checkout, no .ttf
+// files committed), we fall back to Fyne's bundled default font so the
+// UI still renders.
+func (AppTheme) Font(s fyne.TextStyle) fyne.Resource {
+	if s.Monospace {
+		if r := TextMonospaceFont(); r != nil {
+			return r
+		}
+		return fynetheme.DefaultTheme().Font(s)
+	}
+	if r := TextFont(); r != nil {
+		return r
+	}
+	return fynetheme.DefaultTheme().Font(s)
+}
+
+// Icon delegates to Fyne defaults — the icon set is shared. Custom
+// icons (if any) land per-widget, not via the theme.
 func (AppTheme) Icon(n fyne.ThemeIconName) fyne.Resource {
 	return fynetheme.DefaultTheme().Icon(n)
 }
-func (AppTheme) Size(n fyne.ThemeSizeName) float32 { return fynetheme.DefaultTheme().Size(n) }
+
+// Size routes Fyne's built-in size names to our typography + spacing
+// scale (01-tokens.md §3 / §4) honoring the active density. Names with
+// no spec equivalent (e.g. ScrollBar, Separator) fall through to Fyne
+// defaults so chrome rendering stays consistent.
+func (AppTheme) Size(n fyne.ThemeSizeName) float32 {
+	if tok, ok := fyneSizeRoute[n]; ok {
+		return Size(tok)
+	}
+	return fynetheme.DefaultTheme().Size(n)
+}
 
 // resolvedMode reconciles the active mode with the OS-supplied variant.
 // Explicit Dark/Light wins; ThemeSystem defers to Fyne.
