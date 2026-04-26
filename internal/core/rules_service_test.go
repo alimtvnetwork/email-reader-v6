@@ -57,6 +57,14 @@ func newSvc(t *testing.T, l configLoader, s cfgWriter, p cfgPathFn) *RulesServic
 	return res.Value()
 }
 
+// newSvcMem is the 90% case: build a service backed by a fresh
+// in-memory config. Returns the service so the test stays one-line.
+func newSvcMem(t *testing.T, initial *config.Config) *RulesService {
+	t.Helper()
+	l, s, p, _ := memCfg(initial)
+	return newSvc(t, l, s, p)
+}
+
 func mustCoded(t *testing.T, err error, want errtrace.Code) *errtrace.Coded {
 	t.Helper()
 	var c *errtrace.Coded
