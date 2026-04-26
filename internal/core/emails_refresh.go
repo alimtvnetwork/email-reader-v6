@@ -20,20 +20,24 @@
 //        (UI bootstrap, all tests in this package) stay
 //        binary-compatible.
 //     3. Implements `Refresh` with a complete error envelope:
-//          - empty alias               → ErrCoreInvalidArgument
-//          - no refresher injected     → ErrCoreInvalidArgument
-//                                        (config-time bug, not runtime)
+//          - empty alias               → ErrWatchAliasRequired
+//          - no refresher injected     → ErrEmailsRefresherUnwired
+//                                        (config-time bootstrap gap;
+//                                        new dedicated ER-EML-22003 code
+//                                        introduced by the Errtrace
+//                                        registry restructure to
+//                                        distinguish from generic
+//                                        invalid-argument failures)
 //          - context already cancelled → ctx.Err() wrapped as
 //                                        ErrCoreInvalidArgument so
 //                                        the caller can distinguish
 //                                        from a watcher-internal failure
 //          - watcher returns error     → wrapped with
-//                                        ErrWatcherPollFailed + alias ctx
+//                                        ErrWatcherPollCycle + alias ctx
 //                                        (registry code reused from the
-//                                        watcher domain; new dedicated
-//                                        emails-refresh code is a
-//                                        registry-restructure concern,
-//                                        tracked separately).
+//                                        watcher domain since the wrapped
+//                                        cause is genuinely a watcher
+//                                        poll-cycle failure).
 //
 //   When the watcher gains `PollOnce`, the production wiring is one
 //   line in bootstrap: `svc = svc.WithRefresher(watcherAdapter{w})`.
