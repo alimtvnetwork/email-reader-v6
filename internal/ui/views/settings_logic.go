@@ -145,15 +145,18 @@ func ProjectSettingsInput(
 	retentionDays uint16,
 	maint MaintenanceFields,
 	prev core.SettingsSnapshot,
+	densityLabel string,
 ) core.SettingsInput {
 	mode, _ := core.ParseThemeMode(themeLabel)
 	weekday, ok := core.ParseWeekday(maint.WeekdayLabel)
 	if !ok {
 		weekday = prev.WeeklyVacuumOn
 	}
+	density, _ := core.ParseDensity(densityLabel)
 	return core.SettingsInput{
 		PollSeconds: pollSecs,
 		Theme:       mode,
+		Density:     density,
 		BrowserOverride: core.BrowserOverride{
 			ChromePath:   chromePath,
 			IncognitoArg: prev.BrowserOverride.IncognitoArg,
