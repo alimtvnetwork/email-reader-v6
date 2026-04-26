@@ -8,6 +8,7 @@ import (
 	"context"
 	"io"
 	"log"
+	"math/rand"
 	"strings"
 	"time"
 
@@ -109,6 +110,9 @@ type pollState struct {
 	startedAt                                  time.Time
 	havePrev                                   bool
 	lastError                                  string
+	// consecutiveErrors counts EventPollError in a row. Reset to 0 on any
+	// successful poll. Drives exponential backoff with jitter (CF-W-BACKOFF).
+	consecutiveErrors int
 }
 
 const heartbeatEvery = 60 // ~ every 60 polls (~3 min at 3s poll)
@@ -125,6 +129,7 @@ func logPollError(logger *log.Logger, opts Options, st *pollState, err error) {
 		}
 		st.lastError = msg
 	}
+	st.consecutiveErrors++
 	opts.Bus.Publish(Event{Kind: EventPollError, Alias: opts.Account.Alias, Err: err})
 }
 
@@ -133,6 +138,7 @@ func logPollError(logger *log.Logger, opts Options, st *pollState, err error) {
 func handlePollOK(logger *log.Logger, opts Options, st *pollState, stats *mailclient.MailboxStats) {
 	alias := opts.Account.Alias
 	st.lastError = ""
+	st.consecutiveErrors = 0
 	if st.havePrev {
 		if stats.UidValidity != st.prevUidValidity {
 			logger.Printf("")
@@ -199,9 +205,24 @@ func runLoop(ctx context.Context, opts Options, logger *log.Logger, tick *time.T
 			} else if stats != nil {
 				handlePollOK(logger, opts, st, stats)
 			}
-			tick.Reset(*poll)
+			tick.Reset(nextDelay(*poll, st, logger, alias))
 		}
 	}
+}
+
+// nextDelay picks the wait until the next poll attempt. Happy path returns
+// the configured cadence; on a streak of errors it returns
+// NextPollDelay(base, streak, jitter) and logs the chosen back-off so an
+// operator can tell why polls slowed down. Splitting this off keeps
+// runLoop ≤15 statements and the math testable without a fake clock.
+func nextDelay(base time.Duration, st *pollState, logger *log.Logger, alias string) time.Duration {
+	if st.consecutiveErrors == 0 {
+		return base
+	}
+	d := NextPollDelay(base, st.consecutiveErrors, rand.Float64())
+	logger.Printf("%s  ⏳ [%s] backing off after %d consecutive error(s): next poll in %s",
+		ts(), alias, st.consecutiveErrors, d.Round(100*time.Millisecond))
+	return d
 }
 
 // applyPollReload clamps and applies a new PollSeconds value, logging the

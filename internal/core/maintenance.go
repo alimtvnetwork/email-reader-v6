@@ -33,6 +33,17 @@ import (
 // busyness does not wedge the loop).
 type Pruner func(ctx context.Context, cutoff time.Time) (int64, error)
 
+// Analyzer is the seam over store.Analyze. Optional: when nil the
+// ANALYZE-after-N-deletes logic is skipped and the cumulative counter
+// is never reset (which is harmless — Pruner still runs).
+type Analyzer func(ctx context.Context) error
+
+// AnalyzeThresholdRows is the cumulative-delete count above which the
+// Maintenance loop fires Analyzer and resets the counter. Mirrors
+// store.AnalyzeThreshold (kept here as a separate const so the core
+// package does not import store at construction time).
+const AnalyzeThresholdRows int64 = 1000
+
 // SnapshotSource returns the current OpenUrlsRetentionDays. Reading
 // it on every tick (rather than caching at construction) means the
 // user can change the knob in Settings and the sweep starts honouring
@@ -47,6 +58,11 @@ type MaintenanceOptions struct {
 	Pruner Pruner
 	// Retention is required: nothing to schedule without the knob.
 	Retention SnapshotSource
+	// Analyzer is optional. When non-nil, the loop tracks cumulative
+	// deletes across ticks and invokes Analyzer once the count crosses
+	// AnalyzeThresholdRows; the counter then resets to zero. Spec
+	// 23-app-database/04 §2.
+	Analyzer Analyzer
 	// Now defaults to time.Now.
 	Now func() time.Time
 	// TickInterval defaults to 1 minute. The retention tick fires at
@@ -58,6 +74,10 @@ type MaintenanceOptions struct {
 	// OnSweep is an optional observer (logging / metrics / tests). Fired
 	// after every sweep attempt, success or error.
 	OnSweep func(deleted int64, err error)
+	// OnAnalyze is an optional observer fired when Analyzer runs.
+	// Receives the cumulative-delete count that triggered it and the
+	// Analyzer's error (nil on success). Used by tests + structured logs.
+	OnAnalyze func(triggeredAt int64, err error)
 }
 
 // Maintenance is the goroutine handle. Construct via NewMaintenance,
@@ -133,26 +153,28 @@ func (m *Maintenance) run(ctx context.Context, done chan struct{}) {
 	ticker := time.NewTicker(m.opts.TickInterval)
 	defer ticker.Stop()
 	var lastRun time.Time
+	var cumDeletes int64
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			lastRun = m.maybeSweep(ctx, lastRun)
+			lastRun, cumDeletes = m.maybeSweep(ctx, lastRun, cumDeletes)
 		}
 	}
 }
 
 // maybeSweep performs one tick's worth of work: evaluates the helper,
-// invokes the Pruner if due, fires OnSweep, and returns the new
-// lastRun. Pulled out of run() to keep that function under the
-// 15-statement linter cap and to make the per-tick logic unit-testable
-// in isolation.
-func (m *Maintenance) maybeSweep(ctx context.Context, lastRun time.Time) time.Time {
+// invokes the Pruner if due, fires OnSweep, optionally runs Analyzer
+// when cumulative deletes cross the threshold, and returns the new
+// lastRun + cumulative-delete tally. Pulled out of run() to keep that
+// function under the 15-statement linter cap and to make the per-tick
+// logic unit-testable in isolation.
+func (m *Maintenance) maybeSweep(ctx context.Context, lastRun time.Time, cum int64) (time.Time, int64) {
 	now := m.opts.Now()
 	days := m.opts.Retention()
 	if !ShouldRunRetentionTick(lastRun, now, m.opts.RetentionIntervalHours, days) {
-		return lastRun
+		return lastRun, cum
 	}
 	cutoff := RetentionCutoff(now, days)
 	deleted, err := m.opts.Pruner(ctx, cutoff)
@@ -160,8 +182,26 @@ func (m *Maintenance) maybeSweep(ctx context.Context, lastRun time.Time) time.Ti
 		m.opts.OnSweep(deleted, err)
 	}
 	if err != nil {
-		// Re-arm: do not bump lastRun so the next tick retries.
-		return lastRun
+		return lastRun, cum // re-arm: do not bump lastRun
 	}
-	return now
+	cum = m.maybeAnalyze(ctx, cum+deleted)
+	return now, cum
+}
+
+// maybeAnalyze runs the Analyzer (when configured) once cumulative
+// deletes cross AnalyzeThresholdRows, then resets the counter. When
+// no Analyzer is configured the counter is left unchanged so a future
+// reconfiguration still benefits from accumulated history.
+func (m *Maintenance) maybeAnalyze(ctx context.Context, cum int64) int64 {
+	if m.opts.Analyzer == nil || cum < AnalyzeThresholdRows {
+		return cum
+	}
+	err := m.opts.Analyzer(ctx)
+	if m.opts.OnAnalyze != nil {
+		m.opts.OnAnalyze(cum, err)
+	}
+	if err != nil {
+		return cum // keep the tally so the next sweep retries
+	}
+	return 0
 }

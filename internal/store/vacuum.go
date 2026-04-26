@@ -1,14 +1,15 @@
-// vacuum.go houses the OpenedUrls retention sweeper.
+// vacuum.go houses the OpenedUrls retention sweeper plus the ANALYZE
+// trigger that follows large prunes.
 //
-// Spec: spec/23-app-database/04-retention-and-vacuum.md §1, §3 (Q-OPEN-PRUNE-LAUNCHED
-// and Q-OPEN-PRUNE-BLOCKED). The OpenedUrls v1 schema does not yet carry a
-// `Decision` column, so we collapse both prune queries into a single
-// time-cutoff DELETE on `OpenedAt`. When the Decision column lands the prune
-// will fan out into the per-decision queries documented in the spec.
+// Spec: spec/23-app-database/04-retention-and-vacuum.md §1, §2, §3.
 //
-// The function is intentionally minimal — no batching loop, no ANALYZE/VACUUM
-// — those land alongside the maintenance loop in a future slice. This call
-// only needs to be safe under the watcher's daily tick.
+//	§1/§3: PruneOpenedUrlsBefore — single time-cutoff DELETE on OpenedAt.
+//	       (When the Decision column lands the prune fans out into the
+//	       per-decision queries Q-OPEN-PRUNE-LAUNCHED / Q-OPEN-PRUNE-BLOCKED.)
+//	§2:    ANALYZE runs after any prune that deletes ≥ 1 000 rows. Tracking
+//	       is cumulative across ticks so a long tail of small prunes still
+//	       eventually rebuilds statistics. Weekly VACUUM and the
+//	       wal_checkpoint cadence land in a follow-up.
 package store
 
 import (
@@ -17,6 +18,10 @@ import (
 
 	"github.com/lovable/email-read/internal/errtrace"
 )
+
+// AnalyzeThreshold is the row-count at which cumulative deletes trigger
+// `ANALYZE`. Spec/23-app-database/04 §2 row 3.
+const AnalyzeThreshold int64 = 1000
 
 // PruneOpenedUrlsBefore deletes OpenedUrls rows whose OpenedAt is strictly
 // older than `cutoff`. Returns the number of rows deleted. A zero `cutoff`
@@ -35,4 +40,22 @@ func (s *Store) PruneOpenedUrlsBefore(ctx context.Context, cutoff time.Time) (in
 	}
 	n, _ := res.RowsAffected()
 	return n, nil
+}
+
+// Analyze runs SQLite `ANALYZE` to refresh the stat tables. Cheap on a
+// small DB but unbounded on a huge one, so callers gate it on
+// ShouldAnalyze (cumulative-deletes ≥ AnalyzeThreshold).
+func (s *Store) Analyze(ctx context.Context) error {
+	if _, err := s.DB.ExecContext(ctx, `ANALYZE`); err != nil {
+		return errtrace.Wrap(err, "analyze")
+	}
+	return nil
+}
+
+// ShouldAnalyze decides whether the running cumulative-delete tally has
+// reached the ANALYZE threshold. Pure: callers do `cum += deleted; if
+// ShouldAnalyze(cum) { Analyze(); cum = 0 }`. Returning true on exactly
+// equal lets a single bulk prune of 1 000 rows trigger immediately.
+func ShouldAnalyze(cumulativeDeletes int64) bool {
+	return cumulativeDeletes >= AnalyzeThreshold
 }
