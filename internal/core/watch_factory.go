@@ -30,20 +30,42 @@ import (
 // that to ER-WCH-21412.
 type AccountResolver func(alias string) *config.Account
 
+// PollChanProvider is the optional CF-W1 seam: the factory asks for a
+// per-alias receive channel at Start time, and releases it when the
+// runner exits. The provider's job is to fan Settings cadence updates
+// into every live runner's channel. Two methods so the provider can
+// distinguish "runner started" (allocate / register) from "runner
+// stopped" (free the slot, never publish to it again).
+//
+// Why an interface (vs a func): Acquire-only would leak channels on
+// Stop because the factory cannot tell the provider when to forget.
+// Release closes the loop without forcing the watcher loop to call
+// `close()` on a channel it does not own (which would race with the
+// provider's fan-out goroutine).
+//
+// Nil provider is fine — the factory then passes a nil
+// `PollSecondsCh` to watcher.Run, preserving the pre-CF-W1 behaviour.
+type PollChanProvider interface {
+	Acquire(alias string) <-chan int
+	Release(alias string)
+}
+
 // RealLoopFactoryDeps bundles the long-lived collaborators that every
 // runner shares: the rules engine, browser launcher, persistent store,
 // shared watcher event bus, and a logger. Engine + Launcher are passed
 // by pointer so live config reloads upstream propagate without
 // re-wiring runners. Bus may be nil (CLI mode); Logger nil falls back
-// to a discard logger inside Run.
+// to a discard logger inside Run. PollChans is the optional CF-W1
+// provider — see PollChanProvider.
 type RealLoopFactoryDeps struct {
-	Resolver AccountResolver
-	Engine   *rules.Engine
-	Launcher *browser.Launcher
-	Store    *store.Store
-	Bus      *watcher.Bus
-	Logger   *log.Logger
-	Verbose  bool
+	Resolver  AccountResolver
+	Engine    *rules.Engine
+	Launcher  *browser.Launcher
+	Store     *store.Store
+	Bus       *watcher.Bus
+	Logger    *log.Logger
+	Verbose   bool
+	PollChans PollChanProvider
 }
 
 // NewRealLoopFactory validates `deps` (Resolver + Store are mandatory —
@@ -96,6 +118,11 @@ type realLoop struct {
 // account (alias not found at New time) is surfaced as
 // ErrWatchAccountNotFound so Watch.runLoop publishes a typed
 // WatchError event instead of a generic shutdown message.
+//
+// CF-W1: when a PollChanProvider is wired, we Acquire a per-alias
+// channel before the loop runs and defer Release after watcher.Run
+// returns — this is the precise lifetime the provider needs to know
+// to stop publishing into a dead channel.
 func (l *realLoop) Run(ctx context.Context) error {
 	if l.acct == nil {
 		return errtrace.NewCoded(
@@ -103,19 +130,20 @@ func (l *realLoop) Run(ctx context.Context) error {
 			"watch: account "+l.opts.Alias+" not found",
 		)
 	}
+	var pollCh <-chan int
+	if l.deps.PollChans != nil {
+		pollCh = l.deps.PollChans.Acquire(l.opts.Alias)
+		defer l.deps.PollChans.Release(l.opts.Alias)
+	}
 	return watcher.Run(ctx, watcher.Options{
-		Account:     *l.acct,
-		PollSeconds: l.opts.PollSeconds,
-		Engine:      l.deps.Engine,
-		Launcher:    l.deps.Launcher,
-		Store:       l.deps.Store,
-		Logger:      l.deps.Logger,
-		Verbose:     l.deps.Verbose,
-		Bus:         l.deps.Bus,
-		// PollSecondsCh is intentionally nil here: live cadence updates
-		// are out of scope for the Watch wiring slice. CF-W1 (Settings
-		// → live PollSeconds) lands when Settings.Subscribe is wired
-		// through Watch in a follow-up.
-		PollSecondsCh: nil,
+		Account:       *l.acct,
+		PollSeconds:   l.opts.PollSeconds,
+		Engine:        l.deps.Engine,
+		Launcher:      l.deps.Launcher,
+		Store:         l.deps.Store,
+		Logger:        l.deps.Logger,
+		Verbose:       l.deps.Verbose,
+		Bus:           l.deps.Bus,
+		PollSecondsCh: pollCh,
 	})
 }
