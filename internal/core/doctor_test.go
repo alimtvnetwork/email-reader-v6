@@ -80,17 +80,31 @@ func Test_Doctor_TargetFilter_Match(t *testing.T) {
 	})
 }
 
-// withTempConfig points config.Load at a temp dir and restores cwd on exit.
+// withTempConfig isolates config.json on disk for the duration of fn.
+//
+// Historically this only chdir'd into a tempdir, which was a no-op
+// because config.Path resolves relative to os.Executable (the test
+// binary), NOT cwd. Under `go test -count=N` that meant a config
+// written by one test leaked into the next, producing flakes like
+// Test_Doctor_NoAccounts seeing a previous run's "atto" account.
+//
+// We now delegate to the same backup/restore helper used by the
+// accounts tests so isolation actually works.
 func withTempConfig(t *testing.T, fn func()) {
 	t.Helper()
-	tmp := t.TempDir()
-	old, _ := os.Getwd()
-	t.Cleanup(func() { _ = os.Chdir(old) })
-	if err := os.Chdir(tmp); err != nil {
-		t.Fatal(err)
-	}
-	_ = os.MkdirAll(filepath.Join(tmp, "data"), 0o755)
-	fn()
+	withIsolatedConfig(t, func() {
+		// Preserve the historical contract: callers may assume a
+		// `data/` dir exists relative to cwd when fn runs. Cheapest
+		// way is to chdir into the test's TempDir as before.
+		tmp := t.TempDir()
+		old, _ := os.Getwd()
+		t.Cleanup(func() { _ = os.Chdir(old) })
+		if err := os.Chdir(tmp); err != nil {
+			t.Fatal(err)
+		}
+		_ = os.MkdirAll(filepath.Join(tmp, "data"), 0o755)
+		fn()
+	})
 }
 
 // writeOneAccount drops a config.json with one account whose password is
