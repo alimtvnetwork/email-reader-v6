@@ -43,26 +43,10 @@ func loadExtension() (settingsExtension, error) {
 	return holder.Settings, nil
 }
 
-// saveExtension writes the "settings" key back into config.json by reading
-// the current file, parsing it as a generic map (so unknown keys survive),
-// replacing the "settings" entry, and writing the result back atomically
-// (tmp + rename — same protocol as config.Save).
-func saveExtension(ext settingsExtension) error {
-	p, err := config.Path()
-	if err != nil {
-		return errtrace.WrapCode(err, errtrace.ErrConfigOpen, "extension path")
-	}
-	root, err := readConfigAsMap(p)
-	if err != nil {
-		return err
-	}
-	// Ensure deterministic key ordering for the schemes list.
-	if len(ext.OpenUrlAllowedSchemes) > 1 {
-		sort.Strings(ext.OpenUrlAllowedSchemes)
-	}
-	root["settings"] = ext
-	return writeConfigMap(p, root)
-}
+// (saveExtension was inlined into settings.saveRaw to keep the typed
+// config and the extension block in a single atomic write — no partial
+// state is observable on disk.)
+
 
 // readConfigAsMap reads the file as a generic JSON object. Missing file →
 // empty map.
