@@ -228,14 +228,15 @@ func BuildShell(aliases []string) fyne.CanvasObject {
 
 // viewFor returns the widget for a nav destination. Each case picks a real
 // view from internal/ui/views or falls back to a placeholder for nav items
-// not yet implemented.
-func viewFor(item NavItem, state *AppState, gotoNav func(NavKind), onAccountsChanged func()) fyne.CanvasObject {
+// not yet implemented. `services` carries the typed Phase 2 service bundle
+// constructed once at app boot (see BuildServices in services.go).
+func viewFor(item NavItem, state *AppState, services *Services, gotoNav func(NavKind), onAccountsChanged func()) fyne.CanvasObject {
 	switch item.Kind {
 	case NavDashboard:
 		dashOpts := views.DashboardOptions{
 			Alias:        state.Alias(),
 			OnStartWatch: func() { gotoNav(NavWatch) },
-			Service:      buildDashboardService(),
+			Service:      services.Dashboard,
 		}
 		if rt := WatchRuntimeOrNil(); rt != nil {
 			dashOpts.Bus = rt.Bus
@@ -244,11 +245,11 @@ func viewFor(item NavItem, state *AppState, gotoNav func(NavKind), onAccountsCha
 	case NavEmails:
 		return views.BuildEmails(views.EmailsOptions{
 			Alias:   state.Alias(),
-			Service: buildEmailsService(),
+			Service: services.Emails,
 		})
 	case NavRules:
 		return views.BuildRules(views.RulesOptions{
-			Service:        buildRulesService(),
+			Service:        services.Rules,
 			OnRulesChanged: onAccountsChanged, // shared shell-rebuild trigger
 		})
 	case NavAccounts:
@@ -268,7 +269,7 @@ func viewFor(item NavItem, state *AppState, gotoNav func(NavKind), onAccountsCha
 		return views.BuildTools(views.ToolsOptions{
 			OnAccountsChanged: onAccountsChanged,
 			OnRulesChanged:    onAccountsChanged, // same shell-rebuild trigger
-			RulesService:      buildRulesService(),
+			RulesService:      services.Rules,
 		})
 	case NavSettings:
 		return views.BuildSettings(views.SettingsOptions{})
