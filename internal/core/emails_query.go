@@ -130,6 +130,10 @@ func (s *EmailsService) ListPage(ctx context.Context, q EmailQuery) errtrace.Res
 	// Project + post-filter in one pass.
 	filtered := make([]EmailSummary, 0, len(rows))
 	for _, e := range rows {
+		// OnlyUnread: drop rows the user has already read.
+		if q.OnlyUnread && e.IsRead {
+			continue
+		}
 		// SinceAt / UntilAt window.
 		if !q.SinceAt.IsZero() && e.ReceivedAt.Before(q.SinceAt) {
 			continue
@@ -137,9 +141,9 @@ func (s *EmailsService) ListPage(ctx context.Context, q EmailQuery) errtrace.Res
 		if !q.UntilAt.IsZero() && e.ReceivedAt.After(q.UntilAt) {
 			continue
 		}
-		// OnlyUnread / IncludeDeleted: pinned no-ops — see EmailQuery
-		// field comments.
-		_ = q.OnlyUnread
+		// IncludeDeleted: pinned no-op until P4.3 lands the DeletedAt
+		// column (see EmailQuery field comments + EmailCounts.Deleted
+		// tripwire).
 		_ = q.IncludeDeleted
 		filtered = append(filtered, toSummary(e))
 	}
