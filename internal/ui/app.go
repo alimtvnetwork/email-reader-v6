@@ -228,6 +228,7 @@ func viewFor(item NavItem, state *AppState, gotoNav func(NavKind), onAccountsCha
 		dashOpts := views.DashboardOptions{
 			Alias:        state.Alias(),
 			OnStartWatch: func() { gotoNav(NavWatch) },
+			Service:      buildDashboardService(),
 		}
 		if rt := WatchRuntimeOrNil(); rt != nil {
 			dashOpts.Bus = rt.Bus
