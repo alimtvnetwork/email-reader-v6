@@ -25,33 +25,42 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/lovable/email-read/internal/core"
+	"github.com/lovable/email-read/internal/watcher"
 )
 
 // WatchOptions wires the Watch view to app state. Alias is the alias
 // shown in the header; "" means "no account selected" (the view still
-// renders, but Start is disabled). Watch + PollSeconds are optional —
-// when nil the header falls back to a disabled placeholder button so
+// renders, but Start is disabled). Watch + PollSeconds + Bus are
+// optional — when nil the view falls back to disabled placeholders so
 // headless tests and the pre-wiring fallback both keep working.
 type WatchOptions struct {
 	Alias       string
 	Watch       *core.Watch
 	PollSeconds func() int
+	Bus         *watcher.Bus
 }
 
-// BuildWatch returns the Watch view scaffold per spec §2.1.
+// BuildWatch returns the Watch view per spec §2.1.
 //
 // Layout: container.NewBorder(top=header, bottom=footer, center=tabs).
 //   - header (§2.2): status dot + label + alias + ▶ Start/■ Stop button.
-//   - tabs (§2.3 / §2.4): Cards + Raw log placeholders.
-//   - footer (§2.5): poll cadence (CF-W3) + counter placeholders.
+//   - tabs (§2.3 / §2.4): live Cards + Raw log when Bus is wired,
+//     placeholders otherwise.
+//   - footer (§2.5): poll cadence (CF-W3) + live counters when Bus is
+//     wired.
 func BuildWatch(opts WatchOptions) fyne.CanvasObject {
 	header := buildWatchHeader(opts)
+	cards, cardsRefresh := buildWatchCardsTab(opts)
+	rawlog, rawRefresh := buildWatchRawLogTab(opts)
 	tabs := container.NewAppTabs(
-		container.NewTabItem("Cards", buildWatchCardsPlaceholder()),
-		container.NewTabItem("Raw log", buildWatchRawLogPlaceholder()),
+		container.NewTabItem("Cards", cards),
+		container.NewTabItem("Raw log", rawlog),
 	)
 	tabs.SetTabLocation(container.TabLocationTop)
-	footer := buildWatchFooter()
+	footer, counterRefresh := buildWatchFooter(opts)
+	if opts.Bus != nil && opts.Alias != "" {
+		go subscribeWatchBus(opts, cardsRefresh, rawRefresh, counterRefresh)
+	}
 	return container.NewBorder(header, footer, nil, nil, tabs)
 }
 
