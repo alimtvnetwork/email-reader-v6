@@ -6,7 +6,7 @@
 //   - PropagatesAliasInPollOnceCall
 //   - EmptyAlias_ReturnsAliasRequired         (errtrace code)
 //   - WhitespaceAlias_AlsoRejected            (TrimSpace contract)
-//   - NoRefresher_ReturnsConfigBugError       (ErrCoreInvalidArgument)
+//   - NoRefresher_ReturnsConfigBugError       (ErrEmailsRefresherUnwired)
 //   - CtxCancelledBeforePoll_ShortCircuits    (refresher MUST NOT be invoked)
 //   - RefresherError_WrappedWithPollCycleCode (+ alias context)
 //   - WithRefresher_IsChainable_ReplacesPriorDep
