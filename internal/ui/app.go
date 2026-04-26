@@ -292,60 +292,9 @@ func placeholderView(item NavItem, state *AppState) fyne.CanvasObject {
 	return container.NewVBox(heading, widget.NewSeparator(), ctx, body)
 }
 
-// buildDashboardService constructs a typed *core.DashboardService
-// for the dashboard view (Phase 2.3 wiring). The service is stateless
-// so building it on each viewFor(NavDashboard) switch is cheap and
-// avoids hidden lifetime coupling between app boot and individual view
-// constructions. Both injected deps point at the still-deprecated
-// package-level wrappers — that's fine: the wrappers go away in P2.8
-// when bootstrap moves to fully-injected `*EmailsService` /
-// `*RulesService` plumbing.
-//
-// Returns nil on construction failure (impossible given non-nil deps,
-// but the type is a Result envelope so we honor it). The dashboard
-// view's degraded path takes over when Service is nil.
-func buildDashboardService() *core.DashboardService {
-	res := core.NewDashboardService(config.Load, core.CountEmails)
-	if res.HasError() {
-		log.Printf("dashboard: NewDashboardService failed: %v", res.Error())
-		return nil
-	}
-	return res.Value()
-}
+// Phase 2.8 cleanup: the per-call buildDashboardService /
+// buildEmailsService / buildRulesService helpers from P2.3/P2.5/P2.7
+// have been hoisted into BuildServices (services.go), removing ~57
+// lines of duplicated bootstrap glue. The `config` import in this
+// file is now used only by `LoadAliases`/theme code.
 
-// buildEmailsService constructs a typed *core.EmailsService for the
-// emails view (Phase 2.5 wiring). Mirrors `buildDashboardService`:
-// stateless service so per-`viewFor` construction is cheap and avoids
-// hidden lifetime coupling between app boot and individual view
-// constructions.
-//
-// Returns nil on construction failure (impossible in practice — the
-// default opener is non-nil — but honored because the constructor
-// returns a Result envelope). The emails view's degraded path takes
-// over when Service is nil.
-func buildEmailsService() *core.EmailsService {
-	res := core.NewDefaultEmailsService()
-	if res.HasError() {
-		log.Printf("emails: NewDefaultEmailsService failed: %v", res.Error())
-		return nil
-	}
-	return res.Value()
-}
-
-// buildRulesService constructs a typed *core.RulesService for the
-// Rules view + Tools tab Add Rule form (Phase 2.7 wiring). Mirrors
-// `buildDashboardService` / `buildEmailsService`: stateless service
-// so per-`viewFor` construction is cheap.
-//
-// Returns nil on construction failure (impossible in practice — all
-// three deps are non-nil — but honored because the constructor
-// returns a Result envelope). The rules view's degraded path takes
-// over when Service is nil.
-func buildRulesService() *core.RulesService {
-	res := core.NewDefaultRulesService()
-	if res.HasError() {
-		log.Printf("rules: NewDefaultRulesService failed: %v", res.Error())
-		return nil
-	}
-	return res.Value()
-}
