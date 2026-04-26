@@ -24,6 +24,25 @@ type EmailsOptions struct {
 }
 
 func BuildEmails(opts EmailsOptions) fyne.CanvasObject {
+	opts = applyEmailsDefaults(opts)
+	heading := widget.NewLabelWithStyle("Emails", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	if opts.Alias == "" {
+		return emailsEmptyAlias(heading)
+	}
+
+	rows, err := loadEmailRows(opts)
+	if err != nil {
+		return emailsErrorView(heading, err)
+	}
+	if len(rows) == 0 {
+		return emailsEmptyRows(heading, opts.Alias)
+	}
+
+	return buildEmailsBrowser(heading, opts, rows)
+}
+
+// applyEmailsDefaults fills in default callbacks/limits on the options struct.
+func applyEmailsDefaults(opts EmailsOptions) EmailsOptions {
 	if opts.List == nil {
 		opts.List = core.ListEmails
 	}
@@ -36,35 +55,59 @@ func BuildEmails(opts EmailsOptions) fyne.CanvasObject {
 	if opts.MaxResults <= 0 {
 		opts.MaxResults = 200
 	}
+	return opts
+}
 
-	heading := widget.NewLabelWithStyle("Emails", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-	if opts.Alias == "" {
-		hint := widget.NewLabel("Pick an account from the sidebar to browse stored emails.")
-		hint.Wrapping = fyne.TextWrapWord
-		return container.NewVBox(heading, widget.NewSeparator(), hint)
-	}
+// loadEmailRows fetches the email summary list with a 5s timeout.
+func loadEmailRows(opts EmailsOptions) ([]core.EmailSummary, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return opts.List(ctx, core.ListEmailsOptions{Alias: opts.Alias, Limit: opts.MaxResults})
+}
 
+// emailsEmptyAlias renders the "pick an account" hint.
+func emailsEmptyAlias(heading fyne.CanvasObject) fyne.CanvasObject {
+	hint := widget.NewLabel("Pick an account from the sidebar to browse stored emails.")
+	hint.Wrapping = fyne.TextWrapWord
+	return container.NewVBox(heading, widget.NewSeparator(), hint)
+}
+
+// emailsErrorView renders a load-failure warning.
+func emailsErrorView(heading fyne.CanvasObject, err error) fyne.CanvasObject {
+	warn := widget.NewLabel("⚠ Failed to load emails: " + err.Error())
+	warn.Wrapping = fyne.TextWrapWord
+	return container.NewVBox(heading, widget.NewSeparator(), warn)
+}
+
+// emailsEmptyRows renders the empty-state for accounts with no stored emails.
+func emailsEmptyRows(heading fyne.CanvasObject, alias string) fyne.CanvasObject {
+	empty := widget.NewLabel(fmt.Sprintf("No emails stored yet for %q. Run a watch or one-shot fetch first.", alias))
+	empty.Wrapping = fyne.TextWrapWord
+	return container.NewVBox(heading, widget.NewSeparator(), empty)
+}
+
+// buildEmailsBrowser composes the split-pane list + detail browser.
+func buildEmailsBrowser(heading fyne.CanvasObject, opts EmailsOptions, rows []core.EmailSummary) fyne.CanvasObject {
 	status := widget.NewLabel("Loading…")
 	status.Wrapping = fyne.TextWrapWord
-
 	detailBox := container.NewVBox(widget.NewLabel("Select an email on the left."))
 	detailScroll := container.NewVScroll(detailBox)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	rows, err := opts.List(ctx, core.ListEmailsOptions{Alias: opts.Alias, Limit: opts.MaxResults})
-	if err != nil {
-		warn := widget.NewLabel("⚠ Failed to load emails: " + err.Error())
-		warn.Wrapping = fyne.TextWrapWord
-		return container.NewVBox(heading, widget.NewSeparator(), warn)
-	}
-	if len(rows) == 0 {
-		empty := widget.NewLabel(fmt.Sprintf("No emails stored yet for %q. Run a watch or one-shot fetch first.", opts.Alias))
-		empty.Wrapping = fyne.TextWrapWord
-		return container.NewVBox(heading, widget.NewSeparator(), empty)
-	}
+	list := newEmailList(rows)
+	list.OnSelected = makeEmailSelectHandler(opts, rows, detailBox, detailScroll, status)
 
-	list := widget.NewList(
+	status.SetText(fmt.Sprintf("%d email(s) for %s.", len(rows), opts.Alias))
+	split := container.NewHSplit(list, detailScroll)
+	split.SetOffset(0.35)
+	return container.NewBorder(
+		container.NewVBox(heading, widget.NewSeparator()),
+		status, nil, nil, split,
+	)
+}
+
+// newEmailList builds the email summary list widget.
+func newEmailList(rows []core.EmailSummary) *widget.List {
+	return widget.NewList(
 		func() int { return len(rows) },
 		func() fyne.CanvasObject {
 			subj := widget.NewLabelWithStyle("subject", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
@@ -84,7 +127,11 @@ func BuildEmails(opts EmailsOptions) fyne.CanvasObject {
 			meta.SetText(fmt.Sprintf("%s · %s", r.From, r.ReceivedAt))
 		},
 	)
-	list.OnSelected = func(i widget.ListItemID) {
+}
+
+// makeEmailSelectHandler returns the row-selection callback that loads detail.
+func makeEmailSelectHandler(opts EmailsOptions, rows []core.EmailSummary, detailBox *fyne.Container, detailScroll *container.Scroll, status *widget.Label) func(widget.ListItemID) {
+	return func(i widget.ListItemID) {
 		r := rows[i]
 		dctx, dcancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer dcancel()
@@ -100,18 +147,6 @@ func BuildEmails(opts EmailsOptions) fyne.CanvasObject {
 		detailBox.Refresh()
 		detailScroll.ScrollToTop()
 	}
-
-	status.SetText(fmt.Sprintf("%d email(s) for %s.", len(rows), opts.Alias))
-
-	split := container.NewHSplit(list, detailScroll)
-	split.SetOffset(0.35)
-
-	return container.NewBorder(
-		container.NewVBox(heading, widget.NewSeparator()),
-		status,
-		nil, nil,
-		split,
-	)
 }
 
 func renderDetail(d *core.EmailDetail, open func(string) error, status *widget.Label) []fyne.CanvasObject {
