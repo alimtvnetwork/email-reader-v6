@@ -29,15 +29,15 @@ type AccountFormInput struct {
 // core.AddAccount, plus a list of human-readable validation errors. When
 // Errors is non-empty, Valid is false and the caller should NOT submit.
 type AccountFormResult struct {
-	Valid   bool
-	Errors  []string
-	Alias   string
-	Email   string
+	Valid    bool
+	Errors   []string
+	Alias    string
+	Email    string
 	Password string
-	Host    string
-	Port    int
-	UseTLS  bool
-	Mailbox string
+	Host     string
+	Port     int
+	UseTLS   bool
+	Mailbox  string
 }
 
 // ValidateAccountForm trims input, fills sensible defaults from imapdef

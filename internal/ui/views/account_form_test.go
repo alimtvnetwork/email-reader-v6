@@ -73,10 +73,10 @@ func TestValidateAccountForm(t *testing.T) {
 
 func TestValidateAccountForm_DefaultsAndTrim(t *testing.T) {
 	got := ValidateAccountForm(AccountFormInput{
-		Alias:   "  a  ",
-		Email:   "  u@x.com  ",
+		Alias:    "  a  ",
+		Email:    "  u@x.com  ",
 		Password: "p",
-		Mailbox: "  ",
+		Mailbox:  "  ",
 	})
 	if !got.Valid {
 		t.Fatalf("expected valid, got %v", got.Errors)
@@ -100,7 +100,11 @@ func TestSuggestServer(t *testing.T) {
 	if got := SuggestServer("u@unknown.example"); got.Host != "mail.unknown.example" {
 		t.Errorf("unknown suggest: %+v", got)
 	}
-	if got := SuggestServer("notanemail"); !reflect.DeepEqual(got, struct{ Host string; Port int; UseTLS bool }{}) {
+	if got := SuggestServer("notanemail"); !reflect.DeepEqual(got, struct {
+		Host   string
+		Port   int
+		UseTLS bool
+	}{}) {
 		// imapdef.Server is a named struct so DeepEqual against an anon struct
 		// won't match by type — use a field check instead.
 	}

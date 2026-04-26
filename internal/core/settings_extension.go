@@ -46,7 +46,6 @@ func loadExtension() (settingsExtension, error) {
 // config and the extension block in a single atomic write — no partial
 // state is observable on disk.)
 
-
 // readConfigAsMap reads the file as a generic JSON object. Missing file →
 // empty map.
 func readConfigAsMap(p string) (map[string]any, error) {
