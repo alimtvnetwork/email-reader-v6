@@ -368,3 +368,92 @@ func parseSqliteRFC3339(s string) (time.Time, error) {
 		errors.New("unrecognised timestamp shape: "+s),
 		"parseSqliteRFC3339")
 }
+
+// StoreActivityRow is the projection returned by
+// `(*Store).QueryRecentActivity`. Mirrors the **store-derivable**
+// subset of `core.ActivityRow` — `Kind` is left as the raw integer
+// enum (1..4) here; the core-side adapter
+// (`core.NewStoreActivitySource`) maps it to the `core.ActivityKind`
+// string enum so the store package keeps zero `core` imports.
+//
+// `Message` and `ErrorCode` are extracted from the `Payload` JSON
+// blob; both default to zero values when the blob is empty (`{}`),
+// missing the field, or holds a wrong-typed value (defensive — a
+// future watcher version emitting a richer payload must not crash
+// the dashboard query).
+type StoreActivityRow struct {
+	OccurredAt time.Time
+	Alias      string
+	Kind       int    // raw WatchEventKind enum: 1=Start, 2=Stop, 3=Error, 4=Heartbeat
+	Message    string // optional; from Payload.Message
+	ErrorCode  int    // optional; from Payload.ErrorCode (only meaningful when Kind=3)
+}
+
+// activityPayload is the JSON shape decoded from `WatchEvents.Payload`.
+// Only the two spec-required fields are decoded; unknown keys are
+// ignored (forward-compatible with future payload extensions).
+type activityPayload struct {
+	Message   string `json:"Message"`
+	ErrorCode int    `json:"ErrorCode"`
+}
+
+// QueryRecentActivity returns up to `limit` most-recent rows from
+// `WatchEvents`, sorted DESC by `OccurredAt` (ties broken by Id DESC
+// so the order is fully deterministic — important for golden tests).
+// Limits ≤0 short-circuit to an empty slice without touching SQL;
+// the core service has already validated `limit ≥ 1`, so a zero
+// here means a caller bypassed that guard and we degrade gracefully.
+//
+// Failure modes match `QueryAccountHealth`:
+//   - driver-side errors → wrapped with "QueryRecentActivity" suffix.
+//   - per-row scan errors → wrapped with "QueryRecentActivity.Scan".
+//   - timestamp parse errors → wrapped with the offending alias.
+//   - payload JSON parse errors → SILENTLY tolerated; the row is
+//     returned with empty Message/zero ErrorCode. The rationale:
+//     a malformed payload (e.g. a future watcher emitted a struct
+//     this binary doesn't know how to read) should not blank the
+//     entire activity feed; the timestamp + Kind + Alias are still
+//     useful even if the message is missing.
+//
+// Spec: spec/21-app/02-features/01-dashboard/01-backend.md §2.2.
+func (s *Store) QueryRecentActivity(ctx context.Context, limit int) ([]StoreActivityRow, error) {
+	if limit <= 0 {
+		return []StoreActivityRow{}, nil
+	}
+	rows, err := s.DB.QueryContext(ctx, queries.RecentActivitySelectN, limit)
+	if err != nil {
+		return nil, errtrace.Wrap(err, "QueryRecentActivity")
+	}
+	defer rows.Close()
+
+	out := make([]StoreActivityRow, 0, limit)
+	for rows.Next() {
+		var (
+			alias       string
+			kind        int
+			occurredTxt string
+			payloadTxt  sql.NullString
+		)
+		if err := rows.Scan(&alias, &kind, &occurredTxt, &payloadTxt); err != nil {
+			return nil, errtrace.Wrap(err, "QueryRecentActivity.Scan")
+		}
+		t, perr := parseSqliteRFC3339(occurredTxt)
+		if perr != nil {
+			return nil, errtrace.Wrap(perr, "QueryRecentActivity.OccurredAt["+alias+"]")
+		}
+		row := StoreActivityRow{OccurredAt: t, Alias: alias, Kind: kind}
+		if payloadTxt.Valid && payloadTxt.String != "" && payloadTxt.String != "{}" {
+			var p activityPayload
+			// Defensive: ignore JSON parse errors per the doc-comment.
+			if jerr := json.Unmarshal([]byte(payloadTxt.String), &p); jerr == nil {
+				row.Message = p.Message
+				row.ErrorCode = p.ErrorCode
+			}
+		}
+		out = append(out, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, errtrace.Wrap(err, "QueryRecentActivity.Rows")
+	}
+	return out, nil
+}
