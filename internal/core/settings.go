@@ -122,16 +122,7 @@ func (s *Settings) persist(ctx context.Context, in SettingsInput, kind SettingsE
 	if err := validateInput(in); err != nil {
 		return errtrace.Err[SettingsSnapshot](err)
 	}
-	raw, err := loadRaw()
-	if err != nil {
-		return errtrace.Err[SettingsSnapshot](err)
-	}
-	applyInputToRaw(raw, in, s.clock())
-	if err := saveRaw(raw); err != nil {
-		return errtrace.Err[SettingsSnapshot](errtrace.WrapCode(err,
-			errtrace.ErrSettingsPersist, "persist settings"))
-	}
-	snap, err := snapshotFromRaw(raw)
+	snap, err := s.persistLocked(in)
 	if err != nil {
 		return errtrace.Err[SettingsSnapshot](err)
 	}
@@ -140,6 +131,31 @@ func (s *Settings) persist(ctx context.Context, in SettingsInput, kind SettingsE
 	s.mu.Unlock()
 	s.publish(SettingsEvent{Kind: kind, Snapshot: snap, At: s.clock()})
 	return errtrace.Ok(snap)
+}
+
+// persistLocked runs the on-disk Load+apply+Save under the
+// process-wide config write lock so it cannot interleave with
+// AddAccount/RemoveAccount (CF-A2). Split out so persist stays
+// under the 15-statement linter limit (AC-PROJ-20).
+func (s *Settings) persistLocked(in SettingsInput) (SettingsSnapshot, error) {
+	var (
+		snap SettingsSnapshot
+		err  error
+	)
+	config.WithWriteLock(func() {
+		var raw *rawConfigWithSettings
+		raw, err = loadRaw()
+		if err != nil {
+			return
+		}
+		applyInputToRaw(raw, in, s.clock())
+		if sErr := saveRaw(raw); sErr != nil {
+			err = errtrace.WrapCode(sErr, errtrace.ErrSettingsPersist, "persist settings")
+			return
+		}
+		snap, err = snapshotFromRaw(raw)
+	})
+	return snap, err
 }
 
 // Subscribe returns a buffered channel (cap 4) and a cancel func. Per spec
