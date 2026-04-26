@@ -94,36 +94,30 @@ func TestExportSpec_HasFilter(t *testing.T) {
 	}
 }
 
-func TestBuildExportQuery_Composition(t *testing.T) {
+// TestEmailExportFilterFromSpec verifies the spec→filter translation
+// consumed by `Store.QueryEmailExportRows` and `Store.CountEmails`.
+// (The SQL composition itself lives in store and is covered by
+// `TestBuildEmailExportQuery_Composition` over there.)
+func TestEmailExportFilterFromSpec(t *testing.T) {
 	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	t1 := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
 
 	cases := []struct {
-		name       string
-		spec       ExportSpec
-		wantClause string
-		wantArgs   int
+		name string
+		in   ExportSpec
+		want store.EmailExportFilter
 	}{
-		{"empty", ExportSpec{}, "", 0},
-		{"alias", ExportSpec{Alias: "a"}, "Alias = ?", 1},
-		{"since", ExportSpec{Since: t0}, "ReceivedAt >= ?", 1},
-		{"until", ExportSpec{Until: t1}, "ReceivedAt < ?", 1},
-		{"all", ExportSpec{Alias: "a", Since: t0, Until: t1}, "Alias = ? AND ReceivedAt >= ? AND ReceivedAt < ?", 3},
+		{"empty", ExportSpec{}, store.EmailExportFilter{}},
+		{"alias", ExportSpec{Alias: "a"}, store.EmailExportFilter{Alias: "a"}},
+		{"since", ExportSpec{Since: t0}, store.EmailExportFilter{Since: t0}},
+		{"until", ExportSpec{Until: t1}, store.EmailExportFilter{Until: t1}},
+		{"all", ExportSpec{Alias: "a", Since: t0, Until: t1},
+			store.EmailExportFilter{Alias: "a", Since: t0, Until: t1}},
 	}
 	for _, c := range cases {
-		q, args := buildExportQuery(c.spec)
-		if c.wantClause == "" {
-			if strings.Contains(q, "WHERE") {
-				t.Errorf("%s: expected no WHERE, got %q", c.name, q)
-			}
-		} else if !strings.Contains(q, c.wantClause) {
-			t.Errorf("%s: expected clause %q in %q", c.name, c.wantClause, q)
-		}
-		if len(args) != c.wantArgs {
-			t.Errorf("%s: want %d args, got %d", c.name, c.wantArgs, len(args))
-		}
-		if !strings.Contains(q, "ORDER BY Id ASC") {
-			t.Errorf("%s: missing ORDER BY: %q", c.name, q)
+		got := emailExportFilterFromSpec(c.in)
+		if got != c.want {
+			t.Errorf("%s: got %+v want %+v", c.name, got, c.want)
 		}
 	}
 }
