@@ -78,13 +78,23 @@ func TestNewEmailsService_RejectsNilOpener(t *testing.T) {
 	if !res.HasError() {
 		t.Fatal("expected error when opener is nil, got ok")
 	}
-	var coded *errtrace.CodedError
+	var coded *errtrace.Coded
 	if !errors.As(res.Error(), &coded) {
-		t.Fatalf("expected CodedError, got %T", res.Error())
+		t.Fatalf("expected *errtrace.Coded, got %T", res.Error())
 	}
 	if coded.Code != errtrace.ErrCoreInvalidArgument {
 		t.Fatalf("expected ErrCoreInvalidArgument, got %v", coded.Code)
 	}
+}
+
+// ctxValue scans a Coded's slice-shaped Context for the given key.
+func ctxValue(c *errtrace.Coded, key string) (any, bool) {
+	for _, f := range c.Context {
+		if f.Key == key {
+			return f.Value, true
+		}
+	}
+	return nil, false
 }
 
 func TestEmailsService_List_PropagatesOpenError(t *testing.T) {
