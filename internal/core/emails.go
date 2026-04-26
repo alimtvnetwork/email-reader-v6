@@ -80,6 +80,12 @@ type emailsStore interface {
 	// CountUnreadEmails is the Phase 4 (P4.5) extension. Counts rows
 	// with `IsRead = 0` matching the alias (empty alias = all).
 	CountUnreadEmails(ctx context.Context, alias string) (int, error)
+	// SetEmailDeletedAt is the Phase 4 (P4.3) extension. Sets
+	// `Emails.DeletedAt` for every (alias, uid) pair: a non-nil
+	// `*int64` writes unix-seconds (delete); nil writes SQL NULL
+	// (undelete). Returns total RowsAffected across all batches;
+	// (0, nil) for empty `uids`.
+	SetEmailDeletedAt(ctx context.Context, alias string, uids []uint32, deletedAt *int64) (int64, error)
 }
 
 // storeOpener returns an open emailsStore plus a `close` callback the
