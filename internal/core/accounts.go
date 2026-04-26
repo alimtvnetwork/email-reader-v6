@@ -61,12 +61,20 @@ func AddAccount(in AccountInput) errtrace.Result[*AddAccountResult] {
 	}
 
 	acct := buildAccount(in, clean)
+	existed := cfg.FindAccount(acct.Alias) != nil
 	cfg.UpsertAccount(acct)
 	if err := config.Save(cfg); err != nil {
 		return errtrace.Err[*AddAccountResult](
 			errtrace.WrapCode(err, errtrace.ErrConfigEncode, "save config").
 				WithContext("Alias", in.Alias),
 		)
+	}
+	// Publish AFTER persistence so consumers (e.g. Tools.diagCache)
+	// only invalidate on a state that actually exists on disk.
+	if existed {
+		publishAccountEvent(AccountUpdated, acct.Alias)
+	} else {
+		publishAccountEvent(AccountAdded, acct.Alias)
 	}
 	p, _ := config.Path()
 	return errtrace.Ok(&AddAccountResult{
