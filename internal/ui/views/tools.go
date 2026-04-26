@@ -21,10 +21,12 @@ type ToolsOptions struct {
 	OnRulesChanged    func()
 }
 
-// BuildTools returns the Tools view with one tab per form.
+// BuildTools returns the Tools view with one tab per form / sub-tool.
+// As of 2026-04-26 it ships: Add account, Add rule, Doctor, Diagnose;
+// Read / Export CSV / OpenUrl land with `core.Tools`.
 func BuildTools(opts ToolsOptions) fyne.CanvasObject {
 	heading := widget.NewLabelWithStyle("Tools", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-	subtitle := widget.NewLabel("Mutating actions. Each form runs inline — no modal popups.")
+	subtitle := widget.NewLabel("Mutating actions and read-only diagnostics. Each tab runs inline — no modal popups.")
 
 	tabs := container.NewAppTabs(
 		container.NewTabItem("Add account", BuildAddAccountForm(AddAccountFormOptions{
@@ -33,10 +35,11 @@ func BuildTools(opts ToolsOptions) fyne.CanvasObject {
 		container.NewTabItem("Add rule", BuildAddRuleForm(AddRuleFormOptions{
 			OnSaved: opts.OnRulesChanged,
 		})),
-		container.NewTabItem("Remove", placeholderTab("Remove account / rule lands in Step 17.")),
-		container.NewTabItem("Read", placeholderTab("One-shot fetch form lands in Step 18.")),
-		container.NewTabItem("Export CSV", placeholderTab("CSV export form lands in Step 19.")),
-		container.NewTabItem("Diagnose", placeholderTab("Connection diagnose form lands in Step 20.")),
+		container.NewTabItem("Doctor", BuildDoctorTab()),
+		container.NewTabItem("Diagnose", BuildDiagnoseTab()),
+		container.NewTabItem("Read", placeholderTab("One-shot fetch form lands with core.Tools (06-tools/01-backend.md).")),
+		container.NewTabItem("Export CSV", placeholderTab("CSV export form lands with core.Tools (06-tools/01-backend.md).")),
+		container.NewTabItem("OpenUrl", placeholderTab("Manual URL launcher lands with core.Tools (06-tools/01-backend.md).")),
 	)
 	tabs.SetTabLocation(container.TabLocationTop)
 

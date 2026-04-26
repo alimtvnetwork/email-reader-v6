@@ -113,6 +113,18 @@ func DecodePassword(b64 string) (string, error) {
 	return SanitizePassword(string(b)), nil
 }
 
+// DecodeRawPassword base64-decodes a stored password WITHOUT sanitization.
+// Used by `core.Doctor` to expose what's truly stored on disk so the user
+// can see hidden whitespace / zero-width chars before they hit IMAP.
+// Never call this for actual login — use DecodePassword.
+func DecodeRawPassword(b64 string) ([]byte, error) {
+	b, err := base64.StdEncoding.DecodeString(strings.TrimSpace(b64))
+	if err != nil {
+		return nil, errtrace.Wrap(err, "decode raw password")
+	}
+	return b, nil
+}
+
 // ExeDir returns the directory that holds the running executable.
 // Falls back to the current working directory in tests / `go run`.
 func ExeDir() (string, error) {
