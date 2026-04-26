@@ -29,6 +29,11 @@ type Options struct {
 	Logger      *log.Logger // optional; defaults to stdout
 	Verbose     bool        // if true, log every poll step. Default: only state changes.
 	Bus         *Bus        // optional; structured event stream for the UI. CLI leaves nil.
+	// PollSecondsCh, when non-nil, lets a Settings consumer push live
+	// PollSeconds updates. Values are clamped to 1..60 and applied on the
+	// NEXT loop iteration (in-flight polls are not interrupted). Per
+	// spec/21-app/02-features/07-settings/01-backend.md §8 (CF-W1).
+	PollSecondsCh <-chan int
 }
 
 // ts returns the compact HH:MM:SS prefix we put on every line. The CLI
@@ -166,6 +171,14 @@ func Run(ctx context.Context, opts Options) error {
 	tick := time.NewTimer(0)
 	defer tick.Stop()
 	st := &pollState{startedAt: time.Now()}
+	return runLoop(ctx, opts, logger, tick, st, &poll)
+}
+
+// runLoop owns the main select loop. Extracted so Run stays ≤15 statements.
+// `poll` is held by pointer so live-reload (PollSecondsCh) can mutate it
+// between iterations without interrupting an in-flight poll.
+func runLoop(ctx context.Context, opts Options, logger *log.Logger, tick *time.Timer, st *pollState, poll *time.Duration) error {
+	alias := opts.Account.Alias
 	for {
 		select {
 		case <-ctx.Done():
@@ -174,6 +187,10 @@ func Run(ctx context.Context, opts Options) error {
 				ts(), time.Since(st.startedAt).Round(time.Second), st.pollCount)
 			opts.Bus.Publish(Event{Kind: EventStopped, Alias: alias})
 			return nil
+		case secs, ok := <-opts.PollSecondsCh:
+			if ok {
+				applyPollReload(logger, alias, poll, secs)
+			}
 		case <-tick.C:
 			st.pollCount++
 			stats, err := pollOnce(ctx, opts, logger)
@@ -182,9 +199,28 @@ func Run(ctx context.Context, opts Options) error {
 			} else if stats != nil {
 				handlePollOK(logger, opts, st, stats)
 			}
-			tick.Reset(poll)
+			tick.Reset(*poll)
 		}
 	}
+}
+
+// applyPollReload clamps and applies a new PollSeconds value, logging the
+// change. The new cadence takes effect on the next tick (in-flight polls
+// are NOT interrupted) per spec CF-W1.
+func applyPollReload(logger *log.Logger, alias string, poll *time.Duration, secs int) {
+	if secs < 1 {
+		secs = 1
+	}
+	if secs > 60 {
+		secs = 60
+	}
+	next := time.Duration(secs) * time.Second
+	if next == *poll {
+		return
+	}
+	logger.Printf("%s  ⚙ [%s] poll cadence reloaded: %s → %s (applies next tick)",
+		ts(), alias, *poll, next)
+	*poll = next
 }
 
 // shortPath strips a long /Applications/.../Google Chrome path to just the

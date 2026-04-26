@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 	"text/tabwriter"
+	"time"
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/spf13/cobra"
@@ -324,17 +325,53 @@ func runWatch(parent context.Context, alias string, verbose bool) error {
 	ctx, stop := newWatchContext(parent)
 	defer stop()
 
+	pollCh, cancelPoll := startPollReloadBridge(ctx)
+	defer cancelPoll()
+
 	logger := log.New(os.Stdout, "", 0)
 	return watcher.Run(ctx, watcher.Options{
-		Account:     acct,
-		PollSeconds: cfg.Watch.PollSeconds,
-		Engine:      engine,
-		Launcher:    launcher,
-		Store:       st,
-		Logger:      logger,
-		Verbose:     verbose,
+		Account:       acct,
+		PollSeconds:   cfg.Watch.PollSeconds,
+		Engine:        engine,
+		Launcher:      launcher,
+		Store:         st,
+		Logger:        logger,
+		Verbose:       verbose,
+		PollSecondsCh: pollCh,
 	})
 }
+
+// startPollReloadBridge subscribes to core.Settings and forwards every
+// `PollSeconds` change as an int onto the returned channel. Wires the
+// CF-W1 contract from spec/21-app/02-features/07-settings/01-backend.md §8.
+// On any setup failure (e.g., config not loadable) it returns (nil, no-op):
+// the watcher then runs with a static cadence — exactly the pre-Settings
+// behaviour, which is the safest fallback.
+func startPollReloadBridge(ctx context.Context) (<-chan int, func()) {
+	s := core.NewSettings(time.Now)
+	if s.HasError() {
+		return nil, func() {}
+	}
+	events, cancel := s.Value().Subscribe(ctx)
+	out := make(chan int, 4)
+	go forwardPollSeconds(events, out)
+	return out, cancel
+}
+
+// forwardPollSeconds drains Settings events and emits PollSeconds ints.
+// Closing of `events` (via cancel) terminates the goroutine cleanly.
+func forwardPollSeconds(events <-chan core.SettingsEvent, out chan<- int) {
+	for ev := range events {
+		select {
+		case out <- int(ev.Snapshot.PollSeconds):
+		default:
+			// watcher hasn't drained yet — drop; it will pick up the
+			// latest value on the NEXT Settings event.
+		}
+	}
+	close(out)
+}
+
 
 // resolveWatchAccount picks the watch target by alias (or first when empty).
 func resolveWatchAccount(cfg *config.Config, alias string) (config.Account, error) {
