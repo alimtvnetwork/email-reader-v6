@@ -120,7 +120,7 @@ func TestDashboard_Summary_GoldenProjection(t *testing.T) {
 // Mirrors the project's `newTestStore` pattern in
 // `internal/store/store_test.go` — file DB (not `:memory:`) so WAL
 // pragmas apply and the migration ledger persists.
-func openGoldenStore(t *testing.T) *store.Store {
+func openGoldenStore(t testing.TB) *store.Store {
 	t.Helper()
 	dir := t.TempDir()
 	st, err := store.OpenAt(filepath.Join(dir, "golden.db"))
@@ -134,7 +134,7 @@ func openGoldenStore(t *testing.T) *store.Store {
 // seedGoldenEmails inserts `n` distinct emails for the given alias,
 // each with a unique MessageId+Uid so UpsertEmail doesn't dedup them
 // into a single row (which would silently break the count assertions).
-func seedGoldenEmails(ctx context.Context, t *testing.T, st *store.Store, alias string, n int) {
+func seedGoldenEmails(ctx context.Context, t testing.TB, st *store.Store, alias string, n int) {
 	t.Helper()
 	for i := 0; i < n; i++ {
 		_, _, err := st.UpsertEmail(ctx, &store.Email{
