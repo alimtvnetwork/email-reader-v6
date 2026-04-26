@@ -233,13 +233,13 @@ func (s *Store) GetWatchState(ctx context.Context, alias string) (WatchState, er
 func (s *Store) UpsertWatchState(ctx context.Context, ws WatchState) error {
 	_, err := s.DB.ExecContext(ctx, `
 		INSERT INTO WatchState (Alias, LastUid, LastSubject, LastReceivedAt, UpdatedAt)
-		VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+		VALUES (?, ?, ?, ?, `+sqliteRFC3339NowExpr+`)
 		ON CONFLICT(Alias) DO UPDATE SET
 			LastUid        = excluded.LastUid,
 			LastSubject    = excluded.LastSubject,
 			LastReceivedAt = excluded.LastReceivedAt,
-			UpdatedAt      = CURRENT_TIMESTAMP`,
-		ws.Alias, ws.LastUid, ws.LastSubject, ws.LastReceivedAt,
+			UpdatedAt      = `+sqliteRFC3339NowExpr+`,
+		ws.Alias, ws.LastUid, ws.LastSubject, formatRFC3339UTC(ws.LastReceivedAt),
 	)
 	if err != nil {
 		return errtrace.Wrap(err, "upsert watch state")
