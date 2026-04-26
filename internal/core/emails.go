@@ -80,6 +80,11 @@ type emailsStore interface {
 	// CountUnreadEmails is the Phase 4 (P4.5) extension. Counts rows
 	// with `IsRead = 0` matching the alias (empty alias = all).
 	CountUnreadEmails(ctx context.Context, alias string) (int, error)
+	// CountDeletedEmails is the Slice #100 extension. Counts rows
+	// with `DeletedAt IS NOT NULL` matching the alias (empty alias =
+	// all). Powers `EmailCounts.Deleted` now that m0012 has shipped
+	// the column.
+	CountDeletedEmails(ctx context.Context, alias string) (int, error)
 	// SetEmailDeletedAt is the Phase 4 (P4.3) extension. Sets
 	// `Emails.DeletedAt` for every (alias, uid) pair: a non-nil
 	// `*int64` writes unix-seconds (delete); nil writes SQL NULL
@@ -292,23 +297,23 @@ func (s *EmailsService) MarkRead(ctx context.Context, alias string, uids []uint3
 // EmailCounts is the toolbar/dashboard projection populated by
 // `(*EmailsService).Counts`. Spec
 // `spec/21-app/02-features/02-emails/01-backend.md` §2.6 defines the
-// shape as `{Total, Unread, Deleted}` — the `Deleted` field is wired
-// to a constant `0` for now because the M0010 migration shipped
-// `IsFlagged` instead of the spec's `DeletedAt` column. Soft-delete
-// tracking lands in P4.3 (deferred pending the M0010 reconciliation
-// decision); when it does, only this struct's `Deleted` populator
-// changes and the field name is already in place so callers compile
-// through.
+// shape as `{Total, Unread, Deleted}`. As of Slice #100, `Deleted`
+// is populated from a real `WHERE DeletedAt IS NOT NULL` COUNT query
+// against the column m0012 introduced — three independent COUNTs
+// inside one open store handle, mirroring the rationale documented
+// on `EmailsCountUnreadAll`.
 type EmailCounts struct {
 	Total   int
 	Unread  int
-	Deleted int // always 0 until P4.3; present so the spec shape is stable.
+	Deleted int
 }
 
-// Counts returns total + unread (and zero-pinned deleted, see above)
-// for the given alias. Empty alias = all accounts. Issues two
-// independent COUNT queries against the store inside one open
-// handle; on either failure wraps with `ErrDbQueryEmail` + alias ctx.
+// Counts returns total + unread + deleted for the given alias. Empty
+// alias = all accounts. Issues three independent COUNT queries
+// against the store inside one open handle; on any failure wraps
+// with `ErrDbQueryEmail` + alias ctx and a query-specific op suffix
+// (`Counts.Total` / `Counts.Unread` / `Counts.Deleted`) so log
+// readers can tell which projection field tripped.
 //
 // Spec: §2.6 / §3.5. Used by the toolbar badge and the dashboard
 // `AccountHealthRow`.
@@ -334,7 +339,14 @@ func (s *EmailsService) Counts(ctx context.Context, alias string) errtrace.Resul
 				WithContext("alias", alias),
 		)
 	}
-	return errtrace.Ok(EmailCounts{Total: total, Unread: unread, Deleted: 0})
+	deleted, err := st.CountDeletedEmails(ctx, alias)
+	if err != nil {
+		return errtrace.Err[EmailCounts](
+			errtrace.WrapCode(err, errtrace.ErrDbQueryEmail, "core.EmailsService.Counts.Deleted").
+				WithContext("alias", alias),
+		)
+	}
+	return errtrace.Ok(EmailCounts{Total: total, Unread: unread, Deleted: deleted})
 }
 
 func toSummary(e store.Email) EmailSummary {
