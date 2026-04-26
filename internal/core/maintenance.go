@@ -91,9 +91,7 @@ func NewMaintenance(opts MaintenanceOptions) errtrace.Result[*Maintenance] {
 }
 
 // Start spawns the maintenance goroutine. Idempotent: a second call
-// while already running is a no-op (returns the same handle's state).
-// Returns the parent context's cancel func so Stop can wait for clean
-// shutdown.
+// while already running is a no-op.
 func (m *Maintenance) Start(parent context.Context) {
 	m.startMu.Lock()
 	defer m.startMu.Unlock()
@@ -101,9 +99,10 @@ func (m *Maintenance) Start(parent context.Context) {
 		return
 	}
 	ctx, cancel := context.WithCancel(parent)
+	done := make(chan struct{})
 	m.cancel = cancel
-	m.done = make(chan struct{})
-	go m.run(ctx)
+	m.done = done
+	go m.run(ctx, done)
 }
 
 // Stop cancels the goroutine context and waits up to `timeout` for it
@@ -129,8 +128,8 @@ func (m *Maintenance) Stop(timeout time.Duration) {
 
 // run is the goroutine body. Wakes every TickInterval and asks
 // ShouldRunRetentionTick whether to sweep. lastRun is goroutine-local.
-func (m *Maintenance) run(ctx context.Context) {
-	defer close(m.done)
+func (m *Maintenance) run(ctx context.Context, done chan struct{}) {
+	defer close(done)
 	ticker := time.NewTicker(m.opts.TickInterval)
 	defer ticker.Stop()
 	var lastRun time.Time
