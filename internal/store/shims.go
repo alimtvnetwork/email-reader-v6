@@ -108,3 +108,57 @@ func (s *Store) QueryOpenedUrls(ctx context.Context, f OpenedUrlListFilter) (Row
 	}
 	return rows, nil
 }
+
+// SetEmailRead flips Emails.IsRead for every (alias, uid) pair in
+// `uids`. Returns the cumulative RowsAffected across all batches.
+//
+// **Batching contract** (per spec/21-app/02-features/02-emails/01-backend.md
+// §3.3): a single UPDATE may bind at most
+// `queries.SetEmailReadMaxBatch` (999) UID placeholders — the SQLite
+// `SQLITE_MAX_VARIABLE_NUMBER` floor. We split larger inputs into
+// chunks of that size and wrap the whole sequence in one
+// transaction so callers see all-or-nothing semantics: any chunk
+// failing rolls back every preceding chunk in the same call.
+//
+// **Empty `uids`**: returns (0, nil) without opening a transaction
+// (matches the spec's "empty UIDs → no SQL" branch and keeps the
+// `MarkRead_EmptyUids_NoSql` test deterministic).
+//
+// **Idempotency**: SQLite's UPDATE returns RowsAffected even when the
+// new value equals the old — so re-issuing the same op may report
+// nonzero changes. The spec's idempotency contract is *behavioral*
+// (final state matches), not *RowsAffected = 0 on repeat*; tests
+// assert the former.
+func (s *Store) SetEmailRead(ctx context.Context, alias string, uids []uint32, read bool) (int64, error) {
+	if len(uids) == 0 {
+		return 0, nil
+	}
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, errtrace.Wrap(err, "SetEmailRead.Begin")
+	}
+	var total int64
+	for off := 0; off < len(uids); off += queries.SetEmailReadMaxBatch {
+		end := off + queries.SetEmailReadMaxBatch
+		if end > len(uids) {
+			end = len(uids)
+		}
+		q, args := queries.SetEmailRead(read, alias, uids[off:end])
+		res, err := tx.ExecContext(ctx, q, args...)
+		if err != nil {
+			_ = tx.Rollback()
+			return 0, errtrace.Wrap(err, "SetEmailRead.Exec")
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			_ = tx.Rollback()
+			return 0, errtrace.Wrap(err, "SetEmailRead.RowsAffected")
+		}
+		total += n
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, errtrace.Wrap(err, "SetEmailRead.Commit")
+	}
+	return total, nil
+}
+
