@@ -41,22 +41,24 @@ type ActivitySource = activitySource
 // source — same convention as `NewStoreAccountHealthSource`.
 //
 // **Kind mapping**: the store returns the raw `core.WatchEventKind`
-// integer enum (1..4); this adapter maps it to the spec
+// integer enum (1..6); this adapter maps it to the spec
 // `core.ActivityKind` string enum:
 //
-//   - 1 (WatchStart)     → ActivityPollStarted
-//   - 2 (WatchStop)      → DROPPED (no spec ActivityKind for clean
-//                          shutdown; Stop is a watcher-internal
-//                          lifecycle event, not user-visible activity)
-//   - 3 (WatchError)     → ActivityPollFailed
-//   - 4 (WatchHeartbeat) → ActivityPollSucceeded (each heartbeat means
-//                          one successful poll completed)
+//   - 1 (WatchStart)        → ActivityPollStarted
+//   - 2 (WatchStop)         → DROPPED (no spec ActivityKind for clean
+//                             shutdown; Stop is a watcher-internal
+//                             lifecycle event, not user-visible activity)
+//   - 3 (WatchError)        → ActivityPollFailed
+//   - 4 (WatchHeartbeat)    → ActivityPollSucceeded (each heartbeat means
+//                             one successful poll completed)
+//   - 5 (WatchEmailStored)  → ActivityEmailStored (Slice #107)
+//   - 6 (WatchRuleMatched)  → ActivityRuleMatched (Slice #107)
 //
 // Unknown integer values are also dropped — the row is silently
-// elided from the returned slice so a future watcher emitting Kind=5
-// (EmailStored) can roll out without crashing the dashboard on
-// older binaries. The `out` slice's length may therefore be ≤ the
-// store row count; the caller (`RecentActivity`) treats this as
+// elided from the returned slice so a future watcher emitting
+// Kind=7+ can roll out without crashing the dashboard on older
+// binaries. The `out` slice's length may therefore be ≤ the store
+// row count; the caller (`RecentActivity`) treats this as
 // "honoured limit, fewer rows available" which is correct semantics.
 //
 // Error envelope: store-layer failures are wrapped with `ErrDbOpen`
@@ -111,6 +113,10 @@ func mapWatchKindToActivityKind(k int) (ActivityKind, bool) {
 		return ActivityPollSucceeded, true
 	case WatchError:
 		return ActivityPollFailed, true
+	case WatchEmailStored:
+		return ActivityEmailStored, true
+	case WatchRuleMatched:
+		return ActivityRuleMatched, true
 	default:
 		// WatchStop + any unknown integer → dropped.
 		return "", false
