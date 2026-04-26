@@ -40,6 +40,7 @@ type WatchRuntime struct {
 	Bus          *watcher.Bus
 	Store        *store.Store
 	Settings     *core.Settings
+	PollChans    *core.PollChanRegistry
 	cfgMu        sync.RWMutex
 	cfg          *config.Config
 	pollSecondsF func() int
