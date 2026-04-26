@@ -36,6 +36,12 @@ type Email struct {
 	BodyHtml   string
 	ReceivedAt time.Time
 	FilePath   string
+	// IsRead reflects the M0010 `Emails.IsRead` column (1 once the
+	// user has opened/viewed the email; 0 otherwise). Surfaced on
+	// the Go struct so service-layer filters (e.g. EmailQuery.OnlyUnread
+	// in core/emails_query.go) can do `if e.IsRead { continue }` without
+	// a second round-trip. Default false matches the DB DEFAULT 0.
+	IsRead bool
 }
 
 // WatchState mirrors a row in the WatchState table.
