@@ -317,6 +317,7 @@ func (s *EmailsService) Counts(ctx context.Context, alias string) errtrace.Resul
 	return errtrace.Ok(EmailCounts{Total: total, Unread: unread, Deleted: 0})
 }
 
+func toSummary(e store.Email) EmailSummary {
 	s := EmailSummary{
 		Id:       e.Id,
 		Alias:    e.Alias,
