@@ -1,5 +1,5 @@
-// maintenance_log_jobs_test.go pins the format of the new VACUUM and
-// wal_checkpoint log lines.
+// maintenance_log_jobs_test.go pins the structured-log tail for the
+// VACUUM and wal_checkpoint events. Spec/23-app-database/04 §6.
 package ui
 
 import (
@@ -10,7 +10,7 @@ import (
 
 func TestFormatVacuumRun_Success(t *testing.T) {
 	got := FormatVacuumRun(2097152, nil)
-	want := "ui: maintenance: vacuum: reclaimed_bytes=2097152 ok"
+	want := "event=vacuum reclaimed_bytes=2097152 ok"
 	if got != want {
 		t.Fatalf("vacuum success format mismatch:\n got %q\nwant %q", got, want)
 	}
@@ -27,8 +27,8 @@ func TestFormatVacuumRun_NegativeReclaimedPreserved(t *testing.T) {
 
 func TestFormatVacuumRun_Error(t *testing.T) {
 	got := FormatVacuumRun(123, errors.New("locked"))
-	if !strings.HasPrefix(got, "ui: maintenance: vacuum: ") {
-		t.Errorf("missing prefix: %q", got)
+	if !strings.HasPrefix(got, "event=vacuum ") {
+		t.Errorf("missing event prefix: %q", got)
 	}
 	if !strings.Contains(got, "reclaimed_bytes=123") || !strings.Contains(got, "error=locked") {
 		t.Errorf("error format missing fields: %q", got)
@@ -40,7 +40,7 @@ func TestFormatVacuumRun_Error(t *testing.T) {
 
 func TestFormatWalCheckpoint_Success(t *testing.T) {
 	got := FormatWalCheckpoint(42, nil)
-	want := "ui: maintenance: wal_checkpoint: pages=42 ok"
+	want := "event=wal_checkpoint pages=42 ok"
 	if got != want {
 		t.Fatalf("wal_checkpoint format mismatch:\n got %q\nwant %q", got, want)
 	}
@@ -48,6 +48,9 @@ func TestFormatWalCheckpoint_Success(t *testing.T) {
 
 func TestFormatWalCheckpoint_Error(t *testing.T) {
 	got := FormatWalCheckpoint(0, errors.New("io error"))
+	if !strings.HasPrefix(got, "event=wal_checkpoint ") {
+		t.Errorf("missing event prefix: %q", got)
+	}
 	if !strings.Contains(got, "pages=0") || !strings.Contains(got, "error=io error") {
 		t.Errorf("error format missing fields: %q", got)
 	}

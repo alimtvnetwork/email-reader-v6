@@ -1,8 +1,13 @@
-// maintenance_log_test.go locks the retention-sweep log format. The
-// format is part of the operational contract: ops greps for the
-// prefix "ui: maintenance: retention sweep" to confirm the daily tick
-// is alive in production. Changing the format breaks dashboards and
-// runbooks, so this test must fail loudly if anyone touches it.
+// maintenance_log_test.go locks the structured-log "tail" emitted by
+// the maintenance loop. Spec/23-app-database/04 §6 mandates the
+// `component=maintenance event=… key=value` shape; the prefix
+// (`component=maintenance`) is added by slog.With at logger
+// construction, so the Format* helpers return only the event tail.
+//
+// The format is part of the operational contract — ops greps for
+// `component=maintenance event=prune` to confirm the daily tick is
+// alive. Changing the tail breaks dashboards / runbooks, so this
+// suite must fail loudly on any drift.
 package ui
 
 import (
@@ -13,7 +18,7 @@ import (
 
 func TestFormatRetentionSweep_Success_IncludesCountAndOk(t *testing.T) {
 	got := FormatRetentionSweep(42, nil)
-	want := "ui: maintenance: retention sweep: deleted=42 ok"
+	want := "event=prune deleted=42 ok"
 	if got != want {
 		t.Fatalf("success format mismatch:\n got %q\nwant %q", got, want)
 	}
@@ -24,7 +29,7 @@ func TestFormatRetentionSweep_Success_ZeroCountStillLogged(t *testing.T) {
 	// liveness monitoring — operators MUST be able to confirm the
 	// sweeper is firing even on an idle DB. Lock the line shape.
 	got := FormatRetentionSweep(0, nil)
-	want := "ui: maintenance: retention sweep: deleted=0 ok"
+	want := "event=prune deleted=0 ok"
 	if got != want {
 		t.Fatalf("zero-count format mismatch:\n got %q\nwant %q", got, want)
 	}
@@ -35,8 +40,8 @@ func TestFormatRetentionSweep_Error_PreservesCountAndError(t *testing.T) {
 	// driver. Format must surface both.
 	err := errors.New("disk full")
 	got := FormatRetentionSweep(7, err)
-	if !strings.HasPrefix(got, "ui: maintenance: retention sweep: ") {
-		t.Errorf("missing canonical prefix: %q", got)
+	if !strings.HasPrefix(got, "event=prune ") {
+		t.Errorf("missing canonical event prefix: %q", got)
 	}
 	if !strings.Contains(got, "deleted=7") {
 		t.Errorf("partial-delete count lost: %q", got)
@@ -67,7 +72,7 @@ func TestFormatRetentionSweep_SingleLine(t *testing.T) {
 
 func TestFormatAnalyzeRun_Success_IncludesTriggerAndOk(t *testing.T) {
 	got := FormatAnalyzeRun(1500, nil)
-	want := "ui: maintenance: analyze: triggered_at=1500 ok"
+	want := "event=analyze triggered_at=1500 ok"
 	if got != want {
 		t.Fatalf("analyze success format mismatch:\n got %q\nwant %q", got, want)
 	}
@@ -75,8 +80,8 @@ func TestFormatAnalyzeRun_Success_IncludesTriggerAndOk(t *testing.T) {
 
 func TestFormatAnalyzeRun_Error_PreservesTriggerAndError(t *testing.T) {
 	got := FormatAnalyzeRun(1234, errors.New("locked"))
-	if !strings.HasPrefix(got, "ui: maintenance: analyze: ") {
-		t.Errorf("missing canonical prefix: %q", got)
+	if !strings.HasPrefix(got, "event=analyze ") {
+		t.Errorf("missing canonical event prefix: %q", got)
 	}
 	if !strings.Contains(got, "triggered_at=1234") {
 		t.Errorf("trigger count lost: %q", got)
