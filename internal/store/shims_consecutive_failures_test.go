@@ -16,6 +16,7 @@ package store
 import (
 	"context"
 	"testing"
+	"time"
 )
 
 func TestBumpConsecutiveFailures_MissingAlias_InsertsWithOne(t *testing.T) {
@@ -78,9 +79,10 @@ func TestResetConsecutiveFailures_PreservesCursor(t *testing.T) {
 	// Seed via the regular UpsertWatchState path so the cursor
 	// columns are populated as the watcher would leave them.
 	if err := s.UpsertWatchState(ctx, WatchState{
-		Alias:       alias,
-		LastUid:     12345,
-		LastSubject: "subject",
+		Alias:          alias,
+		LastUid:        12345,
+		LastSubject:    "subject",
+		LastReceivedAt: time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC),
 	}); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
