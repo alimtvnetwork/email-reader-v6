@@ -388,10 +388,9 @@ func (s *Store) CountEmails(ctx context.Context, alias string) (int, error) {
 	var n int
 	var err error
 	if alias == "" {
-		err = s.DB.QueryRowContext(ctx, `SELECT COUNT(1) FROM Emails`).Scan(&n)
+		err = s.DB.QueryRowContext(ctx, queries.EmailsCountAll).Scan(&n)
 	} else {
-		err = s.DB.QueryRowContext(ctx,
-			`SELECT COUNT(1) FROM Emails WHERE Alias = ?`, alias).Scan(&n)
+		err = s.DB.QueryRowContext(ctx, queries.EmailsCountByAlias, alias).Scan(&n)
 	}
 	if err != nil {
 		return 0, errtrace.Wrap(err, "count emails")

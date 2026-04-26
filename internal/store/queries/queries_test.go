@@ -67,3 +67,15 @@ func TestEmailsList_LimitWithoutOffset(t *testing.T) {
 		t.Fatalf("expected single arg [10], got %v", args)
 	}
 }
+
+func TestEmailsCount_Constants(t *testing.T) {
+	if !strings.Contains(EmailsCountAll, "COUNT(1) FROM Emails") {
+		t.Fatalf("EmailsCountAll wrong: %q", EmailsCountAll)
+	}
+	if strings.Contains(EmailsCountAll, "WHERE") {
+		t.Fatalf("EmailsCountAll must not have WHERE: %q", EmailsCountAll)
+	}
+	if !strings.Contains(EmailsCountByAlias, "WHERE Alias = ?") {
+		t.Fatalf("EmailsCountByAlias missing alias predicate: %q", EmailsCountByAlias)
+	}
+}
