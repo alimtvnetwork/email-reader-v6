@@ -344,3 +344,87 @@ internal/config/
 ```
 
 `internal/core/settings.go` is the only file in `internal/core` permitted to import `internal/config`. Verified by AST test in §12.
+
+---
+
+## 14. Symbol Map (AC → Go symbol)
+
+Authoritative bridge between the settings `97-acceptance-criteria.md` table and the production Go identifiers an AI implementer must touch. AC tables encode test names in their right column; this map covers the **service surface, types, and validators** an implementer needs to satisfy them. **Status legend:** ✅ shipped on `main` · ⏳ planned · 🧪 test-only · 🟡 partial.
+
+### 14.1 Service surface (`core.Settings`)
+
+| Concern                  | Go symbol                                                                 | File                                | Status |
+|--------------------------|---------------------------------------------------------------------------|-------------------------------------|:------:|
+| Service                  | `core.Settings` + `NewSettings(config.Manager, Clock) *Settings`          | `internal/core/settings.go`         |   ✅   |
+| Read-side projection     | `(*Settings).Get(ctx) errtrace.Result[SettingsSnapshot]`                  | `internal/core/settings.go`         |   ✅   |
+| Write                    | `(*Settings).Save(ctx, SettingsInput) errtrace.Result[SettingsSnapshot]`  | `internal/core/settings.go`         |   ✅   |
+| Reset                    | `(*Settings).ResetToDefaults(ctx) errtrace.Result[SettingsSnapshot]`      | `internal/core/settings.go`         |   ✅   |
+| Live updates             | `(*Settings).Subscribe(ctx) <-chan SettingsEvent`                         | `internal/core/settings_event.go`   |   ✅   |
+| Chrome detection         | `(*Settings).DetectChrome(ctx) errtrace.Result[ChromeDetectionReport]`    | `internal/core/settings_extension.go` |   ✅   |
+
+### 14.2 Projection / input types
+
+| Concern                  | Go symbol                                              | File                          | Status |
+|--------------------------|--------------------------------------------------------|-------------------------------|:------:|
+| Read snapshot            | `core.SettingsSnapshot`                                | `internal/core/settings_types.go` |   ✅   |
+| Write input              | `core.SettingsInput`                                   | `internal/core/settings_types.go` |   ✅   |
+| Defaults                 | `core.DefaultSettingsInput()`                          | `internal/core/settings_types.go` |   ✅   |
+| Theme / density / etc.   | `core.ThemeMode`, `core.Density`, `core.ChromeDetectionSource` | `internal/core/settings_types.go` | ✅ |
+| Event                    | `core.SettingsEvent` (`Snapshot SettingsSnapshot`)     | `internal/core/settings_types.go` |   ✅   |
+
+### 14.3 Validators (per §6 — one fn per code)
+
+| Code             | Go symbol                                              | File                               | Status |
+|------------------|--------------------------------------------------------|------------------------------------|:------:|
+| ER-SET-21770     | `validateInput(in SettingsInput) error` *(top-level)*  | `internal/core/settings_validate.go` |   ✅   |
+| ER-SET-21771     | `validatePollSeconds(v uint16) error`                  | `internal/core/settings_validate.go` |   ✅   |
+| ER-SET-21772     | `validateTheme(t ThemeMode) error`                     | `internal/core/settings_validate.go` |   ✅   |
+| ER-SET-21773     | `validateDensity(d Density) error`                     | `internal/core/settings_validate.go` |   ✅   |
+| ER-SET-21774     | `validateSchemes([]string) error`                      | `internal/core/settings_validate.go` |   ✅   |
+| ER-SET-21775     | `validateChromePath(p string) error`                   | `internal/core/settings_validate.go` |   ✅   |
+| ER-SET-21776     | `validateIncognitoArg(arg string) error`               | `internal/core/settings_validate.go` |   ✅   |
+| ER-SET-21777     | `validateLocalhostComposite(in SettingsInput) error`   | `internal/core/settings_validate.go` |   ✅   |
+| ER-SET-21778     | `validateMaintenanceKnobs(in SettingsInput) error`     | `internal/core/settings_validate.go` |   ✅   |
+| ER-SET-21779     | `validateRetentionDays(v uint16) error`                | `internal/core/settings_validate.go` |   ✅   |
+| —                | `normalizeInput(in SettingsInput) SettingsInput`       | `internal/core/settings_validate.go` |   ✅   |
+
+### 14.4 Maintenance knobs (consumed by `core.Maintenance`)
+
+| Concern                  | Go symbol                                                                 | File                                | Status |
+|--------------------------|---------------------------------------------------------------------------|-------------------------------------|:------:|
+| Retention sweep          | `OpenUrlsRetentionDays`, `PruneBatchSize`                                 | `internal/core/settings_types.go`   |   ✅   |
+| Weekly VACUUM            | `WeeklyVacuumOn`, `WeeklyVacuumHourLocal`                                 | `internal/core/settings_types.go`   |   ✅   |
+| WAL checkpoint cadence   | `WalCheckpointHours`                                                      | `internal/core/settings_types.go`   |   ✅   |
+| Wiring                   | `core.maintenanceOptionsFor(snap) MaintenanceOptions`                     | `internal/core/maintenance.go`      |   ✅   |
+| Scheduling helpers       | `core.ShouldRunWalCheckpoint`, `core.ShouldRunWeeklyVacuum`               | `internal/core/schedule.go`         |   ✅   |
+
+### 14.5 Persistence
+
+| Concern                  | Go symbol                                                                 | File                                | Status |
+|--------------------------|---------------------------------------------------------------------------|-------------------------------------|:------:|
+| Atomic write             | `config.WithWriteLock(func(*Config) error) error`                         | `internal/config/config.go`         |   ✅   |
+| Snapshot read            | `config.Manager.LoadSnapshot()`                                           | `internal/config/manager.go`        |   ⏳   |
+| Atomic file replace      | `config.Manager.WriteAtomic(snap Snapshot) error`                         | `internal/config/manager.go`        |   ⏳   |
+
+### 14.6 Errors & logging
+
+| Concern                  | Go symbol                                                                 | File                                | Status |
+|--------------------------|---------------------------------------------------------------------------|-------------------------------------|:------:|
+| Validation codes         | `errtrace.ErrSettings*` (21770..21779)                                    | `internal/errtrace/codes_gen.go`    |   ⏳   |
+| Persistence failure      | `errtrace.ErrSettingsPersistFailed`                                       | `internal/errtrace/codes_gen.go`    |   ⏳   |
+| Slog                     | `settingsSlog` (`component=settings`) + `FormatSettings*` helpers         | `internal/ui/settings_log.go`       |   ⏳   |
+
+### 14.7 Test contract
+
+| Concern                  | Test symbol                                                          | File                                            | Status |
+|--------------------------|----------------------------------------------------------------------|-------------------------------------------------|:------:|
+| Round-trip               | `TestSettings_SaveAndRoundTrip`, `TestSettings_GetReturnsDefaults`   | `internal/core/settings_test.go`                |   ✅   |
+| Validation matrix        | `TestSettings_ValidationErrors`, `TestSettings_ChromePathValidation` | `internal/core/settings_test.go`                |   ✅   |
+| Density rendering        | `TestSettings_Density*`                                              | `internal/core/settings_density_test.go`        |   ✅   |
+| Maintenance knobs        | `TestSettings_Maintenance*`                                          | `internal/core/settings_maintenance_test.go`    |   ✅   |
+| AST guard (§12)          | `Test_AST_OnlySettingsImportsConfig`                                 | `internal/core/ast_settings_only_imports_config_test.go` | ⏳ |
+| Race                     | `TestSettings_RaceClean`                                             | `internal/core/settings_race_test.go`           |   ⏳   |
+
+---
+
+**End of `07-settings/01-backend.md`**
