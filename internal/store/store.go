@@ -91,7 +91,7 @@ func (s *Store) migrate() error {
 			BodyHtml    TEXT    NOT NULL DEFAULT '',
 			ReceivedAt  DATETIME,
 			FilePath    TEXT    NOT NULL DEFAULT '',
-			CreatedAt   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+			CreatedAt   DATETIME NOT NULL DEFAULT ` + sqliteRFC3339NowExpr + `
 		)`,
 		`CREATE INDEX IF NOT EXISTS IxEmailsAliasUid ON Emails(Alias, Uid)`,
 		`CREATE TABLE IF NOT EXISTS WatchState (
@@ -99,14 +99,14 @@ func (s *Store) migrate() error {
 			LastUid        INTEGER NOT NULL DEFAULT 0,
 			LastSubject    TEXT    NOT NULL DEFAULT '',
 			LastReceivedAt DATETIME,
-			UpdatedAt      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+			UpdatedAt      DATETIME NOT NULL DEFAULT ` + sqliteRFC3339NowExpr + `
 		)`,
 		`CREATE TABLE IF NOT EXISTS OpenedUrls (
 			Id        INTEGER PRIMARY KEY AUTOINCREMENT,
 			EmailId   INTEGER NOT NULL,
 			RuleName  TEXT    NOT NULL DEFAULT '',
 			Url       TEXT    NOT NULL,
-			OpenedAt  DATETIME DEFAULT CURRENT_TIMESTAMP,
+			OpenedAt  DATETIME DEFAULT ` + sqliteRFC3339NowExpr + `,
 			FOREIGN KEY(EmailId) REFERENCES Emails(Id) ON DELETE CASCADE
 		)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS IxOpenedUrlsUnique ON OpenedUrls(EmailId, Url)`,
@@ -190,7 +190,7 @@ func (s *Store) UpsertEmail(ctx context.Context, e *Email) (int64, bool, error) 
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(MessageId) DO NOTHING`,
 		e.Alias, e.MessageId, e.Uid, e.FromAddr, e.ToAddr, e.CcAddr,
-		e.Subject, e.BodyText, e.BodyHtml, e.ReceivedAt, e.FilePath,
+		e.Subject, e.BodyText, e.BodyHtml, formatRFC3339UTC(e.ReceivedAt), e.FilePath,
 	)
 	if err != nil {
 		return 0, false, errtrace.Wrap(err, "insert email")
@@ -231,15 +231,17 @@ func (s *Store) GetWatchState(ctx context.Context, alias string) (WatchState, er
 
 // UpsertWatchState writes/updates the alias' last-seen position.
 func (s *Store) UpsertWatchState(ctx context.Context, ws WatchState) error {
-	_, err := s.DB.ExecContext(ctx, `
+	const upsertWatchStateQuery = `
 		INSERT INTO WatchState (Alias, LastUid, LastSubject, LastReceivedAt, UpdatedAt)
-		VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+		VALUES (?, ?, ?, ?, ` + sqliteRFC3339NowExpr + `)
 		ON CONFLICT(Alias) DO UPDATE SET
 			LastUid        = excluded.LastUid,
 			LastSubject    = excluded.LastSubject,
 			LastReceivedAt = excluded.LastReceivedAt,
-			UpdatedAt      = CURRENT_TIMESTAMP`,
-		ws.Alias, ws.LastUid, ws.LastSubject, ws.LastReceivedAt,
+			UpdatedAt      = ` + sqliteRFC3339NowExpr + `
+	`
+	_, err := s.DB.ExecContext(ctx, upsertWatchStateQuery,
+		ws.Alias, ws.LastUid, ws.LastSubject, formatRFC3339UTC(ws.LastReceivedAt),
 	)
 	if err != nil {
 		return errtrace.Wrap(err, "upsert watch state")
