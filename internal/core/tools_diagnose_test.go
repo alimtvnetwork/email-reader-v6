@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/lovable/email-read/internal/errtrace"
+	"github.com/lovable/email-read/internal/store"
 )
 
 // stubClock returns the configured time so cache TTL is deterministic.
