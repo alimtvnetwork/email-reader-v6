@@ -166,6 +166,12 @@ func BuildShell(aliases []string) fyne.CanvasObject {
 	detail := container.NewStack()
 	root := container.NewStack() // we swap the whole shell when accounts change
 
+	// services bundles the typed Phase 2 services (Dashboard / Emails /
+	// Rules). Constructed once at boot and threaded into every viewFor
+	// arm — replaces the per-call buildDashboardService /
+	// buildEmailsService / buildRulesService helpers from P2.3/P2.5/P2.7.
+	services := BuildServices()
+
 	// rebuildSidebar rebuilds the entire shell with a fresh aliases list —
 	// used after the Add Account form saves so the picker reflects truth.
 	var rebuildShell func()
@@ -178,7 +184,7 @@ func BuildShell(aliases []string) fyne.CanvasObject {
 	rebuildDetail = func() {
 		for _, it := range NavItems {
 			if it.Kind == state.Nav() {
-				detail.Objects = []fyne.CanvasObject{viewFor(it, state, gotoNav, rebuildShell)}
+				detail.Objects = []fyne.CanvasObject{viewFor(it, state, services, gotoNav, rebuildShell)}
 				detail.Refresh()
 				return
 			}
