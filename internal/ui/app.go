@@ -196,7 +196,13 @@ func viewFor(item NavItem, state *AppState, gotoNav func(NavKind), onAccountsCha
 	case NavAccounts:
 		return views.BuildAccounts(views.AccountsOptions{})
 	case NavWatch:
-		return views.BuildWatch(views.WatchOptions{Alias: state.Alias()})
+		rt := WatchRuntimeOrNil()
+		opts := views.WatchOptions{Alias: state.Alias()}
+		if rt != nil {
+			opts.Watch = rt.Watch
+			opts.PollSeconds = rt.PollSeconds
+		}
+		return views.BuildWatch(opts)
 	case NavTools:
 		return views.BuildTools(views.ToolsOptions{
 			OnAccountsChanged: onAccountsChanged,
