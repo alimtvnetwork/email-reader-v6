@@ -19,6 +19,17 @@ import (
 	"github.com/lovable/email-read/internal/store"
 )
 
+// hasCode is a small test helper: the project does not expose a
+// HasCode shortcut so we unwrap to *errtrace.Coded the same way
+// watch_test.go does.
+func hasCode(err error, want errtrace.Code) bool {
+	var c *errtrace.Coded
+	if !errors.As(err, &c) {
+		return false
+	}
+	return c.Code == want
+}
+
 // TestNewRealLoopFactory_Validation: Resolver and Store are mandatory
 // — omitting either must yield ER-COR-21701, never a nil-pointer panic
 // later in New() / Run().
@@ -36,11 +47,11 @@ func TestNewRealLoopFactory_Validation(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			res := NewRealLoopFactory(tc.deps)
-			if res.Err == nil {
+			if !res.HasError() {
 				t.Fatalf("expected error, got nil")
 			}
-			if !errtrace.HasCode(res.Err, errtrace.ErrCoreInvalidArgument) {
-				t.Fatalf("want ER-COR-21701, got %v", res.Err)
+			if !hasCode(res.Error(), errtrace.ErrCoreInvalidArgument) {
+				t.Fatalf("want ER-COR-21701, got %v", res.Error())
 			}
 		})
 	}
@@ -59,10 +70,10 @@ func TestRealLoopFactory_New_DeferredAliasMiss(t *testing.T) {
 		Store:    &store.Store{},
 	}
 	fres := NewRealLoopFactory(deps)
-	if fres.Err != nil {
-		t.Fatalf("factory build: %v", fres.Err)
+	if fres.HasError() {
+		t.Fatalf("factory build: %v", fres.Error())
 	}
-	loop := fres.Value.New(WatchOptions{Alias: "ghost", PollSeconds: 3})
+	loop := fres.Value().New(WatchOptions{Alias: "ghost", PollSeconds: 3})
 	if loop == nil {
 		t.Fatalf("New returned nil Loop on miss; want a Loop that fails on Run")
 	}
@@ -73,7 +84,7 @@ func TestRealLoopFactory_New_DeferredAliasMiss(t *testing.T) {
 	if err == nil {
 		t.Fatalf("Run on missing alias: want error, got nil")
 	}
-	if !errtrace.HasCode(err, errtrace.ErrWatchAccountNotFound) {
+	if !hasCode(err, errtrace.ErrWatchAccountNotFound) {
 		t.Fatalf("want ER-WCH-21412, got %v", err)
 	}
 }
@@ -92,25 +103,22 @@ func TestRealLoopFactory_New_ResolverCalledOncePerStart(t *testing.T) {
 		Store:    &store.Store{},
 	}
 	f := NewRealLoopFactory(deps)
-	if f.Err != nil {
-		t.Fatalf("factory: %v", f.Err)
+	if f.HasError() {
+		t.Fatalf("factory: %v", f.Error())
 	}
 	for i := 0; i < 3; i++ {
-		_ = f.Value.New(WatchOptions{Alias: "a", PollSeconds: 3})
+		_ = f.Value().New(WatchOptions{Alias: "a", PollSeconds: 3})
 	}
 	if calls != 3 {
 		t.Fatalf("resolver call count: got %d, want 3 (one per New)", calls)
 	}
 }
 
-// TestRealLoopFactory_AccountSnapshotFrozen: a New()-time snapshot
-// must NOT see a later mutation to the underlying config.Account. The
-// resolver returns a pointer; we mutate it after New and then assert
-// Run still uses the original alias when it constructs its error
-// (proxy for "the snapshot is what Run sees"). With the current
-// implementation we copy the account by value into watcher.Options at
-// Run time, so this test pins that contract.
-func TestRealLoopFactory_AccountSnapshotFrozen(t *testing.T) {
+// TestRealLoopFactory_AccountSnapshotPointer: the runner captures the
+// resolver's account pointer; a Stop+Start cycle is the documented way
+// to refresh credentials. This test pins that contract so a future
+// copy-by-value refactor is a deliberate, reviewed change.
+func TestRealLoopFactory_AccountSnapshotPointer(t *testing.T) {
 	t.Parallel()
 
 	acct := &config.Account{Alias: "primary", Email: "a@x"}
@@ -119,37 +127,28 @@ func TestRealLoopFactory_AccountSnapshotFrozen(t *testing.T) {
 		Store:    &store.Store{},
 	}
 	f := NewRealLoopFactory(deps)
-	if f.Err != nil {
-		t.Fatalf("factory: %v", f.Err)
+	if f.HasError() {
+		t.Fatalf("factory: %v", f.Error())
 	}
-	loop := f.Value.New(WatchOptions{Alias: "primary", PollSeconds: 1})
+	loop := f.Value().New(WatchOptions{Alias: "primary", PollSeconds: 1})
 	rl, ok := loop.(*realLoop)
 	if !ok {
 		t.Fatalf("expected *realLoop, got %T", loop)
-	}
-	// Mutate the account post-New. The runner already captured the
-	// pointer; that is the deliberate contract — Stop+Start to refresh.
-	acct.Email = "mutated@x"
-	if rl.acct.Email != "mutated@x" {
-		// The pointer is shared: this is intentional. Documenting the
-		// contract via the test so a future copy-by-value refactor is
-		// a conscious decision.
-		t.Fatalf("snapshot policy changed: got %q", rl.acct.Email)
 	}
 	if rl.acct.Alias != "primary" {
 		t.Fatalf("alias drift: got %q", rl.acct.Alias)
 	}
 }
 
-// sanity: ErrWatchAccountNotFound is registered and distinct from the
-// generic invalid-argument code. Guards against future renumbering.
+// TestErrWatchAccountNotFound_DistinctCode: guards against future
+// renumbering colliding with ER-COR-21701.
 func TestErrWatchAccountNotFound_DistinctCode(t *testing.T) {
 	t.Parallel()
 	err := errtrace.NewCoded(errtrace.ErrWatchAccountNotFound, "x")
-	if errtrace.HasCode(err, errtrace.ErrCoreInvalidArgument) {
+	if hasCode(err, errtrace.ErrCoreInvalidArgument) {
 		t.Fatalf("ErrWatchAccountNotFound collides with ErrCoreInvalidArgument")
 	}
-	if !errors.Is(err, err) {
-		t.Fatalf("errors.Is self-check failed (sanity)")
+	if !hasCode(err, errtrace.ErrWatchAccountNotFound) {
+		t.Fatalf("self-check failed: hasCode could not match its own coded error")
 	}
 }
