@@ -103,8 +103,22 @@ func NewEmailsService(openStore storeOpener) errtrace.Result[*EmailsService] {
 	return errtrace.Ok(&EmailsService{openStore: openStore})
 }
 
+// NewDefaultEmailsService is the production-bootstrap convenience
+// constructor: builds an `*EmailsService` wired to the real
+// `store.Open`. Used by `internal/ui` (Phase 2.5 wiring) so the UI
+// package never needs to know the unexported `storeOpener` shape.
+//
+// Cannot fail in practice (defaultStoreOpener is non-nil), but
+// returns a Result envelope to keep the constructor signature
+// parallel with `NewEmailsService` and to leave the door open for
+// future validation.
+func NewDefaultEmailsService() errtrace.Result[*EmailsService] {
+	return NewEmailsService(defaultStoreOpener)
+}
+
 // defaultStoreOpener wraps `store.Open` so the package-level wrappers
-// can construct a service per call. Removed in P2.8.
+// (and `NewDefaultEmailsService`) can construct a service per call.
+// Removed in P2.8 once bootstrap fully owns the opener wiring.
 func defaultStoreOpener() (emailsStore, func() error, error) {
 	st, err := store.Open()
 	if err != nil {

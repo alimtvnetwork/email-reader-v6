@@ -16,8 +16,20 @@ import (
 	"github.com/lovable/email-read/internal/errtrace"
 )
 
+// EmailsOptions wires the emails view to data + actions.
+//
+// **Phase 2.5 migration.** The old shape defaulted `List`/`Get` to
+// the deprecated package-level `core.ListEmails` / `core.GetEmail`.
+// The new shape requires a typed `*core.EmailsService` (constructed
+// once at app boot via `core.NewEmailsService`). `List` / `Get`
+// survive as optional overrides used exclusively by tests to inject
+// deterministic rows without standing up a real service. When the
+// override is nil we delegate to the service. When both Service and
+// the override are nil we render a degraded view rather than
+// panicking — keeps headless / partial-bootstrap previews safe.
 type EmailsOptions struct {
 	Alias      string
+	Service    *core.EmailsService // production seam — constructed in app bootstrap
 	List       func(ctx context.Context, opts core.ListEmailsOptions) errtrace.Result[[]core.EmailSummary]
 	Get        func(ctx context.Context, alias string, uid uint32) errtrace.Result[*core.EmailDetail]
 	OpenURL    func(rawurl string) error
@@ -29,6 +41,13 @@ func BuildEmails(opts EmailsOptions) fyne.CanvasObject {
 	heading := widget.NewLabelWithStyle("Emails", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	if opts.Alias == "" {
 		return emailsEmptyAlias(heading)
+	}
+	if opts.List == nil || opts.Get == nil {
+		// Degraded path: bootstrap didn't wire a *EmailsService and no
+		// test overrides were supplied. Surface the wiring gap instead
+		// of panicking on the first list call.
+		return emailsErrorView(heading,
+			fmt.Errorf("emails service not wired (no Service or List/Get overrides injected)"))
 	}
 
 	rows, err := loadEmailRows(opts)
@@ -42,13 +61,19 @@ func BuildEmails(opts EmailsOptions) fyne.CanvasObject {
 	return buildEmailsBrowser(heading, opts, rows)
 }
 
-// applyEmailsDefaults fills in default callbacks/limits on the options struct.
+// applyEmailsDefaults fills test-override seams from the injected
+// service when present, then applies the standard fallbacks for the
+// non-data dependencies (OpenURL, MaxResults). Test overrides take
+// precedence over the service so existing test fixtures continue to
+// work unchanged.
 func applyEmailsDefaults(opts EmailsOptions) EmailsOptions {
-	if opts.List == nil {
-		opts.List = core.ListEmails
-	}
-	if opts.Get == nil {
-		opts.Get = core.GetEmail
+	if opts.Service != nil {
+		if opts.List == nil {
+			opts.List = opts.Service.List
+		}
+		if opts.Get == nil {
+			opts.Get = opts.Service.Get
+		}
 	}
 	if opts.OpenURL == nil {
 		opts.OpenURL = openExternal

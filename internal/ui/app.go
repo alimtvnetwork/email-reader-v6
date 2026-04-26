@@ -236,7 +236,10 @@ func viewFor(item NavItem, state *AppState, gotoNav func(NavKind), onAccountsCha
 		}
 		return views.BuildDashboard(dashOpts)
 	case NavEmails:
-		return views.BuildEmails(views.EmailsOptions{Alias: state.Alias()})
+		return views.BuildEmails(views.EmailsOptions{
+			Alias:   state.Alias(),
+			Service: buildEmailsService(),
+		})
 	case NavRules:
 		return views.BuildRules(views.RulesOptions{})
 	case NavAccounts:
@@ -294,6 +297,25 @@ func buildDashboardService() *core.DashboardService {
 	res := core.NewDashboardService(config.Load, core.CountEmails)
 	if res.HasError() {
 		log.Printf("dashboard: NewDashboardService failed: %v", res.Error())
+		return nil
+	}
+	return res.Value()
+}
+
+// buildEmailsService constructs a typed *core.EmailsService for the
+// emails view (Phase 2.5 wiring). Mirrors `buildDashboardService`:
+// stateless service so per-`viewFor` construction is cheap and avoids
+// hidden lifetime coupling between app boot and individual view
+// constructions.
+//
+// Returns nil on construction failure (impossible in practice — the
+// default opener is non-nil — but honored because the constructor
+// returns a Result envelope). The emails view's degraded path takes
+// over when Service is nil.
+func buildEmailsService() *core.EmailsService {
+	res := core.NewDefaultEmailsService()
+	if res.HasError() {
+		log.Printf("emails: NewDefaultEmailsService failed: %v", res.Error())
 		return nil
 	}
 	return res.Value()
