@@ -256,3 +256,113 @@ func (s *Store) SetEmailDeletedAt(ctx context.Context, alias string, uids []uint
 	}
 	return total, nil
 }
+
+// StoreAccountHealthRow is the projection returned by
+// `(*Store).QueryAccountHealth`. Mirrors the **store-derivable**
+// subset of `core.AccountHealthRow` — the `Health` and
+// `ConsecutiveFailures` fields stay on the core side because:
+//
+//   - `Health` is computed from the other fields + a clock — pure
+//     domain logic, no business in the store.
+//   - `ConsecutiveFailures` needs a window-function walk that this
+//     slice intentionally defers (see queries.AccountHealthSelectAll
+//     doc-comment).
+//
+// Field name parity with core's `AccountHealthRow` keeps the adapter
+// (`core.NewStoreAccountHealthSource`) a five-line copy loop with no
+// rename gymnastics. Zero-value timestamps signify "no events yet
+// of this kind" — same convention as the core-side row.
+type StoreAccountHealthRow struct {
+	Alias        string
+	LastPollAt   time.Time // zero = never polled (or only Stop/Error events)
+	LastErrorAt  time.Time // zero = never errored
+	EmailsStored int
+	UnreadCount  int
+}
+
+// QueryAccountHealth returns one StoreAccountHealthRow per known alias
+// — i.e. every alias seen in `WatchEvents` OR `Emails`. Aliases
+// configured in `accounts.yaml` but with neither watch events nor
+// stored emails do NOT appear; the core service is responsible for
+// joining against the configured account list and synthesising
+// `Warning` rows for the gap (this matches the existing
+// `(*DashboardService).AccountHealth` contract).
+//
+// **Failure modes**: open errors and Scan errors are wrapped via
+// `errtrace.Wrap` with a "QueryAccountHealth" / "QueryAccountHealth.Scan"
+// suffix so log readers can tell driver-side failures apart from
+// per-row parse failures. Timestamp parse failures are wrapped with
+// the offending alias in the message — the most common cause is a
+// pre-m0008 hand-imported DB with non-RFC3339 OccurredAt, and naming
+// the alias makes it grep-able.
+//
+// Spec: spec/21-app/01-features/01-dashboard/00-overview.md §4 +
+// queries.AccountHealthSelectAll for the SQL rationale.
+func (s *Store) QueryAccountHealth(ctx context.Context) ([]StoreAccountHealthRow, error) {
+	rows, err := s.DB.QueryContext(ctx, queries.AccountHealthSelectAll)
+	if err != nil {
+		return nil, errtrace.Wrap(err, "QueryAccountHealth")
+	}
+	defer rows.Close()
+
+	out := []StoreAccountHealthRow{}
+	for rows.Next() {
+		var (
+			alias              string
+			lastPollText       sql.NullString
+			lastErrorText      sql.NullString
+			emailsStored       int
+			unreadCount        int
+		)
+		if err := rows.Scan(&alias, &lastPollText, &lastErrorText, &emailsStored, &unreadCount); err != nil {
+			return nil, errtrace.Wrap(err, "QueryAccountHealth.Scan")
+		}
+		row := StoreAccountHealthRow{
+			Alias:        alias,
+			EmailsStored: emailsStored,
+			UnreadCount:  unreadCount,
+		}
+		if lastPollText.Valid && lastPollText.String != "" {
+			t, perr := parseSqliteRFC3339(lastPollText.String)
+			if perr != nil {
+				return nil, errtrace.Wrap(perr, "QueryAccountHealth.LastPollAt["+alias+"]")
+			}
+			row.LastPollAt = t
+		}
+		if lastErrorText.Valid && lastErrorText.String != "" {
+			t, perr := parseSqliteRFC3339(lastErrorText.String)
+			if perr != nil {
+				return nil, errtrace.Wrap(perr, "QueryAccountHealth.LastErrorAt["+alias+"]")
+			}
+			row.LastErrorAt = t
+		}
+		out = append(out, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, errtrace.Wrap(err, "QueryAccountHealth.Rows")
+	}
+	return out, nil
+}
+
+// parseSqliteRFC3339 parses a timestamp in either of the two shapes
+// the schema actually emits:
+//
+//   - `sqliteRFC3339NowExpr` defaulting columns: `2026-04-26T10:05:00.000Z`
+//     (RFC3339Nano with millisecond precision and a literal `Z` zone).
+//   - Hand-inserted test fixtures: `2026-04-26T10:05:00.000Z` (same
+//     shape) or `2026-04-26T10:05:00Z` (no fractional seconds).
+//
+// We try `time.RFC3339Nano` first (covers both above) then fall back
+// to `time.RFC3339` for the no-frac variant. Anything else is a real
+// schema drift and surfaces as an error.
+func parseSqliteRFC3339(s string) (time.Time, error) {
+	if t, err := time.Parse(time.RFC3339Nano, s); err == nil {
+		return t.UTC(), nil
+	}
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t.UTC(), nil
+	}
+	return time.Time{}, errtrace.Wrap(
+		errors.New("unrecognised timestamp shape: "+s),
+		"parseSqliteRFC3339")
+}
