@@ -55,6 +55,8 @@ func TestShouldRefreshDashboardOnEvent(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0).UTC()
 	debounce := 750 * time.Millisecond
 	newMail := watcher.Event{Kind: watcher.EventNewMail, Alias: "work"}
+	urlOpened := watcher.Event{Kind: watcher.EventUrlOpened, Alias: "work", Url: "https://x", OpenOK: true}
+	urlOpenedFail := watcher.Event{Kind: watcher.EventUrlOpened, Alias: "work", OpenOK: false}
 
 	cases := []struct {
 		name        string
@@ -68,10 +70,19 @@ func TestShouldRefreshDashboardOnEvent(t *testing.T) {
 		{"new mail first time fires", newMail, time.Time{}, now, debounce, true, "now"},
 		{"new mail within debounce skipped", newMail, now.Add(-200 * time.Millisecond), now, debounce, false, "last"},
 		{"new mail just past debounce fires", newMail, now.Add(-800 * time.Millisecond), now, debounce, true, "now"},
+		{"url_opened first time fires", urlOpened, time.Time{}, now, debounce, true, "now"},
+		{"url_opened within debounce skipped", urlOpened, now.Add(-100 * time.Millisecond), now, debounce, false, "last"},
+		{"url_opened past debounce fires", urlOpened, now.Add(-1 * time.Second), now, debounce, true, "now"},
+		{"url_opened failure still triggers refresh", urlOpenedFail, time.Time{}, now, debounce, true, "now"},
+		{"new_mail then url_opened share debounce", urlOpened, now.Add(-50 * time.Millisecond), now, debounce, false, "last"},
 		{"poll_ok never fires", watcher.Event{Kind: watcher.EventPollOK, Alias: "work"}, time.Time{}, now, debounce, false, "last"},
 		{"rule_match never fires", watcher.Event{Kind: watcher.EventRuleMatch, Alias: "work"}, time.Time{}, now, debounce, false, "last"},
 		{"heartbeat never fires", watcher.Event{Kind: watcher.EventHeartbeat, Alias: "work"}, now.Add(-10 * time.Second), now, debounce, false, "last"},
+		{"poll_error never fires", watcher.Event{Kind: watcher.EventPollError, Alias: "work"}, time.Time{}, now, debounce, false, "last"},
+		{"uidval_reset never fires", watcher.Event{Kind: watcher.EventUidValReset, Alias: "work"}, time.Time{}, now, debounce, false, "last"},
+		{"started never fires", watcher.Event{Kind: watcher.EventStarted, Alias: "work"}, time.Time{}, now, debounce, false, "last"},
 		{"zero debounce always fires for new mail", newMail, now.Add(-1 * time.Millisecond), now, 0, true, "now"},
+		{"zero debounce always fires for url_opened", urlOpened, now.Add(-1 * time.Millisecond), now, 0, true, "now"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -87,5 +98,27 @@ func TestShouldRefreshDashboardOnEvent(t *testing.T) {
 				t.Errorf("next=%v, want %v", next, want)
 			}
 		})
+	}
+}
+
+// TestDashboardRefreshKind locks down the exact set of trigger kinds.
+// Adding a kind here should be a deliberate, reviewed change — the
+// dashboard runs SQL aggregates so over-triggering wastes cycles.
+func TestDashboardRefreshKind(t *testing.T) {
+	allKinds := []watcher.EventKind{
+		watcher.EventStarted, watcher.EventBaseline, watcher.EventPollOK,
+		watcher.EventPollError, watcher.EventNewMail, watcher.EventRuleMatch,
+		watcher.EventUrlOpened, watcher.EventHeartbeat, watcher.EventStopped,
+		watcher.EventUidValReset,
+	}
+	want := map[watcher.EventKind]bool{
+		watcher.EventNewMail:   true,
+		watcher.EventUrlOpened: true,
+	}
+	for _, k := range allKinds {
+		got := dashboardRefreshKind(k)
+		if got != want[k] {
+			t.Errorf("dashboardRefreshKind(%q)=%v, want %v", k, got, want[k])
+		}
 	}
 }
