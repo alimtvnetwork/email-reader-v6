@@ -120,11 +120,8 @@ var fyneColorRoute = map[fyne.ThemeColorName]ColorName{
 	fynetheme.ColorNameSuccess:         ColorSuccess,
 	fynetheme.ColorNameWarning:         ColorWarning,
 	fynetheme.ColorNameSeparator:       ColorBorder,
-	// Selection: spec wants ColorPrimary at alpha 0.30 — alpha-mixing
-	// requires a wrapped color value, deferred until the elevation/alpha
-	// helper lands. For now use the solid Primary so selection is at
-	// least theme-aware (better than Fyne's hard-coded blue).
-	fynetheme.ColorNameSelection: ColorPrimary,
+	// Selection is intentionally absent: it's special-cased in Color()
+	// to apply the §2 alpha-0.30 blend on ColorPrimary via scaleAlpha.
 }
 
 // fyneSizeRoute is the §3/§4 routing table: each Fyne built-in size
