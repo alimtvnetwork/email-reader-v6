@@ -101,6 +101,7 @@ const (
 	ErrUiFormValidation    Code = "ER-UI-21903"
 	ErrUiViewRender        Code = "ER-UI-21904"
 	ErrUiClipboard         Code = "ER-UI-21905"
+	ErrRulesServiceUnwired Code = "ER-UI-21906"
 
 	// ER-SET (Settings) — block 21770–21789
 	ErrSettingsConstruct        Code = "ER-SET-21770"
