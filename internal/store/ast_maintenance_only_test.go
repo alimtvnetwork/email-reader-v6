@@ -3,8 +3,8 @@
 //	"AST scan: only `internal/store/maintenance` issues
 //	 `VACUUM` / `ANALYZE` / `PRAGMA wal_checkpoint`."
 //
-// Our maintenance file is `internal/store/vacuum.go` (the spec's
-// "store/maintenance" responsibility lives in that single file). The
+// Our maintenance file is `internal/store/vacuum.go` — the spec's
+// "store/maintenance" responsibility lives in that single file. The
 // guard walks every .go file under the repository root, parses it, and
 // inspects every basic-string-literal token. If any production file
 // outside the allowlist contains one of the maintenance SQL keywords as
@@ -29,78 +29,105 @@ import (
 	"testing"
 )
 
+// maintenanceAllowlist names the production files permitted to issue
+// VACUUM / ANALYZE / wal_checkpoint statements. Paths are repo-relative
+// and forward-slashed.
+var maintenanceAllowlist = map[string]bool{
+	"internal/store/vacuum.go": true,
+}
+
+// maintenanceSQLRe matches VACUUM / ANALYZE as whole upper-case words
+// and the wal_checkpoint pragma in any case.
+var maintenanceSQLRe = regexp.MustCompile(`\b(VACUUM|ANALYZE)\b|(?i)PRAGMA\s+wal_checkpoint`)
+
 func Test_AST_MaintenanceOnly(t *testing.T) {
 	root := repoRootForMaintenanceGuard(t)
-
-	// Production files allowed to issue maintenance SQL. Paths are
-	// relative to repo root, forward-slashed.
-	allow := map[string]bool{
-		"internal/store/vacuum.go": true,
-	}
-
-	// Match VACUUM / ANALYZE as whole upper-case words and the
-	// wal_checkpoint pragma in any case. SQLite statements are
-	// conventionally upper-case across this codebase.
-	keywordRe := regexp.MustCompile(`\b(VACUUM|ANALYZE)\b|(?i)PRAGMA\s+wal_checkpoint`)
-
-	fset := token.NewFileSet()
-	var violations []string
-
-	walkErr := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			base := d.Name()
-			if base == ".git" || base == "node_modules" || base == ".lovable" || base == "dist" || base == "build" {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if !strings.HasSuffix(path, ".go") {
-			return nil
-		}
-		if strings.HasSuffix(path, "_test.go") {
-			return nil
-		}
-		rel, relErr := filepath.Rel(root, path)
-		if relErr != nil {
-			return relErr
-		}
-		rel = filepath.ToSlash(rel)
-		if allow[rel] {
-			return nil
-		}
-
-		src, readErr := os.ReadFile(path)
-		if readErr != nil {
-			return readErr
-		}
-		file, parseErr := parser.ParseFile(fset, path, src, 0)
-		if parseErr != nil {
-			// Files that fail to parse aren't our concern here.
-			return nil
-		}
-		ast.Inspect(file, func(n ast.Node) bool {
-			lit, ok := n.(*ast.BasicLit)
-			if !ok || lit.Kind != token.STRING {
-				return true
-			}
-			if keywordRe.MatchString(lit.Value) {
-				violations = append(violations, rel+": "+lit.Value)
-			}
-			return true
-		})
-		return nil
-	})
-	if walkErr != nil {
-		t.Fatalf("walk repo: %v", walkErr)
-	}
-
+	violations := scanRepoForMaintenanceSQL(t, root)
 	if len(violations) > 0 {
 		t.Fatalf("AC-DB-47 violation: maintenance SQL found outside internal/store/vacuum.go:\n  %s",
 			strings.Join(violations, "\n  "))
 	}
+}
+
+// scanRepoForMaintenanceSQL walks every .go production file under root
+// and returns a list of "<rel>: <literal>" violations.
+func scanRepoForMaintenanceSQL(t *testing.T, root string) []string {
+	t.Helper()
+	var violations []string
+	walk := func(path string, d fs.DirEntry, err error) error {
+		return inspectGoPath(root, path, d, err, &violations)
+	}
+	if err := filepath.WalkDir(root, walk); err != nil {
+		t.Fatalf("walk repo: %v", err)
+	}
+	return violations
+}
+
+// inspectGoPath is the per-entry callback: it filters dirs/files,
+// resolves the allowlist, parses the file, and appends violations.
+func inspectGoPath(root, path string, d fs.DirEntry, walkErr error, out *[]string) error {
+	if walkErr != nil {
+		return walkErr
+	}
+	if d.IsDir() {
+		return skipUninterestingDir(d.Name())
+	}
+	rel, ok := candidateGoFile(root, path)
+	if !ok {
+		return nil
+	}
+	*out = append(*out, scanFileForMaintenanceSQL(path, rel)...)
+	return nil
+}
+
+func skipUninterestingDir(name string) error {
+	switch name {
+	case ".git", "node_modules", ".lovable", "dist", "build":
+		return filepath.SkipDir
+	}
+	return nil
+}
+
+// candidateGoFile returns (rel, true) when path is a production .go
+// file outside the allowlist; otherwise (_, false).
+func candidateGoFile(root, path string) (string, bool) {
+	if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+		return "", false
+	}
+	rel, err := filepath.Rel(root, path)
+	if err != nil {
+		return "", false
+	}
+	rel = filepath.ToSlash(rel)
+	if maintenanceAllowlist[rel] {
+		return "", false
+	}
+	return rel, true
+}
+
+// scanFileForMaintenanceSQL parses path and returns violation strings
+// for every string literal containing a forbidden keyword.
+func scanFileForMaintenanceSQL(path, rel string) []string {
+	src, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	file, err := parser.ParseFile(token.NewFileSet(), path, src, 0)
+	if err != nil {
+		return nil
+	}
+	var hits []string
+	ast.Inspect(file, func(n ast.Node) bool {
+		lit, ok := n.(*ast.BasicLit)
+		if !ok || lit.Kind != token.STRING {
+			return true
+		}
+		if maintenanceSQLRe.MatchString(lit.Value) {
+			hits = append(hits, rel+": "+lit.Value)
+		}
+		return true
+	})
+	return hits
 }
 
 // repoRootForMaintenanceGuard walks up from this test file until it
