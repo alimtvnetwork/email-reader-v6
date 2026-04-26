@@ -153,26 +153,28 @@ func (m *Maintenance) run(ctx context.Context, done chan struct{}) {
 	ticker := time.NewTicker(m.opts.TickInterval)
 	defer ticker.Stop()
 	var lastRun time.Time
+	var cumDeletes int64
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			lastRun = m.maybeSweep(ctx, lastRun)
+			lastRun, cumDeletes = m.maybeSweep(ctx, lastRun, cumDeletes)
 		}
 	}
 }
 
 // maybeSweep performs one tick's worth of work: evaluates the helper,
-// invokes the Pruner if due, fires OnSweep, and returns the new
-// lastRun. Pulled out of run() to keep that function under the
-// 15-statement linter cap and to make the per-tick logic unit-testable
-// in isolation.
-func (m *Maintenance) maybeSweep(ctx context.Context, lastRun time.Time) time.Time {
+// invokes the Pruner if due, fires OnSweep, optionally runs Analyzer
+// when cumulative deletes cross the threshold, and returns the new
+// lastRun + cumulative-delete tally. Pulled out of run() to keep that
+// function under the 15-statement linter cap and to make the per-tick
+// logic unit-testable in isolation.
+func (m *Maintenance) maybeSweep(ctx context.Context, lastRun time.Time, cum int64) (time.Time, int64) {
 	now := m.opts.Now()
 	days := m.opts.Retention()
 	if !ShouldRunRetentionTick(lastRun, now, m.opts.RetentionIntervalHours, days) {
-		return lastRun
+		return lastRun, cum
 	}
 	cutoff := RetentionCutoff(now, days)
 	deleted, err := m.opts.Pruner(ctx, cutoff)
@@ -180,8 +182,26 @@ func (m *Maintenance) maybeSweep(ctx context.Context, lastRun time.Time) time.Ti
 		m.opts.OnSweep(deleted, err)
 	}
 	if err != nil {
-		// Re-arm: do not bump lastRun so the next tick retries.
-		return lastRun
+		return lastRun, cum // re-arm: do not bump lastRun
 	}
-	return now
+	cum = m.maybeAnalyze(ctx, cum+deleted)
+	return now, cum
+}
+
+// maybeAnalyze runs the Analyzer (when configured) once cumulative
+// deletes cross AnalyzeThresholdRows, then resets the counter. When
+// no Analyzer is configured the counter is left unchanged so a future
+// reconfiguration still benefits from accumulated history.
+func (m *Maintenance) maybeAnalyze(ctx context.Context, cum int64) int64 {
+	if m.opts.Analyzer == nil || cum < AnalyzeThresholdRows {
+		return cum
+	}
+	err := m.opts.Analyzer(ctx)
+	if m.opts.OnAnalyze != nil {
+		m.opts.OnAnalyze(cum, err)
+	}
+	if err != nil {
+		return cum // keep the tally so the next sweep retries
+	}
+	return 0
 }
