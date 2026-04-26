@@ -28,13 +28,22 @@ var (
 )
 
 // normalizeInput trims whitespace, lower-cases schemes, dedupes + sorts them,
-// and trims the BrowserOverride strings. It does NOT validate and does NOT
-// substitute defaults — that responsibility lives with DefaultSettingsInput
-// and the caller.
+// and trims the BrowserOverride strings. It also substitutes defaults for the
+// zero-valued maintenance knobs so callers (and existing tests) that construct
+// a partial SettingsInput don't trip the §5 range validators on fields they
+// never touched. It does NOT validate.
 func normalizeInput(in SettingsInput) SettingsInput {
 	in.BrowserOverride.ChromePath = strings.TrimSpace(in.BrowserOverride.ChromePath)
 	in.BrowserOverride.IncognitoArg = strings.TrimSpace(in.BrowserOverride.IncognitoArg)
 	in.OpenUrlAllowedSchemes = canonSchemes(in.OpenUrlAllowedSchemes)
+	defaults := DefaultSettingsInput()
+	if in.WalCheckpointHours == 0 {
+		in.WalCheckpointHours = defaults.WalCheckpointHours
+	}
+	if in.PruneBatchSize == 0 {
+		in.PruneBatchSize = defaults.PruneBatchSize
+	}
+	// WeeklyVacuumOn/HourLocal: zero is valid (Sunday/midnight); leave as-is.
 	return in
 }
 
