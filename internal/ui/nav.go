@@ -15,6 +15,7 @@ const (
 	NavAccounts  NavKind = "accounts"
 	NavWatch     NavKind = "watch"
 	NavTools     NavKind = "tools"
+	NavSettings  NavKind = "settings"
 )
 
 // NavItem is one row in the sidebar.
@@ -33,4 +34,5 @@ var NavItems = []NavItem{
 	{NavAccounts, "Accounts", "Account table (alias, host, last UID) lands in Step 14."},
 	{NavWatch, "Watch", "Live watcher: structured cards + raw log tabs land in Steps 21–23."},
 	{NavTools, "Tools", "Inline forms for read / export-csv / diagnose land in Steps 18–20."},
+	{NavSettings, "Settings", "Theme, poll cadence, browser path, and density toggle."},
 }
