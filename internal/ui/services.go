@@ -31,16 +31,24 @@ import (
 	"github.com/lovable/email-read/internal/config"
 	"github.com/lovable/email-read/internal/core"
 	"github.com/lovable/email-read/internal/errtrace"
+	"github.com/lovable/email-read/internal/store"
 )
 
 // Services is the typed dependency bundle threaded through `viewFor`.
-// All three fields are nil-safe at the view layer (each view has a
+// All fields are nil-safe at the view layer (each view has a
 // degraded-path branch) so a partial-bootstrap failure surfaces as an
 // inline status banner rather than a panic.
+//
+// `HealthSource` is the production `core.AccountHealthSource` adapter
+// returned by `core.NewStoreAccountHealthSource(rt.Store)`. It stays
+// nil until `AttachHealthSource` is called from the lazy
+// `WatchRuntimeOrNil()` path (mirrors how `AttachRefresher` wires the
+// production refresher into `Emails`).
 type Services struct {
-	Dashboard *core.DashboardService
-	Emails    *core.EmailsService
-	Rules     *core.RulesService
+	Dashboard    *core.DashboardService
+	Emails       *core.EmailsService
+	Rules        *core.RulesService
+	HealthSource core.AccountHealthSource
 }
 
 // BuildServices constructs all three Phase 2 services. Call once at
