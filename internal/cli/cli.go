@@ -374,6 +374,36 @@ func forwardPollSeconds(events <-chan core.SettingsEvent, out chan<- int) {
 	close(out)
 }
 
+// startBrowserReloadBridge subscribes to core.Settings and calls
+// `launcher.Reload(...)` on every Save / Reset. Wires CF-T1 from
+// spec/21-app/02-features/07-settings/99-consistency-report.md so the
+// next OpenUrl call after a Save honours the new ChromePath /
+// IncognitoArg without restarting the process. Mid-launch calls are
+// never interrupted (they completed before Reload arrived).
+//
+// On any Settings setup failure → no-op cancel; the launcher keeps using
+// its bootstrap config — exact pre-Settings behaviour.
+func startBrowserReloadBridge(ctx context.Context, launcher *browser.Launcher) func() {
+	s := core.NewSettings(time.Now)
+	if s.HasError() || launcher == nil {
+		return func() {}
+	}
+	events, cancel := s.Value().Subscribe(ctx)
+	go forwardBrowserOverrides(events, launcher)
+	return cancel
+}
+
+// forwardBrowserOverrides drains Settings events and reloads the launcher.
+// Channel close (via cancel) terminates the goroutine cleanly.
+func forwardBrowserOverrides(events <-chan core.SettingsEvent, launcher *browser.Launcher) {
+	for ev := range events {
+		launcher.Reload(config.Browser{
+			ChromePath:   ev.Snapshot.BrowserOverride.ChromePath,
+			IncognitoArg: ev.Snapshot.BrowserOverride.IncognitoArg,
+		})
+	}
+}
+
 
 // resolveWatchAccount picks the watch target by alias (or first when empty).
 func resolveWatchAccount(cfg *config.Config, alias string) (config.Account, error) {
