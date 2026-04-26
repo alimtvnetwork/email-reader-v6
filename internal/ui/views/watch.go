@@ -25,33 +25,42 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/lovable/email-read/internal/core"
+	"github.com/lovable/email-read/internal/watcher"
 )
 
 // WatchOptions wires the Watch view to app state. Alias is the alias
 // shown in the header; "" means "no account selected" (the view still
-// renders, but Start is disabled). Watch + PollSeconds are optional —
-// when nil the header falls back to a disabled placeholder button so
+// renders, but Start is disabled). Watch + PollSeconds + Bus are
+// optional — when nil the view falls back to disabled placeholders so
 // headless tests and the pre-wiring fallback both keep working.
 type WatchOptions struct {
 	Alias       string
 	Watch       *core.Watch
 	PollSeconds func() int
+	Bus         *watcher.Bus
 }
 
-// BuildWatch returns the Watch view scaffold per spec §2.1.
+// BuildWatch returns the Watch view per spec §2.1.
 //
 // Layout: container.NewBorder(top=header, bottom=footer, center=tabs).
 //   - header (§2.2): status dot + label + alias + ▶ Start/■ Stop button.
-//   - tabs (§2.3 / §2.4): Cards + Raw log placeholders.
-//   - footer (§2.5): poll cadence (CF-W3) + counter placeholders.
+//   - tabs (§2.3 / §2.4): live Cards + Raw log when Bus is wired,
+//     placeholders otherwise.
+//   - footer (§2.5): poll cadence (CF-W3) + live counters when Bus is
+//     wired.
 func BuildWatch(opts WatchOptions) fyne.CanvasObject {
 	header := buildWatchHeader(opts)
+	cards, cardsRefresh := buildWatchCardsTab(opts)
+	rawlog, rawRefresh := buildWatchRawLogTab(opts)
 	tabs := container.NewAppTabs(
-		container.NewTabItem("Cards", buildWatchCardsPlaceholder()),
-		container.NewTabItem("Raw log", buildWatchRawLogPlaceholder()),
+		container.NewTabItem("Cards", cards),
+		container.NewTabItem("Raw log", rawlog),
 	)
 	tabs.SetTabLocation(container.TabLocationTop)
-	footer := buildWatchFooter()
+	footer, counterRefresh := buildWatchFooter(opts)
+	if opts.Bus != nil && opts.Alias != "" {
+		go subscribeWatchBus(opts, cardsRefresh, rawRefresh, counterRefresh)
+	}
 	return container.NewBorder(header, footer, nil, nil, tabs)
 }
 
@@ -151,29 +160,150 @@ func pickPollSeconds(opts WatchOptions) int {
 	return 3
 }
 
-// buildWatchCardsPlaceholder renders the Cards-tab empty state per §2.3
-// (cardsEmpty label).
-func buildWatchCardsPlaceholder() fyne.CanvasObject {
-	l := widget.NewLabel("No new mail yet — heartbeats stream to the Raw log tab.\n\nLive event stream awaiting Cards consumer (next slice on top of core.Watch).")
-	l.Wrapping = fyne.TextWrapWord
-	l.Alignment = fyne.TextAlignCenter
-	return container.NewPadded(l)
+// buildWatchCardsTab returns the Cards-tab widget plus a refresh
+// callback the bus subscriber invokes when a new card lands. The
+// caller threads `cards` slice ownership into the closure so the
+// rendering stays single-goroutine (Fyne widget setters are safe but
+// the slice itself is not).
+//
+// When opts.Bus or opts.Alias is empty we render the empty-state
+// label and return a no-op refresh — keeps headless tests + pre-
+// wiring callers honest.
+func buildWatchCardsTab(opts WatchOptions) (fyne.CanvasObject, func(WatchCard)) {
+	if opts.Bus == nil || opts.Alias == "" {
+		l := widget.NewLabel("No new mail yet — heartbeats stream to the Raw log tab.\n\nLive event stream awaiting account selection.")
+		l.Wrapping = fyne.TextWrapWord
+		l.Alignment = fyne.TextAlignCenter
+		return container.NewPadded(l), func(WatchCard) {}
+	}
+	body := widget.NewLabel("(awaiting first event…)")
+	body.Wrapping = fyne.TextWrapWord
+	scroll := container.NewVScroll(body)
+	var cards []WatchCard
+	refresh := func(c WatchCard) {
+		cards = AppendBounded(cards, c, watchCardsCap)
+		body.SetText(renderCards(cards))
+	}
+	return scroll, refresh
 }
 
-// buildWatchRawLogPlaceholder renders the Raw log empty state per §2.4.
-func buildWatchRawLogPlaceholder() fyne.CanvasObject {
-	l := widget.NewLabel("(raw log — Watch event bus consumer wires up next)")
-	l.Wrapping = fyne.TextWrapWord
-	return container.NewPadded(l)
+// buildWatchRawLogTab mirrors buildWatchCardsTab for the raw line
+// log. The buffer is much larger (events stream faster than cards)
+// and we use a multiline label inside a vscroll so the user can
+// scrollback through poll history.
+func buildWatchRawLogTab(opts WatchOptions) (fyne.CanvasObject, func(string)) {
+	if opts.Bus == nil || opts.Alias == "" {
+		l := widget.NewLabel("(raw log — start watching to stream events)")
+		l.Wrapping = fyne.TextWrapWord
+		return container.NewPadded(l), func(string) {}
+	}
+	body := widget.NewLabel("")
+	body.Wrapping = fyne.TextWrapWord
+	scroll := container.NewVScroll(body)
+	var lines []string
+	refresh := func(line string) {
+		lines = AppendBounded(lines, line, watchRawLogCap)
+		body.SetText(joinLines(lines))
+	}
+	return scroll, refresh
 }
 
-// buildWatchFooter renders the footer (§2.5) and wires the live cadence
-// label (CF-W3): a Settings.Subscribe consumer updates the displayed
-// poll-seconds whenever a Save / Reset event arrives.
-func buildWatchFooter() fyne.CanvasObject {
+// buildWatchFooter renders the footer (§2.5): live cadence label
+// (CF-W3) on one side, live counters on the other. Returns a refresh
+// callback the bus consumer fires after every event so the counter
+// totals stay current.
+func buildWatchFooter(opts WatchOptions) (fyne.CanvasObject, func(WatchCounters)) {
 	cadence := newCadenceIndicator()
-	counters := widget.NewLabel("polls=— · newMail=— · matches=—")
-	return container.NewBorder(widget.NewSeparator(), nil, counters, nil, cadence)
+	counters := widget.NewLabel(WatchCounters{}.FormatCounters())
+	if opts.Bus == nil || opts.Alias == "" {
+		counters.SetText("polls=— · newMail=— · matches=— · opens=— · errors=—")
+	}
+	refresh := func(c WatchCounters) { counters.SetText(c.FormatCounters()) }
+	return container.NewBorder(widget.NewSeparator(), nil, counters, nil, cadence), refresh
+}
+
+// watchCardsCap / watchRawLogCap bound the rolling buffers so a
+// long-running watcher does not balloon UI memory. Tuned by feel:
+// cards represent user-actionable events (new mail, matches, opens)
+// so 50 covers most "since I sat down" sessions; raw log is firehose-
+// y so 500 lines ≈ 25 minutes of 3-s polls.
+const (
+	watchCardsCap  = 50
+	watchRawLogCap = 500
+)
+
+// subscribeWatchBus is the single goroutine that drains opts.Bus,
+// filters by alias, and dispatches to the three refresh callbacks.
+// Counters are accumulated locally (not shared with other views) so
+// no mutex is needed. Closing the bus channel terminates the
+// goroutine cleanly. Bounded leak: one goroutine per BuildWatch (i.e.
+// per shell rebuild), matching the cadence-label consumer's
+// lifecycle.
+func subscribeWatchBus(opts WatchOptions, cardsRefresh func(WatchCard), rawRefresh func(string), counterRefresh func(WatchCounters)) {
+	events, cancel := opts.Bus.Subscribe()
+	defer cancel()
+	var counters WatchCounters
+	for ev := range events {
+		if ev.Alias != opts.Alias {
+			continue
+		}
+		rawRefresh(FormatRawLogLine(ev))
+		counters = AccumulateCounters(counters, ev)
+		counterRefresh(counters)
+		if card, ok := EventToCard(ev); ok {
+			cardsRefresh(card)
+		}
+	}
+}
+
+// renderCards renders the rolling card buffer as a multi-line text
+// blob. A real Fyne List with custom item widgets is the long-term
+// home, but a single Label keeps this slice's surface small and
+// matches how the Raw log tab renders. Newest card on top.
+func renderCards(cards []WatchCard) string {
+	if len(cards) == 0 {
+		return "(awaiting first event…)"
+	}
+	parts := make([]string, 0, len(cards))
+	for _, c := range cards {
+		parts = append(parts, formatCardLine(c))
+	}
+	return joinLines(parts)
+}
+
+// formatCardLine renders one card as "HH:MM:SS  TONE  Title — Body".
+// Tone glyph parallels the Raw log glyphs so the two tabs feel
+// related.
+func formatCardLine(c WatchCard) string {
+	return fmt.Sprintf("%s  %s  %s — %s",
+		c.At.Format("15:04:05"), toneGlyph(c.Tone), c.Title, c.Body)
+}
+
+// toneGlyph maps CardTone to a single-rune visual cue. Kept tiny so
+// it inlines and so future tones are a one-line addition.
+func toneGlyph(t CardTone) string {
+	switch t {
+	case CardToneSuccess:
+		return "✓"
+	case CardToneWarn:
+		return "⚠"
+	case CardToneError:
+		return "✗"
+	}
+	return "·"
+}
+
+// joinLines concatenates with newline separators. Local helper so we
+// avoid importing strings just for one Join.
+func joinLines(lines []string) string {
+	out := ""
+	for i, l := range lines {
+		if i > 0 {
+			out += "\n"
+		}
+		out += l
+	}
+	return out
 }
 
 // newCadenceIndicator returns a label showing the current
