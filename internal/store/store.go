@@ -13,6 +13,7 @@ import (
 
 	"github.com/lovable/email-read/internal/config"
 	"github.com/lovable/email-read/internal/errtrace"
+	"github.com/lovable/email-read/internal/store/queries"
 )
 
 // Store is a thin wrapper around *sql.DB providing typed helpers.
@@ -318,11 +319,7 @@ func (s *Store) HasOpenedUrl(ctx context.Context, emailId int64, url string) (bo
 func (s *Store) GetEmailByUid(ctx context.Context, alias string, uid uint32) (*Email, error) {
 	var e Email
 	var received sql.NullTime
-	err := s.DB.QueryRowContext(ctx, `
-		SELECT Id, Alias, MessageId, Uid, FromAddr, ToAddr, CcAddr, Subject,
-		       BodyText, BodyHtml, ReceivedAt, FilePath
-		FROM Emails
-		WHERE Alias = ? AND Uid = ?`,
+	err := s.DB.QueryRowContext(ctx, queries.EmailByUid,
 		alias, uid,
 	).Scan(&e.Id, &e.Alias, &e.MessageId, &e.Uid, &e.FromAddr, &e.ToAddr,
 		&e.CcAddr, &e.Subject, &e.BodyText, &e.BodyHtml, &received, &e.FilePath)
@@ -351,44 +348,18 @@ type EmailQuery struct {
 // ListEmails returns email rows matching the query. Body fields are populated
 // so the UI can render snippets without a second round-trip.
 func (s *Store) ListEmails(ctx context.Context, q EmailQuery) ([]Email, error) {
-	sqlStr, args := buildListEmailsQuery(q)
+	sqlStr, args := queries.EmailsList(queries.EmailsListInput{
+		Alias:  q.Alias,
+		Search: q.Search,
+		Limit:  q.Limit,
+		Offset: q.Offset,
+	})
 	rows, err := s.DB.QueryContext(ctx, sqlStr, args...)
 	if err != nil {
 		return nil, errtrace.Wrap(err, "list emails")
 	}
 	defer rows.Close()
 	return scanEmailRows(rows)
-}
-
-// buildListEmailsQuery composes the SQL string + bound args for ListEmails.
-func buildListEmailsQuery(q EmailQuery) (string, []any) {
-	sqlStr := `SELECT Id, Alias, MessageId, Uid, FromAddr, ToAddr, CcAddr, Subject,
-	                  BodyText, BodyHtml, ReceivedAt, FilePath
-	           FROM Emails`
-	var args []any
-	var where []string
-	if q.Alias != "" {
-		where = append(where, "Alias = ?")
-		args = append(args, q.Alias)
-	}
-	if q.Search != "" {
-		where = append(where, "(LOWER(Subject) LIKE ? OR LOWER(FromAddr) LIKE ?)")
-		needle := "%" + strings.ToLower(q.Search) + "%"
-		args = append(args, needle, needle)
-	}
-	if len(where) > 0 {
-		sqlStr += " WHERE " + strings.Join(where, " AND ")
-	}
-	sqlStr += " ORDER BY Uid DESC, Id DESC"
-	if q.Limit > 0 {
-		sqlStr += " LIMIT ?"
-		args = append(args, q.Limit)
-		if q.Offset > 0 {
-			sqlStr += " OFFSET ?"
-			args = append(args, q.Offset)
-		}
-	}
-	return sqlStr, args
 }
 
 // scanEmailRows materializes the result set from ListEmails into []Email.
