@@ -51,13 +51,24 @@ import (
 // Name is a short snake_case identifier (e.g. "initial_schema",
 // "add_watch_event"). Used in error messages and the ledger.
 //
-// Up is the SQL executed to apply the migration. May contain multiple
-// statements separated by `;` — `Apply` hands the whole string to
-// `db.ExecContext`, which the SQLite driver splits.
+// Exactly one of Up or UpFunc must be non-zero:
+//
+//   - Up: SQL executed verbatim by `db.ExecContext`. Use for plain
+//     idempotent DDL (`CREATE TABLE IF NOT EXISTS`, `CREATE INDEX
+//     IF NOT EXISTS`). Most migrations should use this form.
+//   - UpFunc: imperative migration that needs runtime introspection
+//     (e.g. SQLite's `ALTER TABLE ADD COLUMN`, which has no `IF NOT
+//     EXISTS` form and errors on duplicate columns). The function
+//     receives the same `*sql.DB` Apply was given and the same ctx.
+//     UpFunc MUST be self-idempotent — see m0005 for the canonical
+//     PRAGMA-table_info pattern.
+//
+// Setting both is a programmer error and panics in Register.
 type Migration struct {
 	Version int
 	Name    string
 	Up      string
+	UpFunc  func(ctx context.Context, db *sql.DB) error
 }
 
 // registry holds the ordered set of migrations. Sibling files under
@@ -78,6 +89,12 @@ func Register(m Migration) {
 	}
 	if m.Name == "" {
 		panic(fmt.Sprintf("migrate.Register: Name required for Version %d", m.Version))
+	}
+	hasUp := m.Up != ""
+	hasFunc := m.UpFunc != nil
+	if hasUp == hasFunc {
+		panic(fmt.Sprintf("migrate.Register: Version %d (%s) must set exactly one of Up or UpFunc",
+			m.Version, m.Name))
 	}
 	registryMu.Lock()
 	defer registryMu.Unlock()
@@ -158,8 +175,14 @@ func Apply(ctx context.Context, db *sql.DB) error {
 		if _, ok := applied[m.Version]; ok {
 			continue
 		}
-		if _, err := db.ExecContext(ctx, m.Up); err != nil {
-			return errtrace.Wrapf(err, "apply migration %04d (%s)", m.Version, m.Name)
+		if m.UpFunc != nil {
+			if err := m.UpFunc(ctx, db); err != nil {
+				return errtrace.Wrapf(err, "apply migration %04d (%s)", m.Version, m.Name)
+			}
+		} else {
+			if _, err := db.ExecContext(ctx, m.Up); err != nil {
+				return errtrace.Wrapf(err, "apply migration %04d (%s)", m.Version, m.Name)
+			}
 		}
 		if _, err := db.ExecContext(ctx, schemaVersionInsert, m.Version, m.Name); err != nil {
 			return errtrace.Wrapf(err, "record migration %04d (%s)", m.Version, m.Name)
