@@ -65,7 +65,7 @@ func Test_LogScan_NoOriginalUrlLeak(t *testing.T) {
 
 	br := &fakeBrowser{}
 	st := newFakeStore()
-	tools := NewTools(br, st, DefaultToolsConfig()).MustValue()
+	tools := NewTools(br, st, DefaultToolsConfig()).Value()
 
 	ctx := context.Background()
 	spec := OpenUrlSpec{
@@ -78,8 +78,8 @@ func Test_LogScan_NoOriginalUrlLeak(t *testing.T) {
 	// First call — should launch and (in any future log addition) emit
 	// a "launched" log entry.
 	r1 := tools.OpenUrl(ctx, spec)
-	if r1.Err() != nil {
-		t.Fatalf("OpenUrl#1: %v", r1.Err())
+	if r1.Error() != nil {
+		t.Fatalf("OpenUrl#1: %v", r1.Error())
 	}
 	if r1.Value().Deduped {
 		t.Fatal("OpenUrl#1 unexpectedly deduped")
@@ -88,8 +88,8 @@ func Test_LogScan_NoOriginalUrlLeak(t *testing.T) {
 	// Second call — should hit the in-memory dedup branch and (in any
 	// future log addition) emit a "deduped" log entry.
 	r2 := tools.OpenUrl(ctx, spec)
-	if r2.Err() != nil {
-		t.Fatalf("OpenUrl#2: %v", r2.Err())
+	if r2.Error() != nil {
+		t.Fatalf("OpenUrl#2: %v", r2.Error())
 	}
 	if !r2.Value().Deduped {
 		t.Fatal("OpenUrl#2 should have been deduped")
@@ -113,13 +113,13 @@ func Test_LogScan_NoOriginalUrlLeak(t *testing.T) {
 	// path too; then re-scan. Keeps the test tight against any future
 	// log emissions on the persistent-write branch.
 	stPersist := newFakeStore()
-	toolsP := NewTools(br, stPersist, DefaultToolsConfig()).MustValue()
+	toolsP := NewTools(br, stPersist, DefaultToolsConfig()).Value()
 	specP := spec
 	specP.EmailId = 99
 	specP.Url = rawUrl // redact path again
 	rp := toolsP.OpenUrl(ctx, specP)
-	if rp.Err() != nil {
-		t.Fatalf("OpenUrl persist branch: %v", rp.Err())
+	if rp.Error() != nil {
+		t.Fatalf("OpenUrl persist branch: %v", rp.Error())
 	}
 	if leaks := scan.scanForSubstrings(sensitiveUserinfo, sensitiveOtp); len(leaks) > 0 {
 		t.Fatalf("AC-DB-55 (persist branch): leaked in %d record(s):\n%s",
