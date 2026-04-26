@@ -71,7 +71,8 @@ func startThemeLiveConsumer(ctx context.Context) {
 // A no-op when the mode is unchanged — ApplyToFyne is cheap but SetTheme
 // triggers a full repaint, so we skip when not needed.
 func forwardThemeEvents(events <-chan core.SettingsEvent) {
-	var last core.ThemeMode = -1 // sentinel so the first event always applies
+	const unset core.ThemeMode = 0 // sentinel: 0 is not a valid ThemeMode
+	last := unset
 	for ev := range events {
 		mode := ev.Snapshot.Theme
 		if mode == last {
