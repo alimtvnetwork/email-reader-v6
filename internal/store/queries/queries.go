@@ -444,3 +444,54 @@ LEFT JOIN poll       p  ON p.Alias  = a.Alias
 LEFT JOIN err        e  ON e.Alias  = a.Alias
 LEFT JOIN emails_agg em ON em.Alias = a.Alias
 ORDER BY a.Alias`
+
+// RecentActivitySelectN returns up to `?` most-recent rows from the
+// `WatchEvents` audit table, sorted DESC by `OccurredAt`. Backs
+// `(*Store).QueryRecentActivity`, which in turn backs the Dashboard
+// `RecentActivity` projection through the
+// `core.NewStoreActivitySource` adapter (Slice #104 wire-up).
+//
+// Columns selected (verbatim, in order):
+//
+//   - `Alias`      — non-null TEXT.
+//   - `Kind`       — INTEGER, the `core.WatchEventKind` enum
+//                    (1=Start, 2=Stop, 3=Error, 4=Heartbeat).
+//   - `OccurredAt` — RFC3339 TEXT (per the m0008 convention; same
+//                    parser as `AccountHealthSelectAll` reuses).
+//   - `Payload`    — TEXT JSON; defaults to `'{}'`. Adapter pulls
+//                    optional `Message` (string) and `ErrorCode`
+//                    (number) from this blob — both are spec-required
+//                    fields on `core.ActivityRow` but not column-
+//                    addressable in this schema (m0008 deliberately
+//                    keeps `WatchEvents` minimal; richer columns
+//                    would add a per-event-type schema split).
+//
+// **Why DESC ORDER then LIMIT (vs. window function)** — the existing
+// composite index `IxWatchEventsAliasOccurredAt(Alias, OccurredAt)`
+// also serves global "newest first" because SQLite uses any
+// `OccurredAt` index to satisfy `ORDER BY OccurredAt DESC` even
+// without `Alias` in the WHERE clause. Adding a second index just
+// for activity feeds would double write cost on every poll for a
+// Phase-3-only feature; the existing index is good enough at our
+// row counts (a busy account writes ~1 event/min, so a year is
+// ~525k rows — well within SQLite's "fast scan" envelope).
+//
+// **What this intentionally does NOT include** — the spec
+// `ActivityKind` enum has two non-WatchEvents members (`EmailStored`
+// and `RuleMatched`). Wiring those requires either:
+//   (a) a UNION across `Emails` (StoredAt / Subject) and
+//       `WatchEvents` (handle different timestamp shapes + sort
+//       merge), or
+//   (b) extending `WatchEvents` to record those kinds at write-time
+//       so this single SELECT continues to suffice.
+// Slice #104 ships path (b)-compatible: only the watcher lifecycle
+// kinds (Start/Stop/Error/Heartbeat) are returned. Email/rule
+// activity surfaces in a follow-on slice once the watcher writes
+// `Kind=5` (EmailStored) / `Kind=6` (RuleMatched) audit rows.
+//
+// Spec: spec/21-app/02-features/01-dashboard/01-backend.md §2.2.
+const RecentActivitySelectN = `
+SELECT Alias, Kind, OccurredAt, Payload
+FROM   WatchEvents
+ORDER  BY OccurredAt DESC, Id DESC
+LIMIT  ?`
