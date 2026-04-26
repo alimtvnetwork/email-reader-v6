@@ -12,26 +12,22 @@ import (
 	"errors"
 	"log/slog"
 	"strings"
-	"sync"
 	"testing"
 )
 
 // withTestLogger swaps maintenanceLogger for one that writes to a
-// bytes.Buffer, then restores it. Synchronises the once so a real
-// process logger built earlier doesn't leak into the test.
+// bytes.Buffer, then restores it. We also pre-fire the lazy
+// initialiser so any production-side `maintenanceSlog()` call inside
+// the test body re-uses our test logger instead of building a new
+// stdout sink on top of it.
 func withTestLogger(t *testing.T, fn func(buf *bytes.Buffer)) {
 	t.Helper()
+	_ = maintenanceSlog() // ensure once.Do has fired with a real logger
 	var buf bytes.Buffer
 	prev := maintenanceLogger
-	prevOnce := maintenanceLoggerOnce
 	maintenanceLogger = slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})).
 		With(slog.String("component", componentMaintenance))
-	maintenanceLoggerOnce = sync.Once{}
-	maintenanceLoggerOnce.Do(func() {}) // mark consumed so production lazy-init no-ops
-	t.Cleanup(func() {
-		maintenanceLogger = prev
-		maintenanceLoggerOnce = prevOnce
-	})
+	t.Cleanup(func() { maintenanceLogger = prev })
 	fn(&buf)
 }
 
