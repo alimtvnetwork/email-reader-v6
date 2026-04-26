@@ -35,13 +35,14 @@ type AddAccountFormOptions struct {
 // 15-statement limit (AC-PROJ-20) by hiding a long sequence of NewEntry /
 // NewCheck calls behind one helper.
 type accountFormEntries struct {
-	alias    *widget.Entry
-	email    *widget.Entry
-	password *widget.Entry
-	host     *widget.Entry
-	port     *widget.Entry
-	useTLS   *widget.Check
-	mailbox  *widget.Entry
+	alias       *widget.Entry
+	email       *widget.Entry
+	displayName *widget.Entry
+	password    *widget.Entry
+	host        *widget.Entry
+	port        *widget.Entry
+	useTLS      *widget.Check
+	mailbox     *widget.Entry
 }
 
 // BuildAddAccountForm returns the inline Add Account form widget.
@@ -60,13 +61,15 @@ func BuildAddAccountForm(opts AddAccountFormOptions) fyne.CanvasObject {
 	return container.NewPadded(container.NewVBox(form, widget.NewSeparator(), actions, status))
 }
 
-// newAccountFormEntries constructs the seven entry widgets with their
+// newAccountFormEntries constructs the entry widgets with their
 // placeholders. Returning a struct keeps BuildAddAccountForm flat.
 func newAccountFormEntries() *accountFormEntries {
 	alias := widget.NewEntry()
 	alias.SetPlaceHolder("e.g. work-gmail")
 	email := widget.NewEntry()
 	email.SetPlaceHolder("you@example.com")
+	displayName := widget.NewEntry()
+	displayName.SetPlaceHolder("optional — e.g. Work — Sales inbox")
 	password := widget.NewPasswordEntry()
 	password.SetPlaceHolder("IMAP password or app-specific token")
 	host := widget.NewEntry()
@@ -77,7 +80,24 @@ func newAccountFormEntries() *accountFormEntries {
 	useTLS.SetChecked(true)
 	mailbox := widget.NewEntry()
 	mailbox.SetPlaceHolder("INBOX")
-	return &accountFormEntries{alias, email, password, host, port, useTLS, mailbox}
+	return &accountFormEntries{alias, email, displayName, password, host, port, useTLS, mailbox}
+}
+
+// newPasswordRevealButton toggles the password Entry between hidden
+// (default) and visible. Re-creating the underlying Entry would lose the
+// typed value, so we mutate Password in place and refresh.
+func newPasswordRevealButton(pw *widget.Entry) *widget.Button {
+	btn := widget.NewButton("Show", nil)
+	btn.OnTapped = func() {
+		pw.Password = !pw.Password
+		if pw.Password {
+			btn.SetText("Show")
+		} else {
+			btn.SetText("Hide")
+		}
+		pw.Refresh()
+	}
+	return btn
 }
 
 // newStatusLabel returns a wrap-on-word label used to show inline form
