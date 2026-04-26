@@ -241,16 +241,18 @@ func (s *Store) HasOpenedUrl(ctx context.Context, emailId int64, url string) (bo
 func (s *Store) GetEmailByUid(ctx context.Context, alias string, uid uint32) (*Email, error) {
 	var e Email
 	var received sql.NullTime
+	var isRead int
 	err := s.DB.QueryRowContext(ctx, queries.EmailByUid,
 		alias, uid,
 	).Scan(&e.Id, &e.Alias, &e.MessageId, &e.Uid, &e.FromAddr, &e.ToAddr,
-		&e.CcAddr, &e.Subject, &e.BodyText, &e.BodyHtml, &received, &e.FilePath)
+		&e.CcAddr, &e.Subject, &e.BodyText, &e.BodyHtml, &received, &e.FilePath, &isRead)
 	if err != nil {
 		return nil, errtrace.Wrapf(err, "select email alias=%s uid=%d", alias, uid)
 	}
 	if received.Valid {
 		e.ReceivedAt = received.Time
 	}
+	e.IsRead = isRead != 0
 	return &e, nil
 }
 
