@@ -13,6 +13,7 @@ import (
 
 	"github.com/lovable/email-read/internal/core"
 	"github.com/lovable/email-read/internal/errtrace"
+	"github.com/lovable/email-read/internal/watcher"
 )
 
 // DashboardOptions wires the dashboard to app state + actions.
@@ -21,6 +22,7 @@ type DashboardOptions struct {
 	OnStartWatch func()
 	OnRefresh    func()
 	LoadStats    LoadStatsFunc
+	Bus          *watcher.Bus // optional; live counter row when non-nil
 }
 
 // LoadStatsFunc is the seam used by tests to inject deterministic counts.
@@ -43,9 +45,11 @@ func BuildDashboard(opts DashboardOptions) fyne.CanvasObject {
 	refresh()
 
 	actions := newDashboardActions(opts, refresh)
+	live := newDashboardLiveRow(opts)
 	return container.NewVBox(
 		heading, subtitle, widget.NewSeparator(),
 		cards.Row, widget.NewSeparator(),
+		live, widget.NewSeparator(),
 		actions, autoStart, status,
 	)
 }
