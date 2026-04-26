@@ -41,7 +41,11 @@ type settingsExtension struct {
 	AllowLocalhostUrls    bool     `json:"allowLocalhostUrls"`
 	AutoStartWatch        bool     `json:"autoStartWatch"`
 	OpenUrlsRetentionDays uint16   `json:"openUrlsRetentionDays"`
-	UpdatedAt             string   `json:"updatedAt"` // RFC3339; "" when never written
+	WeeklyVacuumOn        string   `json:"weeklyVacuumOn"`        // "Sunday".."Saturday"
+	WeeklyVacuumHourLocal uint8    `json:"weeklyVacuumHourLocal"` // 0..23
+	WalCheckpointHours    uint8    `json:"walCheckpointHours"`    // 1..168
+	PruneBatchSize        uint32   `json:"pruneBatchSize"`        // 100..50000
+	UpdatedAt             string   `json:"updatedAt"`             // RFC3339; "" when never written
 }
 
 // rawConfigWithSettings extends the on-disk JSON with the optional settings
@@ -318,6 +322,10 @@ func applyInputToRaw(raw *rawConfigWithSettings, in SettingsInput, now time.Time
 	raw.ext.AllowLocalhostUrls = in.AllowLocalhostUrls
 	raw.ext.AutoStartWatch = in.AutoStartWatch
 	raw.ext.OpenUrlsRetentionDays = in.OpenUrlsRetentionDays
+	raw.ext.WeeklyVacuumOn = in.WeeklyVacuumOn.String()
+	raw.ext.WeeklyVacuumHourLocal = in.WeeklyVacuumHourLocal
+	raw.ext.WalCheckpointHours = in.WalCheckpointHours
+	raw.ext.PruneBatchSize = in.PruneBatchSize
 	raw.ext.UpdatedAt = now.UTC().Format(time.RFC3339Nano)
 }
 
