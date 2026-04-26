@@ -73,7 +73,23 @@ func validateInput(in SettingsInput) error {
 	if err := validateIncognitoArg(in.BrowserOverride.IncognitoArg); err != nil {
 		return err
 	}
+	if err := validateRetentionDays(in.OpenUrlsRetentionDays); err != nil {
+		return err
+	}
 	return validateLocalhostComposite(in)
+}
+
+// validateRetentionDays caps the OpenedUrls audit-row lifetime at 10 years.
+// 0 disables retention entirely (per spec/23-app-database/04-retention §1).
+func validateRetentionDays(v uint16) error {
+	if v > 3650 {
+		return errtrace.NewCoded(errtrace.ErrSettingsRetentionDays,
+			"retention days out of range").
+			WithContext("value", v).
+			WithContext("min", 0).
+			WithContext("max", 3650)
+	}
+	return nil
 }
 
 func validatePollSeconds(v uint16) error {
