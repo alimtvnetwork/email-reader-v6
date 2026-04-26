@@ -196,5 +196,6 @@ func RemoveAccount(alias string) errtrace.Result[struct{}] {
 				WithContext("Alias", alias),
 		)
 	}
+	publishAccountEvent(AccountRemoved, alias)
 	return errtrace.Ok(struct{}{})
 }
