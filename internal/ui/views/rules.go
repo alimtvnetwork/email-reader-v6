@@ -31,8 +31,19 @@ type RulesOptions struct {
 	List    func() errtrace.Result[[]config.Rule]
 	Toggle  func(name string, enabled bool) errtrace.Result[struct{}]
 	Remove  func(name string) errtrace.Result[struct{}]
-	// OnRulesChanged fires after a successful Edit/Delete so the shell can
-	// refresh dependent views (Tools tab counts, dashboard tile, etc.).
+	// Rename / Reorder are the Phase 5.6 additions. When nil and a
+	// Service is wired, they default to the typed methods on
+	// `*core.RulesService` (which return `Result[core.Unit]`, hence
+	// the distinct generic instantiation from Toggle/Remove above).
+	// When BOTH the override and Service are nil, the corresponding
+	// row buttons are hidden — the rest of the view still works,
+	// matching the "degraded but functional" contract documented on
+	// the Toggle/Remove fallbacks.
+	Rename  func(oldName, newName string) errtrace.Result[core.Unit]
+	Reorder func(names []string) errtrace.Result[core.Unit]
+	// OnRulesChanged fires after a successful Edit/Delete/Rename/Reorder
+	// so the shell can refresh dependent views (Tools tab counts,
+	// dashboard tile, etc.).
 	OnRulesChanged func()
 }
 
@@ -47,11 +58,20 @@ func BuildRules(opts RulesOptions) fyne.CanvasObject {
 		if opts.Remove == nil {
 			opts.Remove = opts.Service.Remove
 		}
+		if opts.Rename == nil {
+			opts.Rename = opts.Service.Rename
+		}
+		if opts.Reorder == nil {
+			opts.Reorder = opts.Service.Reorder
+		}
 	}
 	if opts.List == nil || opts.Toggle == nil || opts.Remove == nil {
 		// Degraded path: bootstrap didn't wire a *RulesService and no
 		// test overrides were supplied. Render an inline error panel
-		// instead of nil-panicking on the first list call.
+		// instead of nil-panicking on the first list call. Rename and
+		// Reorder are *not* required for this gate — older callers
+		// that wire only List/Toggle/Remove keep working without the
+		// new row affordances.
 		heading := widget.NewLabelWithStyle("Rules", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 		return container.NewVBox(heading,
 			widget.NewLabel("⚠ Rules service not wired (no Service or List/Toggle/Remove overrides injected)"))
