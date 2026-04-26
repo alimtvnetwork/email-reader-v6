@@ -183,8 +183,29 @@ func (s *Store) CountUnreadEmails(ctx context.Context, alias string) (int, error
 	return n, nil
 }
 
+// CountDeletedEmails returns the number of Emails rows with
+// `DeletedAt IS NOT NULL` matching the alias (or all when alias ==
+// ""). Mirrors the `CountUnreadEmails` shape so
+// `(*core.EmailsService).Counts` can issue three independent COUNT
+// queries and assemble an `EmailCounts` projection without any
+// SUM(CASE) round-trip.
+//
+// Spec: spec/21-app/02-features/02-emails/01-backend.md §3.5.
+func (s *Store) CountDeletedEmails(ctx context.Context, alias string) (int, error) {
+	var n int
+	var err error
+	if alias == "" {
+		err = s.DB.QueryRowContext(ctx, queries.EmailsCountDeletedAll).Scan(&n)
+	} else {
+		err = s.DB.QueryRowContext(ctx, queries.EmailsCountDeletedByAlias, alias).Scan(&n)
+	}
+	if err != nil {
+		return 0, errtrace.Wrap(err, "CountDeletedEmails")
+	}
+	return n, nil
+}
 
-// SetEmailDeletedAt sets `Emails.DeletedAt` for every (alias, uid) in
+
 // `uids`. Returns cumulative RowsAffected across all batches.
 //
 // **Polarity**: `deletedAt == nil` writes SQL NULL ("undelete"); a
