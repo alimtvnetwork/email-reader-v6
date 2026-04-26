@@ -39,43 +39,17 @@ type AddAccountResult struct {
 // by Diagnose. Returns an error for missing required fields or persistence
 // failures.
 func AddAccount(in AccountInput) (*AddAccountResult, error) {
-	in.Email = strings.TrimSpace(in.Email)
-	in.Alias = strings.TrimSpace(in.Alias)
-	if in.Email == "" || in.Alias == "" || in.PlainPassword == "" {
-		return nil, errtrace.New("email, alias and password are required")
+	clean, hidden, err := validateAndSanitize(&in)
+	if err != nil {
+		return nil, err
 	}
-
-	clean := config.SanitizePassword(in.PlainPassword)
-	hidden := len(in.PlainPassword) - len(clean)
 
 	cfg, err := config.Load()
 	if err != nil {
 		return nil, errtrace.Wrap(err, "load config")
 	}
 
-	host := in.ImapHost
-	port := in.ImapPort
-	useTLS := in.UseTLS
-	if host == "" || port == 0 {
-		primary, _, _ := imapdef.Lookup(in.Email)
-		if host == "" {
-			host = primary.Host
-		}
-		if port == 0 {
-			port = primary.Port
-			if port == 0 {
-				port = 993
-			}
-		}
-		if !in.UseTLSExplicit {
-			useTLS = primary.UseTLS || useTLS
-		}
-	}
-	mailbox := in.Mailbox
-	if mailbox == "" {
-		mailbox = "INBOX"
-	}
-
+	host, port, useTLS, mailbox := resolveImapDefaults(in)
 	acct := config.Account{
 		Alias:       in.Alias,
 		Email:       in.Email,
@@ -95,6 +69,48 @@ func AddAccount(in AccountInput) (*AddAccountResult, error) {
 		HiddenCharsRem: hidden,
 		ConfigPath:     p,
 	}, nil
+}
+
+// validateAndSanitize trims required fields on `in` (in place), then sanitizes
+// the password. Returns the cleaned password and the count of hidden chars
+// removed, or an error when required fields are missing.
+func validateAndSanitize(in *AccountInput) (string, int, error) {
+	in.Email = strings.TrimSpace(in.Email)
+	in.Alias = strings.TrimSpace(in.Alias)
+	if in.Email == "" || in.Alias == "" || in.PlainPassword == "" {
+		return "", 0, errtrace.New("email, alias and password are required")
+	}
+	clean := config.SanitizePassword(in.PlainPassword)
+	hidden := len(in.PlainPassword) - len(clean)
+	return clean, hidden, nil
+}
+
+// resolveImapDefaults derives missing host/port/TLS/mailbox values from the
+// email domain via imapdef lookup, falling back to sensible defaults.
+func resolveImapDefaults(in AccountInput) (host string, port int, useTLS bool, mailbox string) {
+	host = in.ImapHost
+	port = in.ImapPort
+	useTLS = in.UseTLS
+	if host == "" || port == 0 {
+		primary, _, _ := imapdef.Lookup(in.Email)
+		if host == "" {
+			host = primary.Host
+		}
+		if port == 0 {
+			port = primary.Port
+			if port == 0 {
+				port = 993
+			}
+		}
+		if !in.UseTLSExplicit {
+			useTLS = primary.UseTLS || useTLS
+		}
+	}
+	mailbox = in.Mailbox
+	if mailbox == "" {
+		mailbox = "INBOX"
+	}
+	return host, port, useTLS, mailbox
 }
 
 // ListAccounts returns all configured accounts (a copy — safe to mutate).
