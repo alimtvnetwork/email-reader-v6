@@ -61,7 +61,7 @@ func readOnceWith(ctx context.Context, spec ReadSpec, progress chan<- string,
 	if err != nil {
 		return errtrace.Err[ReadResult](err)
 	}
-	send(progress, fmt.Sprintf("dialing %s:%d as %s…", acct.Server, acct.Port, acct.User))
+	send(progress, fmt.Sprintf("dialing %s:%d as %s…", acct.ImapHost, acct.ImapPort, acct.Email))
 	if err := ctxCheck(ctx); err != nil {
 		return errtrace.Err[ReadResult](err)
 	}
