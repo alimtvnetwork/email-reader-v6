@@ -26,11 +26,20 @@ import (
 	"github.com/lovable/email-read/internal/errtrace"
 )
 
-// AddRuleFormOptions wires the form to its side effects. Save defaults to
-// core.AddRule (which already upserts by name, so the same function works
-// for both Add and Edit). Tests inject a stub. OnSaved fires after a
-// successful save so the shell can refresh dependent views.
+// AddRuleFormOptions wires the form to its side effects.
+//
+// **Phase 2.7 migration.** The old shape defaulted `Save` to the
+// deprecated package-level `core.AddRule`. The new shape accepts a
+// typed `*core.RulesService` (constructed once at app boot via
+// `core.NewDefaultRulesService`). `Save` survives as an optional
+// override used exclusively by tests to inject deterministic
+// outcomes; when nil we delegate to `Service.Add`. When both Service
+// and Save are nil we render an inline error banner instead of
+// panicking on submit — keeps headless / partial-bootstrap previews
+// safe. OnSaved fires after a successful save so the shell can
+// refresh dependent views.
 type AddRuleFormOptions struct {
+	Service *core.RulesService // production seam — constructed in app bootstrap
 	Save    func(in core.RuleInput) errtrace.Result[*core.AddRuleResult]
 	OnSaved func()
 	Initial *config.Rule // nil ⇒ Add mode; non-nil ⇒ Edit mode
