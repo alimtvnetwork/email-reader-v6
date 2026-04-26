@@ -267,3 +267,55 @@ func (m *Maintenance) maybeAnalyze(ctx context.Context, cum int64) int64 {
 	}
 	return 0
 }
+
+// maybeWalCheckpoint runs the WAL checkpoint when the cadence is due.
+// Returns the next "lastRun" timestamp; on error the timestamp does NOT
+// advance so the next tick retries (consistent with maybeSweep).
+func (m *Maintenance) maybeWalCheckpoint(ctx context.Context, lastRun time.Time) time.Time {
+	if m.opts.WalCheckpointer == nil {
+		return lastRun
+	}
+	now := m.opts.Now()
+	if !ShouldRunWalCheckpoint(lastRun, now, m.opts.WalCheckpointHours) {
+		return lastRun
+	}
+	pages, err := m.opts.WalCheckpointer(ctx)
+	if m.opts.OnWalCheckpoint != nil {
+		m.opts.OnWalCheckpoint(pages, err)
+	}
+	if err != nil {
+		return lastRun
+	}
+	return now
+}
+
+// maybeVacuum runs the weekly VACUUM job. The VacuumGate (free-list
+// guard, spec §4) is consulted first; if it returns false we still bump
+// lastRun so we don't re-check inside the same hour-slot. Errors keep
+// lastRun stale so the next tick retries within the slot.
+func (m *Maintenance) maybeVacuum(ctx context.Context, lastRun time.Time) time.Time {
+	if m.opts.Vacuumer == nil {
+		return lastRun
+	}
+	now := m.opts.Now()
+	if !ShouldRunWeeklyVacuum(lastRun, now, m.opts.VacuumWeekday, m.opts.VacuumHourLocal) {
+		return lastRun
+	}
+	if m.opts.VacuumGate != nil {
+		ok, err := m.opts.VacuumGate(ctx)
+		if err != nil {
+			return lastRun // gate failed → retry next tick
+		}
+		if !ok {
+			return now // skip vacuum but don't keep re-asking this slot
+		}
+	}
+	reclaimed, err := m.opts.Vacuumer(ctx)
+	if m.opts.OnVacuum != nil {
+		m.opts.OnVacuum(reclaimed, err)
+	}
+	if err != nil {
+		return lastRun
+	}
+	return now
+}
