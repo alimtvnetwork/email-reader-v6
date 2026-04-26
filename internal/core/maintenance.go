@@ -38,6 +38,19 @@ type Pruner func(ctx context.Context, cutoff time.Time) (int64, error)
 // is never reset (which is harmless — Pruner still runs).
 type Analyzer func(ctx context.Context) error
 
+// Vacuumer is the seam over store.Vacuum. Returns reclaimed bytes (may
+// be negative on the rare grow case; callers log either way).
+type Vacuumer func(ctx context.Context) (reclaimedBytes int64, err error)
+
+// VacuumGate is the optional pre-check seam mirroring store.ShouldVacuum:
+// when non-nil and returning false, Vacuumer is skipped. The Maintenance
+// loop still bumps lastVacuumRun so we don't re-check inside the same slot.
+type VacuumGate func(ctx context.Context) (shouldRun bool, err error)
+
+// WalCheckpointer is the seam over store.WalCheckpointTruncate. Returns
+// the number of WAL frames present before the truncation (observability).
+type WalCheckpointer func(ctx context.Context) (pages int64, err error)
+
 // AnalyzeThresholdRows is the cumulative-delete count above which the
 // Maintenance loop fires Analyzer and resets the counter. Mirrors
 // store.AnalyzeThreshold (kept here as a separate const so the core
@@ -63,6 +76,21 @@ type MaintenanceOptions struct {
 	// AnalyzeThresholdRows; the counter then resets to zero. Spec
 	// 23-app-database/04 §2.
 	Analyzer Analyzer
+	// Vacuumer is optional. When non-nil, runs once per WeeklyVacuum
+	// slot (default Sunday 03:00 local). Spec 23-app-database/04 §2 row 5.
+	Vacuumer Vacuumer
+	// VacuumGate, when non-nil, runs before Vacuumer; returning false
+	// skips the VACUUM (e.g. free-list < 5%). Spec §4.
+	VacuumGate VacuumGate
+	// WalCheckpointer is optional. When non-nil, runs every
+	// WalCheckpointHours (default 6). Spec §2 row 4.
+	WalCheckpointer WalCheckpointer
+	// VacuumWeekday defaults to time.Sunday.
+	VacuumWeekday time.Weekday
+	// VacuumHourLocal defaults to 3 (03:00 local).
+	VacuumHourLocal int
+	// WalCheckpointHours defaults to 6.
+	WalCheckpointHours int
 	// Now defaults to time.Now.
 	Now func() time.Time
 	// TickInterval defaults to 1 minute. The retention tick fires at
@@ -78,6 +106,13 @@ type MaintenanceOptions struct {
 	// Receives the cumulative-delete count that triggered it and the
 	// Analyzer's error (nil on success). Used by tests + structured logs.
 	OnAnalyze func(triggeredAt int64, err error)
+	// OnVacuum is an optional observer fired after every Vacuumer
+	// invocation (skipped runs do NOT fire it). reclaimedBytes mirrors
+	// the store.Vacuum return value.
+	OnVacuum func(reclaimedBytes int64, err error)
+	// OnWalCheckpoint is an optional observer fired after every
+	// WalCheckpointer invocation. pages = WAL frames before truncation.
+	OnWalCheckpoint func(pages int64, err error)
 }
 
 // Maintenance is the goroutine handle. Construct via NewMaintenance,
