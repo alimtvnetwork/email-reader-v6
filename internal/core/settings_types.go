@@ -159,3 +159,25 @@ func DefaultSettingsInput() SettingsInput {
 		PruneBatchSize:        5000,
 	}
 }
+
+// ParseWeekday parses the canonical capitalised weekday name
+// ("Sunday".."Saturday"). Empty/unknown returns (Sunday, false).
+func ParseWeekday(s string) (time.Weekday, bool) {
+	switch s {
+	case "Sunday":
+		return time.Sunday, true
+	case "Monday":
+		return time.Monday, true
+	case "Tuesday":
+		return time.Tuesday, true
+	case "Wednesday":
+		return time.Wednesday, true
+	case "Thursday":
+		return time.Thursday, true
+	case "Friday":
+		return time.Friday, true
+	case "Saturday":
+		return time.Saturday, true
+	}
+	return time.Sunday, false
+}
