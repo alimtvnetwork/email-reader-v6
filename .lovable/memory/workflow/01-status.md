@@ -1,6 +1,6 @@
 # Workflow status
 
-Last updated: 2026-04-26 (UTC) — Settings form now exposes the **Opened-URLs retention (days)** input (0–3650, hint "0 = never prune"); pure helpers `ParseRetentionDays` + extended `ProjectSettingsInput` cover bounds + zero-disables semantics. Bonus fix: dropped a dead `core` import in `tools_recent_opens.go` that was breaking the Fyne (desktop) build.
+Last updated: 2026-04-26 (UTC) — Retention-sweep observability landed: every `OpenedUrls` prune tick now emits a single canonical log line (`ui: maintenance: retention sweep: deleted=N {ok|error=…}`) via the existing `OnSweep` seam. Format pinned by 4-case test so dashboards/runbooks survive future changes.
 
 ## Current milestone
 🎯 **Spec-21-app implementation Phase 2** — turning the spec/21-app deltas into shipped code. Spec authoring round (35 tasks) **closed**; tasklist archived to `mem://archive/02-spec-21-app-tasklist`.
