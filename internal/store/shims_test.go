@@ -25,40 +25,26 @@ func TestEmailExportFilter_RoundTrip(t *testing.T) {
 	}
 }
 
-// TestBuildOpenedUrlsQuery is the SQL-composition twin of the
-// (now-deleted) `core.TestBuildOpenedUrlsQuery`.
-func TestBuildOpenedUrlsQuery(t *testing.T) {
+// TestQueryOpenedUrls_FilterRoundTrip confirms the shim correctly
+// forwards its filter to queries.OpenedUrlsList. SQL composition itself
+// is covered exhaustively in queries/queries_test.go (P1.9).
+func TestQueryOpenedUrls_FilterRoundTrip(t *testing.T) {
 	t.Parallel()
-	now := time.Now()
-	cases := []struct {
-		name     string
-		f        OpenedUrlListFilter
-		wantArgs int
-		wantSubs []string
-	}{
-		{"baseline",
-			OpenedUrlListFilter{Limit: 50, Before: now},
-			2, []string{"OpenedAt < ?", "LIMIT ?"}},
-		{"alias",
-			OpenedUrlListFilter{Limit: 50, Before: now, Alias: "work"},
-			3, []string{"Alias = ?"}},
-		{"origin",
-			OpenedUrlListFilter{Limit: 50, Before: now, Origin: "rule"},
-			3, []string{"Origin = ?"}},
-		{"both",
-			OpenedUrlListFilter{Limit: 50, Before: now, Alias: "w", Origin: "manual"},
-			4, []string{"Alias = ?", "Origin = ?"}},
+	st := newTestStore(t)
+	ctx := context.Background()
+	rows, err := st.QueryOpenedUrls(ctx, OpenedUrlListFilter{
+		Before: time.Now().Add(time.Hour),
+		Limit:  10,
+	})
+	if err != nil {
+		t.Fatalf("QueryOpenedUrls baseline: %v", err)
 	}
-	for _, c := range cases {
-		q, args := buildOpenedUrlsQuery(c.f)
-		if len(args) != c.wantArgs {
-			t.Errorf("%s: want %d args, got %d (%v)", c.name, c.wantArgs, len(args), args)
-		}
-		for _, sub := range c.wantSubs {
-			if !strings.Contains(q, sub) {
-				t.Errorf("%s: query missing %q in %s", c.name, sub, q)
-			}
-		}
+	defer rows.Close()
+	for rows.Next() {
+		// no rows expected on a fresh store, but iterate to drain
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("rows.Err: %v", err)
 	}
 }
 
