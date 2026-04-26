@@ -7,18 +7,17 @@
 //     renders identically to a live run. `Force: true` bypasses + evicts.
 //
 //  2. `Tools.RecentOpenedUrls(ctx, spec)` — read-only audit accessor
-//     backed by the existing OpenedUrls table. Per spec §2.5 the rich
-//     schema (Alias / Origin / OriginalUrl / IsDeduped / IsIncognito) is
-//     deferred to Delta #1 (PascalCase migration); v1 returns the rows
-//     that exist today (Id, EmailId, RuleName, Url, OpenedAt) and the
-//     caller can filter on Limit + Before. Alias/Origin filters are
-//     accepted but ignored until the schema is migrated.
+//     backed by the OpenedUrls table. Delta #1 (PascalCase migration)
+//     activated the rich schema (Alias / Origin / OriginalUrl /
+//     IsDeduped / IsIncognito / TraceId); the Alias and Origin filter
+//     args are now honoured by `buildOpenedUrlsQuery`.
 //
 // Spec: spec/21-app/02-features/06-tools/01-backend.md §2.3 + §2.5.
 package core
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
