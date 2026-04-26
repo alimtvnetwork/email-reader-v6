@@ -25,8 +25,8 @@ func Test_Doctor_NoAccounts_ReturnsCodedError(t *testing.T) {
 
 func Test_Doctor_HiddenChars_FlaggedAndDumped(t *testing.T) {
 	withTempConfig(t, func() {
-		// Password with a U+200B (zero-width space) — sanitization will strip it.
-		raw := "pa\u200bss"
+		// Leading U+200B (ZWSP) — SanitizePassword trims leading format chars.
+		raw := "\u200bpass"
 		writeOneAccount(t, "atto", "atto@example.com", raw)
 
 		r := Doctor("")
