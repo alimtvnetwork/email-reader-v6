@@ -206,6 +206,25 @@ func (s *Store) ResetConsecutiveFailures(ctx context.Context, alias string) erro
 	return nil
 }
 
+// InsertWatchEvent appends one row to `WatchEvents` from the
+// `core.WatchEventPersistor` goroutine (Slice #107). `kind` is the
+// integer form of `core.WatchEventKind`; `payload` is a JSON blob
+// (caller passes `"{}"` when there's nothing structured to record);
+// `at` is the source-timestamped event time, preserved verbatim.
+//
+// **Failure mode**: wrapped with `errtrace.Wrap` and the persistor
+// logs but does not crash — losing one audit row is preferable to
+// breaking the live event stream that the dashboard subscribes to.
+func (s *Store) InsertWatchEvent(ctx context.Context, alias string, kind int, payload string, at time.Time) error {
+	_, err := s.DB.ExecContext(ctx, queries.WatchEventInsert,
+		alias, kind, payload, formatRFC3339UTC(at),
+	)
+	if err != nil {
+		return errtrace.Wrap(err, "insert watch event")
+	}
+	return nil
+}
+
 // OpenedUrlInsert is the rich payload for `RecordOpenedUrlExt` introduced
 // by Delta #1. The legacy `RecordOpenedUrl(emailId, ruleName, url)` call
 // path still works (Tools.OpenUrl uses the Ext form; watcher and CLI

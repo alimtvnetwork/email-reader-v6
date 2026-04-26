@@ -130,6 +130,8 @@ func TestMapWatchKindToActivityKind_Table(t *testing.T) {
 		{int(WatchStart), ActivityPollStarted, true},
 		{int(WatchHeartbeat), ActivityPollSucceeded, true},
 		{int(WatchError), ActivityPollFailed, true},
+		{int(WatchEmailStored), ActivityEmailStored, true},
+		{int(WatchRuleMatched), ActivityRuleMatched, true},
 		{int(WatchStop), "", false},
 		{0, "", false},
 		{99, "", false},

@@ -80,21 +80,35 @@ func runBridgeLoop(ctx context.Context, events <-chan watcher.Event, dst *eventb
 //
 // Mapping table (locked by tests):
 //
-//	watcher.EventPollOK      → WatchHeartbeat (silent OK pulse)
-//	watcher.EventBaseline    → WatchHeartbeat (initial cursor set)
-//	watcher.EventHeartbeat   → WatchHeartbeat (60-poll alive ping)
-//	watcher.EventNewMail     → WatchHeartbeat (visible activity)
-//	watcher.EventRuleMatch   → WatchHeartbeat (visible activity)
-//	watcher.EventUrlOpened   → WatchHeartbeat (visible activity, OK or fail)
-//	watcher.EventUidValReset → WatchHeartbeat (server-side mailbox reset note)
-//	watcher.EventPollError   → WatchError    (carries Err)
+//	watcher.EventPollOK      → WatchHeartbeat   (silent OK pulse)
+//	watcher.EventBaseline    → WatchHeartbeat   (initial cursor set)
+//	watcher.EventHeartbeat   → WatchHeartbeat   (60-poll alive ping)
+//	watcher.EventNewMail     → WatchEmailStored (Slice #107: business event)
+//	watcher.EventRuleMatch   → WatchRuleMatched (Slice #107: business event)
+//	watcher.EventUrlOpened   → WatchHeartbeat   (visible activity, OK or fail)
+//	watcher.EventUidValReset → WatchHeartbeat   (server-side mailbox reset note)
+//	watcher.EventPollError   → WatchError       (carries Err)
 //	watcher.EventStarted     → drop (Watch.Start already publishes WatchStart)
 //	watcher.EventStopped     → drop (Watch.Stop already publishes WatchStop)
 //
-// Future revision (non-blocking): once the Watch view exposes a typed
-// activity feed, EventNewMail / EventRuleMatch / EventUrlOpened can be
-// promoted to dedicated WatchEventKinds — the table here is the only
-// thing that needs to change.
+// **Slice #107 promotion rationale** — `EventNewMail` and
+// `EventRuleMatch` used to fold into `WatchHeartbeat` ("everything
+// the dashboard sees is just an alive ping"). That under-served the
+// `RecentActivity` feed because the spec `ActivityKind` enum has
+// dedicated `EmailStored` / `RuleMatched` members the user expects
+// to scan visually. Promoting both at the bridge — instead of
+// teaching the watcher to write a different kind directly —
+// preserves a single fan-in point and keeps the watcher package
+// free of dashboard-shaped enums (it already pre-dates the spec
+// `ActivityKind` taxonomy). The activity adapter then maps these
+// new `WatchEventKind`s straight to the spec strings; see
+// `mapWatchKindToActivityKind`.
+//
+// `EventUrlOpened` deliberately stays on `WatchHeartbeat` for now —
+// the spec has no `UrlOpened` ActivityKind, and folding a launch
+// success into `RuleMatched` would double-count (one match → at most
+// one launch). A dedicated `WatchUrlOpened` kind can land in a
+// follow-on slice if/when the spec grows the enum.
 func TranslateWatcherEvent(ev watcher.Event) (WatchEvent, bool) {
 	switch ev.Kind {
 	case watcher.EventStarted, watcher.EventStopped:
@@ -105,6 +119,20 @@ func TranslateWatcherEvent(ev watcher.Event) (WatchEvent, bool) {
 			Alias:   ev.Alias,
 			At:      ev.At,
 			Err:     ev.Err,
+			Message: watcherEventMessage(ev),
+		}, true
+	case watcher.EventNewMail:
+		return WatchEvent{
+			Kind:    WatchEmailStored,
+			Alias:   ev.Alias,
+			At:      ev.At,
+			Message: watcherEventMessage(ev),
+		}, true
+	case watcher.EventRuleMatch:
+		return WatchEvent{
+			Kind:    WatchRuleMatched,
+			Alias:   ev.Alias,
+			At:      ev.At,
 			Message: watcherEventMessage(ev),
 		}, true
 	default:

@@ -506,7 +506,9 @@ ORDER BY a.Alias`
 //
 //   - `Alias`      — non-null TEXT.
 //   - `Kind`       — INTEGER, the `core.WatchEventKind` enum
-//                    (1=Start, 2=Stop, 3=Error, 4=Heartbeat).
+//                    (1=Start, 2=Stop, 3=Error, 4=Heartbeat,
+//                    5=EmailStored, 6=RuleMatched — the latter two
+//                    added by Slice #107).
 //   - `OccurredAt` — RFC3339 TEXT (per the m0008 convention; same
 //                    parser as `AccountHealthSelectAll` reuses).
 //   - `Payload`    — TEXT JSON; defaults to `'{}'`. Adapter pulls
@@ -527,18 +529,14 @@ ORDER BY a.Alias`
 // row counts (a busy account writes ~1 event/min, so a year is
 // ~525k rows — well within SQLite's "fast scan" envelope).
 //
-// **What this intentionally does NOT include** — the spec
-// `ActivityKind` enum has two non-WatchEvents members (`EmailStored`
-// and `RuleMatched`). Wiring those requires either:
-//   (a) a UNION across `Emails` (StoredAt / Subject) and
-//       `WatchEvents` (handle different timestamp shapes + sort
-//       merge), or
-//   (b) extending `WatchEvents` to record those kinds at write-time
-//       so this single SELECT continues to suffice.
-// Slice #104 ships path (b)-compatible: only the watcher lifecycle
-// kinds (Start/Stop/Error/Heartbeat) are returned. Email/rule
-// activity surfaces in a follow-on slice once the watcher writes
-// `Kind=5` (EmailStored) / `Kind=6` (RuleMatched) audit rows.
+// **Slice #107 update** — the spec `ActivityKind` enum's
+// `EmailStored` / `RuleMatched` members are now column-addressable
+// in this single SELECT because the bridge promotes
+// `watcher.EventNewMail` → `WatchEmailStored` and
+// `watcher.EventRuleMatch` → `WatchRuleMatched`, and
+// `WatchEventPersistor` writes every bridged WatchEvent into this
+// table. The full spec ActivityKind taxonomy now flows end-to-end
+// without a UNION across `Emails`.
 //
 // Spec: spec/21-app/02-features/01-dashboard/01-backend.md §2.2.
 const RecentActivitySelectN = `
@@ -546,3 +544,22 @@ SELECT Alias, Kind, OccurredAt, Payload
 FROM   WatchEvents
 ORDER  BY OccurredAt DESC, Id DESC
 LIMIT  ?`
+
+// WatchEventInsert appends one row to the `WatchEvents` audit table
+// from `WatchEventPersistor`. Caller binds, in order:
+//
+//	(1) Alias       — TEXT, required.
+//	(2) Kind        — INTEGER, the `core.WatchEventKind` enum value.
+//	(3) Payload     — TEXT JSON; pass `'{}'` for the empty case.
+//	(4) OccurredAt  — RFC3339 TEXT; bind the bus event's `At` field
+//	                  (already-stamped by `(*core.Watch).publish` /
+//	                  the bridge). We deliberately do NOT default to
+//	                  the column's `strftime('now')` — preserving the
+//	                  source timestamp keeps event ordering stable
+//	                  even if the persistor goroutine briefly stalls.
+//
+// **Why a plain INSERT (not UPSERT)** — `WatchEvents` has an
+// AUTOINCREMENT surrogate PK; every event is a new row by design.
+// There is no natural-key conflict to resolve.
+const WatchEventInsert = `INSERT INTO WatchEvents (Alias, Kind, Payload, OccurredAt)
+       VALUES (?, ?, ?, ?)`

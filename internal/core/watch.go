@@ -26,13 +26,29 @@ import (
 // the Watch bus. Mirrors the spec §4 enum (Start / Stop / Error /
 // Heartbeat); low-level watcher.Bus signals are folded onto this
 // stream by core.BridgeWatcherBus (see watch_bridge.go).
+//
+// **Slice #107 extension** — added two business-event kinds
+// (`WatchEmailStored`, `WatchRuleMatched`) so the Dashboard
+// `RecentActivity` feed can surface user-visible audit entries
+// instead of only watcher-lifecycle pings. The bridge promotes the
+// corresponding `watcher.Event` kinds onto these new values; the
+// activity adapter (`dashboard_activity_source.go`) maps them to the
+// spec `ActivityEmailStored` / `ActivityRuleMatched` strings.
+//
+// **Why an extension is safe** — `WatchEventKind` is `uint8`, the
+// integer is persisted to `WatchEvents.Kind`, and the
+// `mapWatchKindToActivityKind` adapter already drops unknown kinds
+// (forward-compat). Older binaries reading a DB written by a newer
+// binary therefore see *fewer* activity rows, never a crash.
 type WatchEventKind uint8
 
 const (
-	WatchStart     WatchEventKind = 1
-	WatchStop      WatchEventKind = 2
-	WatchError     WatchEventKind = 3
-	WatchHeartbeat WatchEventKind = 4
+	WatchStart       WatchEventKind = 1
+	WatchStop        WatchEventKind = 2
+	WatchError       WatchEventKind = 3
+	WatchHeartbeat   WatchEventKind = 4
+	WatchEmailStored WatchEventKind = 5 // spec ActivityEmailStored — one per persisted message
+	WatchRuleMatched WatchEventKind = 6 // spec ActivityRuleMatched — one per rule hit
 )
 
 // String returns the canonical log form.
@@ -46,6 +62,10 @@ func (k WatchEventKind) String() string {
 		return "Error"
 	case WatchHeartbeat:
 		return "Heartbeat"
+	case WatchEmailStored:
+		return "EmailStored"
+	case WatchRuleMatched:
+		return "RuleMatched"
 	}
 	return "Unknown"
 }

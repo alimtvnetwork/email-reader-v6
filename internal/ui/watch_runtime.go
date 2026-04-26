@@ -325,6 +325,8 @@ func attachWatchAndBridge(ctx context.Context, rt *WatchRuntime, lf core.LoopFac
 	rt.Watch = wRes.Value()
 	stopBridge := core.BridgeWatcherBus(ctx, rt.Bus, dstBus)
 	rt.closers = append(rt.closers, func() error { stopBridge(); return nil })
+	stopPersist := core.StartWatchEventPersistor(ctx, dstBus, rt.Store)
+	rt.closers = append(rt.closers, func() error { stopPersist(); return nil })
 	return nil
 }
 
