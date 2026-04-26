@@ -112,12 +112,12 @@ func TestNewStoreActivitySource_StoreError_WrappedWithErrDbOpen(t *testing.T) {
 	if !res.HasError() {
 		t.Fatalf("post-Close: want error, got %d rows", len(res.Value()))
 	}
-	var coded *errtrace.CodedError
+	var coded *errtrace.Coded
 	if !errors.As(res.Error(), &coded) {
 		t.Fatalf("error not coded: %T %v", res.Error(), res.Error())
 	}
-	if coded.Code() != errtrace.ErrDbOpen {
-		t.Fatalf("wrong code: got %v, want ErrDbOpen", coded.Code())
+	if coded.Code != errtrace.ErrDbOpen {
+		t.Fatalf("wrong code: got %v, want ErrDbOpen", coded.Code)
 	}
 }
 
