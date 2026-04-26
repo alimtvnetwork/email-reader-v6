@@ -4,6 +4,10 @@
 // calls core.AddRule. Errors render inline; success shows a status banner
 // noting whether an existing rule was replaced.
 //
+// Edit mode: when Initial is non-nil the form starts pre-filled with that
+// rule and the Name entry is locked (name is the immutable key — AddRule
+// uses upsert-by-name semantics, so renaming would create a new rule).
+//
 // Behind the !nofyne build tag because it imports the Fyne widget set.
 //go:build !nofyne
 
@@ -17,16 +21,19 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/lovable/email-read/internal/config"
 	"github.com/lovable/email-read/internal/core"
 	"github.com/lovable/email-read/internal/errtrace"
 )
 
 // AddRuleFormOptions wires the form to its side effects. Save defaults to
-// core.AddRule; tests inject a stub. OnSaved fires after a successful save
-// so the shell can refresh dependent views (Rules tab counts, etc.).
+// core.AddRule (which already upserts by name, so the same function works
+// for both Add and Edit). Tests inject a stub. OnSaved fires after a
+// successful save so the shell can refresh dependent views.
 type AddRuleFormOptions struct {
 	Save    func(in core.RuleInput) errtrace.Result[*core.AddRuleResult]
 	OnSaved func()
+	Initial *config.Rule // nil ⇒ Add mode; non-nil ⇒ Edit mode
 }
 
 // ruleFormEntries holds the six Fyne widgets that make up the Add Rule
@@ -42,16 +49,27 @@ type ruleFormEntries struct {
 }
 
 // BuildAddRuleForm returns the inline Add Rule form widget.
+// In Edit mode (opts.Initial != nil) the same widget is used but
+// pre-filled with the existing rule's values and the Name entry locked.
 func BuildAddRuleForm(opts AddRuleFormOptions) fyne.CanvasObject {
+	editing := opts.Initial != nil
 	if opts.Save == nil {
 		opts.Save = core.AddRule
 	}
 	e := newRuleFormEntries()
 	status := newStatusLabel()
 	form := buildRuleForm(e)
-	clear := func() { resetRuleEntries(e) }
-	submit := newRuleSubmitButton(opts, e, status, clear)
-	clearBtn := widget.NewButton("Clear", func() { clear(); status.SetText("") })
+	if editing {
+		applyInitialRuleToEntries(*opts.Initial, e)
+	}
+	clear := func() {
+		resetRuleEntries(e)
+		if editing {
+			applyInitialRuleToEntries(*opts.Initial, e)
+		}
+	}
+	submit := newRuleSubmitButton(opts, e, status, clear, editing)
+	clearBtn := widget.NewButton(ruleClearLabel(editing), func() { clear(); status.SetText("") })
 	return container.NewPadded(container.NewVBox(
 		form,
 		widget.NewSeparator(),
@@ -100,10 +118,39 @@ func resetRuleEntries(e *ruleFormEntries) {
 	e.enabled.SetChecked(true)
 }
 
-// newRuleSubmitButton wires the primary "Save rule" button: validate →
-// call opts.Save → render status → run OnSaved hook on success.
-func newRuleSubmitButton(opts AddRuleFormOptions, e *ruleFormEntries, status *widget.Label, clear func()) *widget.Button {
-	submit := widget.NewButton("Save rule", func() {
+// applyInitialRuleToEntries pre-fills the form widgets from an existing
+// rule. Locks the Name entry (name is the immutable upsert key).
+func applyInitialRuleToEntries(r config.Rule, e *ruleFormEntries) {
+	e.name.SetText(r.Name)
+	e.name.Disable()
+	e.urlRegex.SetText(r.UrlRegex)
+	e.fromRegex.SetText(r.FromRegex)
+	e.subjectRegex.SetText(r.SubjectRegex)
+	e.bodyRegex.SetText(r.BodyRegex)
+	e.enabled.SetChecked(r.Enabled)
+}
+
+// ruleClearLabel returns the label for the secondary button — "Reset" in
+// edit mode (restores the original values), "Clear" in add mode.
+func ruleClearLabel(editing bool) string {
+	if editing {
+		return "Reset"
+	}
+	return "Clear"
+}
+
+// ruleSubmitLabel returns the primary button label.
+func ruleSubmitLabel(editing bool) string {
+	if editing {
+		return "Update rule"
+	}
+	return "Save rule"
+}
+
+// newRuleSubmitButton wires the primary button: validate → call opts.Save
+// → render status → run OnSaved hook on success.
+func newRuleSubmitButton(opts AddRuleFormOptions, e *ruleFormEntries, status *widget.Label, clear func(), editing bool) *widget.Button {
+	submit := widget.NewButton(ruleSubmitLabel(editing), func() {
 		v := ValidateRuleForm(ruleFormInputFromEntries(e))
 		if !v.Valid {
 			status.SetText("⚠ " + strings.Join(v.Errors, " · "))
@@ -115,7 +162,9 @@ func newRuleSubmitButton(opts AddRuleFormOptions, e *ruleFormEntries, status *wi
 			return
 		}
 		status.SetText(formatRuleSavedMessage(r.Value()))
-		clear()
+		if !editing {
+			clear()
+		}
 		if opts.OnSaved != nil {
 			opts.OnSaved()
 		}
