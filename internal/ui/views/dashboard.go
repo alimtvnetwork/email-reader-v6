@@ -31,9 +31,10 @@ type DashboardOptions struct {
 	Alias        string
 	OnStartWatch func()
 	OnRefresh    func()
-	Service      *core.DashboardService // production seam — constructed in app bootstrap
-	Summary      SummaryFunc            // test-only override; takes precedence over Service when non-nil
-	Bus          *watcher.Bus           // optional; live counter row when non-nil
+	Service      *core.DashboardService     // production seam — constructed in app bootstrap
+	Summary      SummaryFunc                // test-only override; takes precedence over Service when non-nil
+	Bus          *watcher.Bus               // optional; live counter row when non-nil
+	HealthSource core.AccountHealthSource   // Slice #103 production seam — per-account health rollup; nil → row hidden
 }
 
 // SummaryFunc is the seam used by tests to inject deterministic counts.
