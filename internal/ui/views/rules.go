@@ -159,6 +159,7 @@ func openEditRuleDialog(r config.Rule, opts RulesOptions, status *widget.Label, 
 	}
 	var d dialog.Dialog
 	form := BuildAddRuleForm(AddRuleFormOptions{
+		Service: opts.Service, // share the same *RulesService instance
 		Initial: &r,
 		OnSaved: func() {
 			if d != nil {
