@@ -18,6 +18,7 @@ package queries
 
 import (
 	"strings"
+	"time"
 )
 
 // emailColumns is the canonical column list for any SELECT against the
