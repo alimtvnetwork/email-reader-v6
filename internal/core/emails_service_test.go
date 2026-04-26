@@ -106,7 +106,7 @@ func TestEmailsService_List_PropagatesOpenError(t *testing.T) {
 	if !res.HasError() {
 		t.Fatal("expected open error to surface")
 	}
-	var coded *errtrace.CodedError
+	var coded *errtrace.Coded
 	if !errors.As(res.Error(), &coded) || coded.Code != errtrace.ErrDbOpen {
 		t.Fatalf("expected ErrDbOpen, got %v", res.Error())
 	}
@@ -121,12 +121,12 @@ func TestEmailsService_List_PropagatesQueryError(t *testing.T) {
 	if !res.HasError() {
 		t.Fatal("expected query error to surface")
 	}
-	var coded *errtrace.CodedError
-	if !errors.As(res.Error(), &coded) || coded.Code != errtrace.ErrDbQueryEmail {
+	var coded2 *errtrace.Coded
+	if !errors.As(res.Error(), &coded2) || coded2.Code != errtrace.ErrDbQueryEmail {
 		t.Fatalf("expected ErrDbQueryEmail, got %v", res.Error())
 	}
-	if got := coded.Context["alias"]; got != "a@b" {
-		t.Errorf("expected alias context 'a@b', got %v", got)
+	if got, ok := ctxValue(coded2, "alias"); !ok || got != "a@b" {
+		t.Errorf("expected alias context 'a@b', got %v (ok=%v)", got, ok)
 	}
 	if atomic.LoadInt32(closes) != 1 {
 		t.Errorf("expected close called once, got %d", atomic.LoadInt32(closes))
