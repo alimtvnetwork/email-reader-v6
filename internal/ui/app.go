@@ -241,7 +241,10 @@ func viewFor(item NavItem, state *AppState, gotoNav func(NavKind), onAccountsCha
 			Service: buildEmailsService(),
 		})
 	case NavRules:
-		return views.BuildRules(views.RulesOptions{})
+		return views.BuildRules(views.RulesOptions{
+			Service:        buildRulesService(),
+			OnRulesChanged: onAccountsChanged, // shared shell-rebuild trigger
+		})
 	case NavAccounts:
 		return views.BuildAccounts(views.AccountsOptions{
 			OnAccountsChanged: onAccountsChanged,
