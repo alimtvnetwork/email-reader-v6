@@ -17,6 +17,7 @@ type SettingsSnapshot struct {
 	PollSeconds           uint16
 	BrowserOverride       BrowserOverride
 	Theme                 ThemeMode
+	Density               Density
 	OpenUrlAllowedSchemes []string // canonical lower-case, sorted, deduped
 	AllowLocalhostUrls    bool
 	AutoStartWatch        bool
@@ -38,6 +39,7 @@ type SettingsInput struct {
 	PollSeconds           uint16
 	BrowserOverride       BrowserOverride
 	Theme                 ThemeMode
+	Density               Density
 	OpenUrlAllowedSchemes []string
 	AllowLocalhostUrls    bool
 	AutoStartWatch        bool
@@ -89,6 +91,38 @@ func ParseThemeMode(s string) (ThemeMode, bool) {
 		return ThemeSystem, true
 	}
 	return ThemeDark, false
+}
+
+// Density is the in-memory enum form of the Ui.Density JSON string.
+// Mirrors theme.Density (which lives in internal/ui/theme to avoid pulling
+// the theme package into core); we keep our own enum so core has no
+// dependency on the UI layer. The integer values must match
+// theme.Density's int form so the UI bootstrap can cast directly.
+type Density uint8
+
+const (
+	DensityComfortable Density = 1 // default
+	DensityCompact     Density = 2
+)
+
+// String returns the canonical JSON form ("Comfortable" / "Compact").
+func (d Density) String() string {
+	if d == DensityCompact {
+		return "Compact"
+	}
+	return "Comfortable"
+}
+
+// ParseDensity parses the canonical string form. Empty / unknown →
+// DensityComfortable to match the documented default behaviour.
+func ParseDensity(s string) (Density, bool) {
+	switch s {
+	case "", "Comfortable":
+		return DensityComfortable, true
+	case "Compact":
+		return DensityCompact, true
+	}
+	return DensityComfortable, false
 }
 
 // ChromeDetection is the result of Settings.DetectChrome.
