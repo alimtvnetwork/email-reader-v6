@@ -30,7 +30,10 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/lovable/email-read/internal/errtrace"
