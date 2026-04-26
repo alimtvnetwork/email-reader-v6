@@ -164,13 +164,18 @@ func Format(err error) string {
 }
 
 // Frames extracts every captured frame from the error chain in
-// outermost-first order (closest to the report site first).
+// outermost-first order (closest to the report site first). Recognises both
+// *Traced (legacy Wrap/New) and *Coded (WrapCode/NewCoded) carriers.
 func Frames(err error) []Frame {
 	var out []Frame
 	for cur := err; cur != nil; cur = errors.Unwrap(cur) {
-		if t, ok := cur.(*Traced); ok {
-			out = append(out, t.Frame)
+		switch v := cur.(type) {
+		case *Traced:
+			out = append(out, v.Frame)
+		case *Coded:
+			out = append(out, v.Frame)
 		}
 	}
 	return out
 }
+
