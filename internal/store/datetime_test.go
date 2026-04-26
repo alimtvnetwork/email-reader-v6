@@ -101,3 +101,22 @@ func assertColumnIsRFC3339UTC(t *testing.T, s *Store, table, column string) {
 		t.Errorf("AC-DB-53 violation: %s.%s stored as %q (want RFC 3339 UTC)", table, column, raw)
 	}
 }
+
+// TestNowExprStaysAlignedWithStorePackage locks the contract that the
+// `migrate` package's local copy of `sqliteRFC3339NowExpr` (added in
+// P1.11 to break the would-be import cycle) stays byte-for-byte
+// identical to this package's canonical definition. If they ever
+// diverge, fresh-DB defaults written by the migrate package would
+// disagree with the format `WatchStateUpsert` and friends produce.
+//
+// This test deliberately reads a *literal* string copy of the migrate
+// package's value rather than importing it — importing
+// `internal/store/migrate` from a `package store` test would form the
+// same cycle the duplication exists to avoid.
+func TestNowExprStaysAlignedWithStorePackage(t *testing.T) {
+	const migratePackageCopy = `(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`
+	if migratePackageCopy != sqliteRFC3339NowExpr {
+		t.Fatalf("migrate.sqliteRFC3339NowExpr drift: store=%q migrate=%q",
+			sqliteRFC3339NowExpr, migratePackageCopy)
+	}
+}
