@@ -238,7 +238,7 @@ func runDiagnose(alias string) error {
 	fmt.Printf("Config:  %s\n", cfgPath)
 
 	step := 0
-	return core.Diagnose(alias, func(ev core.DiagnoseEvent) {
+	res := core.Diagnose(alias, func(ev core.DiagnoseEvent) {
 		switch ev.Kind {
 		case core.DiagnoseEventStart:
 			a := ev.Account
@@ -297,6 +297,7 @@ func runDiagnose(alias string) error {
 			fmt.Println("   Check recipient spelling, mailbox existence, Spam/Junk folders, and domain MX/routing in your mail host.")
 		}
 	})
+	return res.PropagateError()
 }
 
 

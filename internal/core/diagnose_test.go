@@ -19,10 +19,12 @@ func TestDiagnose_NoAccounts(t *testing.T) {
 	// Pre-create an empty data dir so config.Load creates a fresh empty config.
 	_ = os.MkdirAll(filepath.Join(tmp, "data"), 0o755)
 
-	if err := Diagnose("", nil); err == nil {
+	res := Diagnose("", nil)
+	if !res.HasError() {
 		t.Fatal("expected error for no configured accounts")
-	} else if !strings.Contains(err.Error(), "no accounts configured") {
-		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(res.Error().Error(), "no accounts configured") {
+		t.Fatalf("unexpected error: %v", res.Error())
 	}
 }
 
