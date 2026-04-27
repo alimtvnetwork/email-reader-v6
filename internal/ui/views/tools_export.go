@@ -20,7 +20,10 @@ import (
 
 // BuildExportTab returns the Export CSV sub-tool body: a Run button + a
 // streaming progress panel + a final result line with the output path.
-func BuildExportTab() fyne.CanvasObject {
+//
+// `factory` is the injected per-call `*core.Tools` builder; see
+// `BuildOpenUrlTab` for the contract.
+func BuildExportTab(factory ToolsFactory) fyne.CanvasObject {
 	heading := widget.NewLabelWithStyle("Export CSV — full Emails table",
 		fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	subtitle := widget.NewLabel("Streams the full Emails table to ./data/export-<ts>.csv. Per-alias / date filtering ships in the next slice.")
@@ -31,7 +34,7 @@ func BuildExportTab() fyne.CanvasObject {
 	output.Disable()
 	status := widget.NewLabel("Click Run to export.")
 
-	runBtn := widget.NewButton("Run", func() { runExportIntoUI(output, status) })
+	runBtn := widget.NewButton("Run", func() { runExportIntoUI(factory, output, status) })
 	runBtn.Importance = widget.HighImportance
 
 	header := container.NewVBox(heading, subtitle,
@@ -40,10 +43,10 @@ func BuildExportTab() fyne.CanvasObject {
 }
 
 // runExportIntoUI invokes core.Tools.ExportCsv and reflects progress + result.
-func runExportIntoUI(output *widget.Entry, status *widget.Label) {
+func runExportIntoUI(factory ToolsFactory, output *widget.Entry, status *widget.Label) {
 	output.SetText("")
 	status.SetText("Counting rows…")
-	tools, err := buildReadTools() // shared constructor; same Tools shape
+	tools, err := buildToolsFromFactory(factory)
 	if err != nil {
 		status.SetText("⚠ setup: " + err.Error())
 		return
