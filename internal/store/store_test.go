@@ -83,10 +83,13 @@ func TestWatchStateRoundTrip(t *testing.T) {
 // TestOpenedUrlsDedup satisfies AC-DB-24 (Q-OPEN-DEDUP returns a
 // row when a Launched row exists within the dedup window) — the
 // second RecordOpenedUrl call observes the first row via the
-// partial UX_OpenedUrl_Dedup index and returns ins=false. The
-// AC-DB-25 / AC-DB-05 partial-index Blocked-not-matched branch is
-// genuinely uncovered (no test today writes a Blocked row and asserts
-// dedup misses it); kept on the gap allowlist as future work.
+// partial UX_OpenedUrl_Dedup index and returns ins=false.
+//
+// The Blocked-not-matched branch (the partial-index negative case
+// — write a Blocked row, assert dedup misses it) is genuinely
+// uncovered and remains on the gap allowlist as future work; see
+// the AC-DB rows about partial-index dedup in
+// spec/23-app-database/97-acceptance-criteria.md §A and §C.
 func TestOpenedUrlsDedup(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
