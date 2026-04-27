@@ -91,7 +91,10 @@ func renderReadEvent(logger *log.Logger, alias string, ev core.ReadEvent) {
 			logger.Printf("    %d enabled rule(s) loaded", ev.RuleCount)
 		}
 	case core.ReadEventBrowserResolved:
-		logger.Printf("    browser ready: %s (incognito flag=%q)", ev.BrowserPath, ev.IncognitoArg)
+		// AC-SX-05: never log the IncognitoArg value at any level —
+		// emit a constant redaction marker instead. The presence of
+		// the flag is observable via the log line; its value is not.
+		logger.Printf("    browser ready: %s (incognito flag=%s)", ev.BrowserPath, redactIncognito(ev.IncognitoArg))
 	case core.ReadEventNoRules:
 		logger.Printf("    ⚠ 0 enabled rules — nothing to evaluate.")
 	case core.ReadEventRuleTrace:
