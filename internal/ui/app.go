@@ -455,3 +455,26 @@ func accountsHealthLoader(services *Services) func(ctx context.Context) map[stri
 	}
 }
 
+
+// openLogFileWithFyne hands `path` to the OS default handler via
+// `fyne.CurrentApp().OpenURL(file://…)`. Pulled out as its own
+// function so the NavErrorLog wiring stays a one-liner and the
+// fallback paths (no Fyne app, URL parse failure) read clearly.
+//
+// Returns an error so the view can render it inline next to the
+// button instead of opening a popup dialog.
+func openLogFileWithFyne(path string) error {
+	a := fyne.CurrentApp()
+	if a == nil {
+		return errtrace.New("no Fyne app (headless mode)")
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return errtrace.Wrap(err, "openLogFileWithFyne: abs path")
+	}
+	u := &url.URL{Scheme: "file", Path: abs}
+	if err := a.OpenURL(u); err != nil {
+		return errtrace.Wrap(err, "openLogFileWithFyne: OpenURL")
+	}
+	return nil
+}
