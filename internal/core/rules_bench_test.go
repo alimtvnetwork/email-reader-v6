@@ -22,8 +22,6 @@ import (
 	"strconv"
 	"testing"
 	"time"
-
-	"github.com/lovable/email-read/internal/errtrace"
 )
 
 const (
