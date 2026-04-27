@@ -277,9 +277,29 @@ var coverageGapAllowlist = map[string]struct{}{
 	// Slice #124 closed AC-PROJ-12/13/16/17/19/21/22 by tagging the
 	// existing AST/errtrace/migrate/retention tests with their AC-PROJ
 	// IDs (no new test code — those rows were already covered by tests
-	// under different names). Remaining AC-PROJ gaps are end-to-end
-	// integration scenarios (01-11, 14-15) and spec-linter rows
-	// (31-36) deferred until those harnesses land.
+	// under different names). Slice #131 closed AC-PROJ-18/32/34 via
+	// new headless scanners in `internal/specaudit/ast_project_linters_test.go`
+	// (`Test_AST_OnlyUiPackagesImportFyne`, `Test_AllQueryRefsResolveInDbQueries`,
+	// `Test_FeatureFolderShapeIsUniform`).
+	//
+	// Honest defers from Slice #131:
+	//   - AC-PROJ-31: scanner is wired (`Test_AllErrorRefsResolveInRegistry`)
+	//     and ratchet-ready, but currently surfaces ~39 ER codes that
+	//     specs reference but `06-error-registry.md` hasn't formalised
+	//     yet (Settings 217xx, Migrations 218xx, UI 219xx blocks).
+	//     Closing requires registry growth = behaviour work.
+	//   - AC-PROJ-33: scanner is wired (`Test_NoBrokenSpecLinks_GreenInCi`)
+	//     and finds ~33 broken cross-tree links, mostly in adjacent
+	//     `02-coding-guidelines/`, `08-generic-update/`, and
+	//     `13-cicd-pipeline-workflows/` trees imported from other repos.
+	//     Closing is documentation cleanup, not test work.
+	//   - AC-PROJ-35: open `OI-1..OI-6` in 06-tools/99-consistency-report.md
+	//     are listed as "scheduled" not "✅ Closed". Same family as the
+	//     deferred OI work tracked from Phase 2.
+	//
+	// Remaining gaps (01-11, 14-15) are end-to-end integration scenarios
+	// requiring a multi-process harness, deferred to a future slice.
+	// AC-PROJ-36 is a placeholder ID, not a real row.
 	"AC-PROJ-01": {},
 	"AC-PROJ-02": {},
 	"AC-PROJ-03": {},
@@ -293,11 +313,6 @@ var coverageGapAllowlist = map[string]struct{}{
 	"AC-PROJ-11": {},
 	"AC-PROJ-14": {},
 	"AC-PROJ-15": {},
-	"AC-PROJ-18": {},
-	"AC-PROJ-31": {},
-	"AC-PROJ-32": {},
-	"AC-PROJ-33": {},
-	"AC-PROJ-34": {},
 	"AC-PROJ-35": {},
 	"AC-PROJ-36": {},
 	// Slice #126 closed AC-SB-01/02/11/15/16/17/19/22 by tagging the
