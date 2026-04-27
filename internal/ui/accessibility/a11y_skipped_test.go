@@ -92,7 +92,7 @@ func Test_ReducedMotion_WatchDotSteady(t *testing.T) {
 	t.Skip("Slice #118e — implementation pending (harness enabled but animation hook not yet built)")
 }
 
-// Spec §8 #7 — Test_TargetSize_Min32
+// Spec §8 #7 — Test_TargetSize_Min32 (AC-DS-65)
 //
 // Walks the widget tree of every view and asserts no interactive
 // widget renders smaller than 32 px on either axis. Spec §7
