@@ -35,22 +35,23 @@ func Test_Contrast_Matrix(t *testing.T) {
 
 // Spec §8 #2 — Test_FocusOrder_Declared
 //
-// AST scan asserting every view file under `internal/ui/views/`
-// declares a `func (vm *View) FocusOrder() []fyne.Focusable` method.
-// Today zero views declare it (verified with
-// `rg -c '^func.*FocusOrder\(\)' internal/ui/views/`); landing the
-// declarations in each view is what Slice #118b actually does, so
-// the guard goes live in the same slice that satisfies it.
-func Test_FocusOrder_Declared(t *testing.T) {
-	t.Skip("Slice #118b — depends on FocusOrder() landing in every view file first")
-}
+// **Slice #118c: lit up.** Lives in `a11y_render_harness_test.go`
+// in this package as a pure AST scan (no Fyne runtime needed).
+// Seeded with an allowlist of every existing view file; the
+// allowlist must shrink monotonically as Slice #118e rolls out
+// `FocusOrder()` declarations across the views package.
 
 // Spec §8 #3 — Test_FocusOrder_NoHiddenInOrder
 //
-// Once `FocusOrder()` exists, asserts the returned slice contains
-// no widgets whose `Hidden` or `Disabled` is true. Pairs with #2.
+// Once `FocusOrder()` declarations exist (Slice #118e), asserts the
+// returned slice contains no widgets whose `Hidden` or `Disabled`
+// is true at construction time. Pairs with #2 and needs the live
+// widget tree to inspect — gated on `A11Y_RENDER=1`.
 func Test_FocusOrder_NoHiddenInOrder(t *testing.T) {
-	t.Skip("Slice #118b — needs FocusOrder() declarations to scan")
+	if !a11yRenderHarnessEnabled() {
+		t.Skip("Slice #118e — needs A11Y_RENDER=1 + FocusOrder() declarations from #118e rollout")
+	}
+	t.Skip("Slice #118e — implementation pending (harness enabled but assertions not yet ported)")
 }
 
 // Spec §8 #4 — Test_StatusHasTextLabel
@@ -59,8 +60,13 @@ func Test_FocusOrder_NoHiddenInOrder(t *testing.T) {
 // `*widget.Label` carrying a status word ("Watching",
 // "Reconnecting…", "Error"). The colour-blind safety guarantee
 // from §4 (color is never the only signal) hangs on this test.
+// Needs the `WatchDot` widget itself (not yet built) and a Fyne
+// render canvas.
 func Test_StatusHasTextLabel(t *testing.T) {
-	t.Skip("Slice #118b — needs WatchDot widget + Fyne render harness")
+	if !a11yRenderHarnessEnabled() {
+		t.Skip("Slice #118e — needs A11Y_RENDER=1 + WatchDot widget rollout")
+	}
+	t.Skip("Slice #118e — implementation pending (harness enabled but WatchDot widget not yet built)")
 }
 
 // Spec §8 #5 — Test_ReducedMotion_CollapsesTokens
@@ -78,8 +84,12 @@ func Test_ReducedMotion_CollapsesTokens(t *testing.T) {
 //
 // Pairs with #5: when the probe returns true, the `WatchDot` pulse
 // animation must not be started (steady solid colour instead).
+// Needs the WatchDot animation hook (Slice #118e).
 func Test_ReducedMotion_WatchDotSteady(t *testing.T) {
-	t.Skip("Slice #118b — needs WatchDot animation hook")
+	if !a11yRenderHarnessEnabled() {
+		t.Skip("Slice #118e — needs A11Y_RENDER=1 + WatchDot animation hook")
+	}
+	t.Skip("Slice #118e — implementation pending (harness enabled but animation hook not yet built)")
 }
 
 // Spec §8 #7 — Test_TargetSize_Min32
@@ -88,34 +98,43 @@ func Test_ReducedMotion_WatchDotSteady(t *testing.T) {
 // widget renders smaller than 32 px on either axis. Spec §7
 // minimum target size.
 func Test_TargetSize_Min32(t *testing.T) {
-	t.Skip("Slice #118b — needs Fyne render harness + per-view widget tree walker")
+	if !a11yRenderHarnessEnabled() {
+		t.Skip("Slice #118e — needs A11Y_RENDER=1 + per-view widget tree walker")
+	}
+	t.Skip("Slice #118e — implementation pending (harness enabled but tree walker not yet built)")
 }
 
 // Spec §8 #8 — Test_KeyboardShortcuts_Sidebar
 //
-// Asserts `Cmd/Ctrl+1..7` invoke the documented sidebar routes
-// (Dashboard, Emails, Rules, Accounts, Watch, Tools, Settings).
-// Hangs on a shortcut-binding registry that does not exist yet.
-func Test_KeyboardShortcuts_Sidebar(t *testing.T) {
-	t.Skip("Slice #118b — needs internal/ui shortcut registry")
-}
+// **Slice #118c: lit up.** Lives in `a11y_render_harness_test.go`
+// in this package as a pure AST scan that walks the UI tree for
+// `desktop.CustomShortcut{...}` constructions and tabulates the
+// digit keys found alongside a Cmd/Ctrl modifier. Bootstrap-PASSes
+// today (no shortcuts registered yet); enforces the full {1..7}
+// set the moment the first binding lands in Slice #118e.
 
 // Spec §8 #9 — Test_FocusRing_Visible
 //
 // Asserts the focused widget paints the focus ring with
-// `ColorPrimary` at alpha 0.40, 2 px outline, offset 2 px. Hangs
-// on `internal/ui/theme/focusring.go` which does not exist yet.
+// `ColorPrimary` at alpha 0.40, 2 px outline, offset 2 px. Tokens
+// are in place (`internal/ui/theme/focusring.go` from Slice #118b);
+// the paint inspection itself needs a live canvas.
 func Test_FocusRing_Visible(t *testing.T) {
-	t.Skip("Slice #118b — needs internal/ui/theme/focusring.go")
+	if !a11yRenderHarnessEnabled() {
+		t.Skip("Slice #118e — needs A11Y_RENDER=1 + canvas paint inspection")
+	}
+	t.Skip("Slice #118e — implementation pending (harness enabled but paint inspector not yet built)")
 }
 
 // Spec §8 #10 — Test_AccessibilityLabel_NonEmpty
 //
 // Walks every rendered `Button` / `WatchDot` / `Badge` /
 // `RawLogLine` instance and asserts a non-empty
-// `AccessibilityLabel`. The `EnsureLabel` shim is in place today;
-// the call sites that use it land alongside the Fyne 2.4 widget
-// upgrade in Slice #118b.
+// `AccessibilityLabel`. The `EnsureLabel` shim is in place today
+// (Slice #118); call-site rollout + tree walk land in #118e.
 func Test_AccessibilityLabel_NonEmpty(t *testing.T) {
-	t.Skip("Slice #118b — needs Fyne render harness + Labeler call-site rollout")
+	if !a11yRenderHarnessEnabled() {
+		t.Skip("Slice #118e — needs A11Y_RENDER=1 + Labeler call-site rollout")
+	}
+	t.Skip("Slice #118e — implementation pending (harness enabled but call-site rollout not yet done)")
 }
