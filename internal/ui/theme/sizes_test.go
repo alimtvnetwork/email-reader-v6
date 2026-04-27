@@ -137,6 +137,9 @@ func Test_Fonts_FallbackWhenAbsent(t *testing.T) {
 // have shipped — both fonts must load and start with the TrueType magic
 // signature 0x00010000. Drops to t.Skip on a fresh checkout so the
 // test pair stays compatible with the intentional fallback contract.
+//
+// Satisfies AC-DS-16 (embedded fonts Inter + JetBrains Mono load
+// successfully).
 func Test_Fonts_PresentAndValidTTF(t *testing.T) {
 	cases := []struct {
 		name string
