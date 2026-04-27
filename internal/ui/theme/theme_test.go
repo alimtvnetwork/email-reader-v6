@@ -10,6 +10,11 @@ import (
 // Test_Palettes_Parity asserts both palettes define every token in
 // AllColorNames(). Adding a token without updating both maps is a
 // build-time bug per spec/24-…/01-tokens.md §2.9.
+//
+// Satisfies AC-DS-01 (every ColorName matches §2 of 01-tokens.md
+// one-to-one) and AC-DS-03 (each color has both Dark and Light
+// variants in palette_dark.go / palette_light.go) — both rows from
+// spec/24-app-design-system-and-ui/97-acceptance-criteria.md.
 func Test_Palettes_Parity(t *testing.T) {
 	for _, name := range AllColorNames() {
 		if _, ok := paletteDark[name]; !ok {
