@@ -274,7 +274,10 @@ var coverageGapAllowlist = map[string]struct{}{
 	// those rows were already covered by tests under different
 	// names). Remaining AC-DS gaps are genuine future work (most
 	// need the deferred Slice #118e Fyne canvas harness).
-	"AC-DS-05": {},
+	// AC-DS-05 closed by Slice #169 — Test_Tokens_NoDuplicateValues
+	// in internal/ui/theme/aliases_test.go enforces the registry-
+	// gated form per spec/24-…/01-tokens.md §2.12 (22 NamedAliases:
+	// 13 Both + 5 DarkOnly + 4 LightOnly). Removed from allowlist.
 	// AC-DS-15 closed by Slice #145 — Test_Theme_SystemResolves in
 	// internal/ui/theme/fyne_theme_resolve_test.go pins the four
 	// resolvedMode(variant) branches: ThemeSystem follows the OS
