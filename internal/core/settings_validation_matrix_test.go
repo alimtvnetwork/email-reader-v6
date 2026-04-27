@@ -253,28 +253,19 @@ func runSettingsValidationCase(t *testing.T, tc settingsValidationCase) {
 	}
 }
 
-// codeOf unwraps the errtrace.CodedError chain and returns the
-// outermost code, or `errtrace.Code(0)` (sentinel "none") when the
-// error is uncoded. Mirrors the lookup pattern used by other
-// `core` tests so a future move to a public helper is mechanical.
+// codeOf unwraps the errtrace.*Coded chain and returns the
+// outermost code, or empty string when the error is uncoded.
+// Mirrors the lookup pattern used by other `core` tests so a
+// future move to a public helper is mechanical.
 func codeOf(err error) errtrace.Code {
 	if err == nil {
-		return errtrace.Code(0)
+		return errtrace.Code("")
 	}
-	var coded *errtrace.CodedError
+	var coded *errtrace.Coded
 	if errors.As(err, &coded) {
 		return coded.Code
 	}
-	// Fallback: scan the message for an "ER-SET-NNNNN" suffix so a
-	// raw `errtrace.NewCoded` without `As` plumbing still reports a
-	// useful diagnostic. We never need this path for the matrix as
-	// written, but leaving it in keeps a future reorganisation
-	// honest.
-	msg := err.Error()
-	if i := strings.LastIndex(msg, "ER-SET-"); i >= 0 {
-		return errtrace.Code(0)
-	}
-	return errtrace.Code(0)
+	return errtrace.Code("")
 }
 
 func mustConfigPath(t *testing.T) string {
