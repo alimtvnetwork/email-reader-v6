@@ -1,43 +1,71 @@
 # run.ps1 — Bootstrap script for email-read CLI
 #
-# Responsibilities:
-#   1. git pull latest changes in this repo
-#   2. go build -> ./email-reader-cli/email-read.exe
-#   3. Ensure data/ and email/ folders exist next to the EXE
-#   4. Add the deploy folder to the user PATH (idempotent)
-#   5. Print a success line with the deploy path
+# Modes:
+#   .\run.ps1          Show this help and exit (no side effects)
+#   .\run.ps1 -i       INSTALL: git pull + go mod tidy. No build, no deploy.
+#   .\run.ps1 -d       DEPLOY : git pull + go mod tidy + go build +
+#                              ensure data/email folders + add to user PATH.
 #
-# Usage:
-#   PS> .\run.ps1
+# Optional modifiers (apply to -d):
+#   -SkipPull          Skip the git pull step.
+#   -SkipPathUpdate    Skip the user PATH update.
+#
+# Examples:
+#   .\run.ps1                       # show help
+#   .\run.ps1 -i                    # just refresh source + Go modules
+#   .\run.ps1 -d                    # full build + deploy
+#   .\run.ps1 -d -SkipPull          # build + deploy without pulling
 #
 # Requires: git, go (1.22+), Windows PowerShell 5+ or PowerShell 7+.
 
 [CmdletBinding()]
 param(
+    [Alias('i')]
+    [switch]$Install,
+    [Alias('d')]
+    [switch]$Deploy,
     [switch]$SkipPull,
     [switch]$SkipPathUpdate
 )
 
 $ErrorActionPreference = 'Stop'
 
-function Write-Step($msg) {
-    Write-Host "==> $msg" -ForegroundColor Cyan
+function Write-Step($msg)     { Write-Host "==> $msg" -ForegroundColor Cyan }
+function Write-Ok($msg)       { Write-Host "    $msg" -ForegroundColor Green }
+function Write-WarnLine($msg) { Write-Host "    $msg" -ForegroundColor Yellow }
+
+function Show-Usage {
+    Write-Host ""
+    Write-Host "email-read bootstrap" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Usage:" -ForegroundColor White
+    Write-Host "  .\run.ps1 -i       Install deps only (git pull + go mod tidy)"
+    Write-Host "  .\run.ps1 -d       Deploy app (pull + tidy + build + PATH)"
+    Write-Host ""
+    Write-Host "Modifiers (apply to -d):" -ForegroundColor White
+    Write-Host "  -SkipPull          Skip git pull"
+    Write-Host "  -SkipPathUpdate    Skip user PATH update"
+    Write-Host ""
+    Write-Host "Run with no flags to see this help." -ForegroundColor DarkGray
+    Write-Host ""
 }
 
-function Write-Ok($msg) {
-    Write-Host "    $msg" -ForegroundColor Green
+# --- Mode validation ---
+if ($Install -and $Deploy) {
+    Write-Host "ERROR: -i and -d are mutually exclusive. Pick one." -ForegroundColor Red
+    Show-Usage
+    exit 2
+}
+if (-not $Install -and -not $Deploy) {
+    Show-Usage
+    exit 0
 }
 
-function Write-WarnLine($msg) {
-    Write-Host "    $msg" -ForegroundColor Yellow
-}
-
-# --- Resolve repo root (folder containing this script) ---
+# --- Resolve paths ---
 $RepoRoot  = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $DeployDir = Join-Path $RepoRoot 'email-reader-cli'
 
 # Detect host OS so this script works on Windows, macOS, and Linux.
-# On non-Windows hosts we drop the .exe suffix and skip the PATH update.
 $IsWindowsHost = $true
 if ($PSVersionTable.PSEdition -eq 'Core') {
     $IsWindowsHost = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
@@ -51,9 +79,11 @@ $MailDir = Join-Path $DeployDir 'email'
 
 Set-Location $RepoRoot
 
-# --- 1. git pull ---
+# =====================================================================
+# Step A: git pull (shared by -i and -d, unless -SkipPull)
+# =====================================================================
 if ($SkipPull) {
-    Write-Step "Skipping git pull (--SkipPull)"
+    Write-Step "Skipping git pull (-SkipPull)"
 } else {
     Write-Step "git pull"
     try {
@@ -64,7 +94,9 @@ if ($SkipPull) {
     }
 }
 
-# --- 2. Verify go is available ---
+# =====================================================================
+# Step B: Verify Go toolchain (shared)
+# =====================================================================
 Write-Step "Checking Go toolchain"
 $go = Get-Command go -ErrorAction SilentlyContinue
 if (-not $go) {
@@ -72,21 +104,35 @@ if (-not $go) {
 }
 Write-Ok ("Found {0}" -f (& go version))
 
-# --- 3. Build the EXE ---
-Write-Step "Building $ExeName"
-if (-not (Test-Path $DeployDir)) {
-    New-Item -ItemType Directory -Path $DeployDir | Out-Null
-}
-
-# Resolve module dependencies (creates/repairs go.sum). Safe to run every time.
+# =====================================================================
+# Step C: go mod tidy (shared)
+# =====================================================================
 Write-Step "Resolving Go module dependencies (go mod tidy)"
 & go mod tidy
 if ($LASTEXITCODE -ne 0) {
     throw "go mod tidy failed with exit code $LASTEXITCODE"
 }
+Write-Ok "Modules resolved."
 
-# Only force a Windows cross-compile when running on Windows.
-# On macOS/Linux, build a native binary so the user can actually execute it.
+# =====================================================================
+# INSTALL MODE — stop here.
+# =====================================================================
+if ($Install) {
+    Write-Host ""
+    Write-Host "Install complete (-i): source pulled and Go modules resolved." -ForegroundColor Green
+    Write-Host "Run '.\run.ps1 -d' when you want to build and deploy." -ForegroundColor DarkGray
+    Write-Host ""
+    exit 0
+}
+
+# =====================================================================
+# DEPLOY MODE — build + deploy + PATH
+# =====================================================================
+Write-Step "Building $ExeName"
+if (-not (Test-Path $DeployDir)) {
+    New-Item -ItemType Directory -Path $DeployDir | Out-Null
+}
+
 if ($IsWindowsHost) {
     $env:GOOS   = 'windows'
     $env:GOARCH = 'amd64'
@@ -98,7 +144,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Ok "Built: $ExePath"
 
-# --- 4. Ensure runtime folders exist ---
+# --- Ensure runtime folders exist ---
 Write-Step "Ensuring data/ and email/ folders"
 foreach ($d in @($DataDir, $MailDir)) {
     if (-not (Test-Path $d)) {
@@ -109,18 +155,17 @@ foreach ($d in @($DataDir, $MailDir)) {
     }
 }
 
-# --- 5. Idempotent user PATH update (Windows-only) ---
+# --- Idempotent user PATH update (Windows-only) ---
 if (-not $IsWindowsHost) {
     Write-Step "Skipping PATH update (non-Windows host)"
     Write-WarnLine "Run the binary directly: $ExePath"
 } elseif ($SkipPathUpdate) {
-    Write-Step "Skipping PATH update (--SkipPathUpdate)"
+    Write-Step "Skipping PATH update (-SkipPathUpdate)"
 } else {
     Write-Step "Updating user PATH"
     $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
     if ($null -eq $userPath) { $userPath = '' }
 
-    # Split, normalise, and check for an existing entry (case-insensitive, trailing-slash tolerant)
     $existing = $userPath.Split(';') |
         Where-Object { $_ -ne '' } |
         ForEach-Object { $_.TrimEnd('\') }
@@ -136,14 +181,13 @@ if (-not $IsWindowsHost) {
             ($userPath.TrimEnd(';') + ';' + $target)
         }
         [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
-        # Also update current session so the user can use it immediately
         $env:Path = $env:Path.TrimEnd(';') + ';' + $target
         Write-Ok "Added to user PATH: $target"
         Write-WarnLine "Open a new terminal for the PATH change to take effect in other shells."
     }
 }
 
-# --- 6. Done ---
+# --- Done ---
 Write-Host ""
 Write-Host "email-read deployed successfully" -ForegroundColor Green
 Write-Host ("  EXE : {0}" -f $ExePath)
