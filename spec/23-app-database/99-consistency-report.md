@@ -88,7 +88,7 @@ Cross-checks `spec/23-app-database/` against every feature backend that consumes
 | `18-database-conventions.md` (positive booleans) | `01-schema.md` §6 X-5 | `Test_BooleanPositive` (AC-DB-54) |
 | `18-database-conventions.md` (FK rules) | `01-schema.md` §4 (`ON DELETE SET NULL`) | `Test_OpenedUrl_FkSetNull` (AC-DB-06) |
 | `02-coding-guidelines.md` §6 (no `interface{}` / `any`) | `02-queries.md` §1 ("never `map[string]any`") | `golangci-lint forbidigo` rule |
-| `03-error-management.md` (`apperror.Wrap` + code registry) | `03-migrations.md` §9 block 21800–21809 | `Test_Errors_AllWrapped` (cross-spec) |
+| `03-error-management.md` (`apperror.Wrap` + code registry) | `03-migrations.md` §9 block 22100–22109 (renumbered Slice #155 from 21800–21809 to resolve ER-CLI range collision) | `Test_Errors_AllWrapped` (cross-spec) |
 | `05-logging-strategy.md` heartbeat invariant | CF-W3 above | `Test_Watch_HeartbeatAlways` |
 | `05-split-db-architecture/` | `00-overview.md` §1 (single-file SQLite, WAL) | manual review |
 

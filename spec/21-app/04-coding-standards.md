@@ -346,6 +346,7 @@ This project's reserved range from `spec/12-consolidated-guidelines/03-error-man
 | `21700–21799` | `ER-COR` | `internal/core` (cross-cutting) |
 | `21800–21899` | `ER-CLI` | `internal/cli` |
 | `21900–21999` | `ER-UI` | `internal/ui` |
+| `22100–22199` | `ER-MIG` | `internal/store/migrate` (allocated Slice #155 — moved out of CLI's 21800-block to resolve range collision; see `spec/23-app-database/03-migrations.md` §9) |
 
 > If new error needed, add to [`06-error-registry.md`](./06-error-registry.md) first, then reference the constant.
 
