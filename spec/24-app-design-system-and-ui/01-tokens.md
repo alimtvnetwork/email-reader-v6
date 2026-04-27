@@ -153,25 +153,55 @@ A naive "no two tokens share the same RGB triple in the same variant" rule (the 
 
 **Why a registry (not a per-token `AliasOf` field):** keeping the alias relation in one auditable table makes review trivial ("did this PR add a new alias? show diff of `aliases.go`") and lets the test file present a precise failure: *"WatchDotWatching duplicates Success in Dark — this pair is **not** in NamedAliases. Either register the alias or pick a distinct RGB."* A per-token field scatters the same information across 13 sites and makes the "add one token, accidentally collide" failure mode silent.
 
-**Alias registry — both Dark and Light variants must hold for the alias to be valid:**
+**Alias registry — pairs are unordered; each row is one allowed RGB collision in the named scope.**
 
-| Alias token (the "named" use) | Source token (the "semantic" definition) | Why aliased |
+The registry is split into three scopes:
+- **Both** — pair shares RGB in **both** Dark and Light variants. Most-stable form.
+- **DarkOnly** — pair shares RGB in Dark only; Light variants differ deliberately (e.g. Slice #118d palette tunes for WCAG).
+- **LightOnly** — pair shares RGB in Light only; Dark variants differ deliberately.
+
+When several tokens form a clique (`A=B=C` in some variant) the registry lists every unordered pair (`(A,B), (A,C), (B,C)`) so the test message can name the precise colliding pair.
+
+**Both-variant aliases (13 pairs):**
+
+| Pair | Why aliased |
+|---|---|
+| `ColorAccent` ↔ `ColorRuleMatchBadge` | Rule-match badge inherits the accent hue. |
+| `ColorError` ↔ `ColorRawLogError` | Error log lines = Error-red. |
+| `ColorError` ↔ `ColorWatchDotError` | Error dot = Error-red. |
+| `ColorRawLogError` ↔ `ColorWatchDotError` | Implied by the `Error` 3-clique above; listed for pair-precise test messages. |
+| `ColorWarning` ↔ `ColorWatchDotReconnecting` | Reconnecting = Warning-amber. |
+| `ColorForeground` ↔ `ColorRawLogNewMail` | New-mail lines render at full text contrast. |
+| `ColorBorder` ↔ `ColorSidebarBorder` | Sidebar separator uses the standard 1 px border. |
+| `ColorBorder` ↔ `ColorCodeBorder` | Code surfaces use the standard 1 px border. |
+| `ColorBorder` ↔ `ColorBadgeNeutralBg` | Neutral badge sits on the same tone as borders. |
+| `ColorSidebarBorder` ↔ `ColorCodeBorder` | Implied by the `Border` 4-clique; listed for pair precision. |
+| `ColorSidebarBorder` ↔ `ColorBadgeNeutralBg` | Implied by the `Border` 4-clique; listed for pair precision. |
+| `ColorCodeBorder` ↔ `ColorBadgeNeutralBg` | Implied by the `Border` 4-clique; listed for pair precision. |
+| `ColorBadgeNeutralFg` ↔ `ColorSidebarForeground` | Neutral badge text matches sidebar muted text. |
+
+**Dark-only aliases (5 pairs):**
+
+| Pair | Why aliased (Dark) | Why distinct in Light |
 |---|---|---|
-| `ColorWatchDotWatching` | `ColorSuccess` | Healthy watcher = Success-green; one knob, one decision. |
-| `ColorWatchDotReconnecting` | `ColorWarning` | Reconnecting = Warning-amber. |
-| `ColorWatchDotError` | `ColorError` | Error dot = Error-red. |
-| `ColorRawLogError` | `ColorError` | Error log lines = Error-red. |
-| `ColorRawLogNewMail` | `ColorForeground` | New-mail lines render at full text contrast. |
-| `ColorRawLogHeartbeat` *(Dark only)* | `ColorForegroundDisabled` | Heartbeat lines fade to disabled-text grey. |
-| `ColorRawLogTimestamp` *(Light only)* | `ColorForegroundDisabled` | Timestamps fade to disabled-text grey. *(Dark variant is intentionally lifted by Slice #118d for WCAG — see palette_dark.go comment.)* |
-| `ColorRuleMatchBadge` | `ColorAccent` | Rule-match badge inherits the accent hue. |
-| `ColorBadgeNeutralBg` | `ColorBorder` | Neutral badge sits on the same surface tone as borders. |
-| `ColorBadgeNeutralFg` *(Dark only)* | `ColorSidebarForeground` | Neutral badge text matches sidebar muted text. |
-| `ColorCodeBorder` | `ColorBorder` | Code surfaces use the standard 1 px border. |
-| `ColorSidebarBorder` | `ColorBorder` | Sidebar separator uses the standard 1 px border. |
-| `ColorSidebarItemActiveForeground` | `ColorPrimaryForeground` | Active sidebar item is a primary-action surface. |
+| `ColorSuccess` ↔ `ColorWatchDotWatching` | Healthy watcher = Success-green. | Light `ColorSuccess` was darkened by Slice #118d (WCAG `Success on Background`); the watch-dot kept the brighter green for at-a-glance scanning. |
+| `ColorForegroundDisabled` ↔ `ColorRawLogHeartbeat` | Heartbeat lines fade to disabled-text grey. | Light heartbeat is intentionally lifted (150 vs 170 RGB) for legibility on the lighter `ColorCodeBg`. |
+| `ColorPrimaryForeground` ↔ `ColorSidebarItemActiveForeground` | Both are pure white on Dark. | Light `SidebarItemActiveForeground` becomes `ColorPrimary` blue (active item on a light card needs hue, not white-on-blue). |
+| `ColorSidebar` ↔ `ColorCodeBg` | Both use the deep `(19,21,26)` panel tone on Dark. | Light `ColorSidebar` is a tinted off-white; `ColorCodeBg` stays a soft grey for code legibility. |
+| `ColorSurfaceMuted` ↔ `ColorCodeLineHighlight` | Both use the subdued panel tone on Dark. | Light `ColorCodeLineHighlight` is a soft blue-tint to disambiguate from regular muted surfaces. |
 
-13 registered aliases. Asymmetric rows (Dark-only / Light-only) are explicitly marked — the registry validator in `aliases.go` enforces the asymmetry, not just the dark-and-light parity that applies to the rest of the palette.
+**Light-only aliases (4 pairs):**
+
+| Pair | Why aliased (Light) | Why distinct in Dark |
+|---|---|---|
+| `ColorPrimaryForeground` ↔ `ColorSurface` | Both are pure white on Light (cards on white pages). | Dark `ColorSurface` is the dark card tone, not white. |
+| `ColorPrimary` ↔ `ColorSidebarItemActiveForeground` | Active item label = primary-action blue on Light. | Dark uses pure white text on the active sidebar item (see Dark-only counterpart). |
+| `ColorSurfaceMuted` ↔ `ColorCodeBg` | Code surfaces match the muted panel tone on Light. | Dark `ColorCodeBg` matches `ColorSidebar` instead. |
+| `ColorWatchDotIdle` ↔ `ColorRawLogTimestamp` | Both use the same neutral grey on Light. | Dark `ColorRawLogTimestamp` was lifted by Slice #118d to (140,145,155) for WCAG against `ColorCodeBg`; `ColorWatchDotIdle` kept (120,125,135). |
+
+**22 registered aliases total** (13 + 5 + 4). The registry validator in `aliases.go` enforces (a) every Both-pair holds in BOTH variants, (b) every DarkOnly-pair holds in Dark AND fails in Light (asymmetry is a test signal — a "DarkOnly" row that accidentally became symmetric must be promoted to Both, otherwise the registry is misleading), (c) symmetric for LightOnly, (d) no reflexive entries, (e) pair canonicalization (unordered: `(A,B)` and `(B,A)` collapse to one row).
+
+
 
 **Test contract:** `Test_Tokens_NoDuplicateValues` (AC-DS-05)
 1. For every pair `(a, b)` of distinct `ColorName`s and every variant `v ∈ {Dark, Light}`:
