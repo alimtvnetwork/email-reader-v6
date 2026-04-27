@@ -86,6 +86,10 @@ func (s *stubLabeler) SetAccessibilityLabel(l string) { s.last = l }
 
 // -----------------------------------------------------------------------------
 // Test 2: spec §8 #11 — Test_NoIconOnlyButtons_WithoutLabel.
+// Closes AC-DS-69 (`spec/24-app-design-system-and-ui/97-acceptance-criteria.md`):
+// "AST: no `widget.NewButtonWithIcon("", ...)` calls." Same scan,
+// rephrased for the AC-coverage audit so the spec ID resolves to a
+// real test reference instead of sitting in coverageGapAllowlist.
 // -----------------------------------------------------------------------------
 //
 // AST scan: any call of the form `widget.NewButtonWithIcon("", ...)`
