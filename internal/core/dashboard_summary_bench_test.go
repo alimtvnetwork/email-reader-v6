@@ -89,6 +89,9 @@ func buildSummaryPerfFixture(t testing.TB) func() errtrace.Result[DashboardSumma
 }
 
 func TestDashboard_Summary_10kEmails_PerfGate(t *testing.T) {
+	if perfGateSkipRace(t) {
+		return
+	}
 	if testing.Short() {
 		t.Skip("perf gate skipped under -short")
 	}

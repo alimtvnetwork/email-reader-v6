@@ -142,6 +142,9 @@ func seedMarkReadPerfEmails(ctx context.Context, t testing.TB, st *store.Store) 
 // TestEmails_MarkRead_500Uids_RealStore_PerfGate enforces the spec
 // §2.3 budget against a real SQLite store. Skipped under -short.
 func TestEmails_MarkRead_500Uids_RealStore_PerfGate(t *testing.T) {
+	if perfGateSkipRace(t) {
+		return
+	}
 	if testing.Short() {
 		t.Skip("perf gate skipped under -short")
 	}

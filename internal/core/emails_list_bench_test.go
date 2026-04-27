@@ -122,6 +122,9 @@ func seedListPerfEmails(ctx context.Context, t testing.TB, st *store.Store) {
 }
 
 func TestEmails_List_100kRows_PerfGate(t *testing.T) {
+	if perfGateSkipRace(t) {
+		return
+	}
 	if testing.Short() {
 		t.Skip("perf gate skipped under -short")
 	}
