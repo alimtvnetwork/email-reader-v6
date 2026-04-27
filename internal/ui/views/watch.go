@@ -33,11 +33,16 @@ import (
 // renders, but Start is disabled). Watch + PollSeconds + Bus are
 // optional — when nil the view falls back to disabled placeholders so
 // headless tests and the pre-wiring fallback both keep working.
+//
+// Clipboard, when non-nil, enables the "Copy" buttons on the Raw log
+// and Cards tabs (production wiring uses fyne.CurrentApp().Clipboard()).
+// Left as a seam so headless tests stay clipboard-free.
 type WatchOptions struct {
 	Alias       string
 	Watch       *core.Watch
 	PollSeconds func() int
 	Bus         *watcher.Bus
+	Clipboard   fyne.Clipboard
 }
 
 // BuildWatch returns the Watch view per spec §2.1.
