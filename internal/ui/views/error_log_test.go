@@ -1,8 +1,9 @@
 // error_log_test.go covers the headless-safe helpers used by the
 // Diagnostics → Error Log view (formatRow, loadEntriesNewestFirst,
-// truncate). The Fyne-rendered widgets themselves are exercised at
-// integration time — these tests run under -tags nofyne so CI
-// without OpenGL libs still gets coverage of the formatting + sort.
+// truncate). NB: these helpers live in error_log.go which is
+// !nofyne-gated, so the test inherits that constraint via the
+// package's build matrix — but the helpers themselves only touch
+// fmt/sort/time, no OpenGL needed at runtime.
 //go:build !nofyne
 
 package views
