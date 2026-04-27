@@ -100,7 +100,8 @@ func logBannerBrowser(logger *log.Logger, opts Options) {
 		logger.Printf("%s", errtrace.Format(err))
 		return
 	}
-	logger.Printf("│  browser : %s  (incognito %s)", shortPath(path), opts.Launcher.IncognitoArg())
+	// AC-SX-05: never log the IncognitoArg value at any level.
+	logger.Printf("│  browser : %s  (incognito %s)", shortPath(path), redactIncog(opts.Launcher.IncognitoArg()))
 }
 
 // pollState carries cross-poll diagnostic state for a watcher loop.
