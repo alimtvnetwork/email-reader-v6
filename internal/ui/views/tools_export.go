@@ -68,7 +68,8 @@ func finalizeExport(r interface {
 }, output *widget.Entry, status *widget.Label,
 ) {
 	if r.HasError() {
-		status.SetText("⚠ " + r.Error().Error())
+		errlog.ReportError("tools.export", r.Error())
+		status.SetText("⚠ " + r.Error().Error() + " — see Diagnostics → Error Log")
 		appendOutput(output, "ERROR: "+r.Error().Error())
 		return
 	}
