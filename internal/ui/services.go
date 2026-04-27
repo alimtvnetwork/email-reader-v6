@@ -82,6 +82,16 @@ type Services struct {
 	Watch          *core.Watch           // Slice #116b (Phase 6.2) singleton lazily attached from WatchRuntime
 	HealthSource   core.AccountHealthSource
 	ActivitySource core.ActivitySource
+	// Tools is the per-call factory for `*core.Tools` consumed by the
+	// Tools tab sub-routes (OpenUrl / Read / Export / Recent opens).
+	// Slice #116c (Phase 6.3) hoist: replaces inline
+	// `config.Load() + core.NewTools(...)` in
+	// `internal/ui/views/tools_*.go` so view files no longer reach
+	// for `config.Load()`. Returns a fresh `*core.Tools` per call to
+	// preserve the existing semantics (live config edits picked up
+	// without restart). Stays nil when constructor wiring fails;
+	// view code falls back to the documented degraded-path message.
+	Tools ToolsFactory
 }
 
 // BuildServices constructs all four typed services (Phase 2 +
