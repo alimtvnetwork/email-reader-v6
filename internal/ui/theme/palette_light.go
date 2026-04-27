@@ -21,7 +21,10 @@ var paletteLight = map[ColorName]color.NRGBA{
 	ColorAccent:            {122, 82, 220, 255},
 
 	// §2.3 status
-	ColorSuccess: {34, 160, 90, 255},
+	// Slice #118d palette tune: darkened from (34,160,90) — WCAG ratio
+	// against ColorBackground rose from 3.23 → 4.67, clearing the
+	// `Success on Background (Light)` row's `knownDrift` flag.
+	ColorSuccess: {20, 130, 70, 255},
 	ColorWarning: {200, 140, 20, 255},
 	ColorError:   {200, 40, 60, 255},
 	ColorInfo:    {30, 130, 210, 255},
