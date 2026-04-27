@@ -11,6 +11,7 @@ package ui
 import (
 	"context"
 	"log"
+	"net/url"
 	"path/filepath"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 
 	"github.com/lovable/email-read/internal/config"
 	"github.com/lovable/email-read/internal/core"
+	"github.com/lovable/email-read/internal/errtrace"
 	"github.com/lovable/email-read/internal/ui/errlog"
 	"github.com/lovable/email-read/internal/ui/theme"
 	"github.com/lovable/email-read/internal/ui/views"
