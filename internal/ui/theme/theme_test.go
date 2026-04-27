@@ -163,6 +163,11 @@ func Test_Apply_RejectsInvalid(t *testing.T) {
 
 // Test_Apply_ConcurrentSafe smoke-tests the RWMutex contract: concurrent
 // reads + writes must neither race nor panic.
+//
+// Satisfies AC-DS-14 (theme.Apply is goroutine-safe under -race
+// across 1000 concurrent calls) — the test runs 200 writes
+// interleaved with 1000 reads; `go test -race` exercises the
+// happens-before edges.
 func Test_Apply_ConcurrentSafe(t *testing.T) {
 	t.Cleanup(resetForTest)
 	done := make(chan struct{})
