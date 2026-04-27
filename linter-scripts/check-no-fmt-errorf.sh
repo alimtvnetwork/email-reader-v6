@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # check-no-fmt-errorf.sh
 #
-# Phase 1 (warn-only) error-trace guardrail.
+# Phase 2 (enforcing) error-trace guardrail. Default LINT_MODE=fail.
 #
 # Flags every production-code use of `fmt.Errorf(` so the team can migrate
 # them to `errtrace.Wrap` / `errtrace.Wrapf` / `errtrace.New`. See
@@ -23,7 +23,7 @@
 
 set -euo pipefail
 
-LINT_MODE="${LINT_MODE:-warn}"
+LINT_MODE="${LINT_MODE:-fail}"
 
 if ! command -v rg >/dev/null 2>&1; then
     echo "check-no-fmt-errorf: ripgrep (rg) not found; skipping." >&2

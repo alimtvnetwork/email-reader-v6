@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # check-no-errors-new.sh
 #
-# Phase 1 (warn-only) error-trace guardrail.
+# Phase 2 (enforcing) error-trace guardrail. Default LINT_MODE=fail.
 #
 # Flags `errors.New(` calls that should be `errtrace.New(` so the sentinel
 # itself carries a frame.
@@ -19,7 +19,7 @@
 
 set -euo pipefail
 
-LINT_MODE="${LINT_MODE:-warn}"
+LINT_MODE="${LINT_MODE:-fail}"
 
 if ! command -v rg >/dev/null 2>&1; then
     echo "check-no-errors-new: ripgrep (rg) not found; skipping." >&2

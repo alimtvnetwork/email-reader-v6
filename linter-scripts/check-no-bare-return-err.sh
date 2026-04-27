@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # check-no-bare-return-err.sh
 #
-# Phase 1 (warn-only) error-trace guardrail.
+# Phase 2 (enforcing) error-trace guardrail. Default LINT_MODE=fail.
 #
 # Flags `return err` lines that have no surrounding `errtrace.Wrap` context,
 # so every package boundary contributes a frame to the trace.
@@ -19,7 +19,7 @@
 
 set -euo pipefail
 
-LINT_MODE="${LINT_MODE:-warn}"
+LINT_MODE="${LINT_MODE:-fail}"
 
 if ! command -v rg >/dev/null 2>&1; then
     echo "check-no-bare-return-err: ripgrep (rg) not found; skipping." >&2
