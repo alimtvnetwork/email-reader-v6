@@ -420,3 +420,17 @@ all future work.
 
 ### Files changed
 - edited `.lovable/memory/preferences/01-error-stack-traces.md`
+
+## Phase 5.3 — Core memory line added (2026-04-27) — ROLLOUT CLOSED
+
+- `mem://index.md` Core line updated from the old single-sentence
+  "All errors must use `internal/errtrace`" to the full convention:
+  three lints in fail mode + the `errlog.ReportError(component, err)`
+  UI surface rule + persistence + `errors tail` CLI.
+- Phases 1 → 5 of the error-trace logging upgrade are now closed.
+  The only outstanding orthogonal item is the pre-existing
+  `internal/core` seed bleed-through test backlog.
+
+### Files changed
+- edited `.lovable/memory/index.md` (Core)
+- edited `.lovable/memory/features/02-error-trace-rollout.md` (this file)
