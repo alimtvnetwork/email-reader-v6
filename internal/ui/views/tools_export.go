@@ -16,6 +16,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/lovable/email-read/internal/core"
+	"github.com/lovable/email-read/internal/ui/errlog"
 )
 
 // BuildExportTab returns the Export CSV sub-tool body: a Run button + a
@@ -48,7 +49,8 @@ func runExportIntoUI(factory ToolsFactory, output *widget.Entry, status *widget.
 	status.SetText("Counting rows…")
 	tools, err := buildToolsFromFactory(factory)
 	if err != nil {
-		status.SetText("⚠ setup: " + err.Error())
+		errlog.ReportError("tools.export.setup", err)
+		status.SetText("⚠ setup: " + err.Error() + " — see Diagnostics → Error Log")
 		return
 	}
 	progress := make(chan core.ExportProgress, 16)
