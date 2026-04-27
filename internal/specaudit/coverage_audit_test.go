@@ -200,15 +200,23 @@ var coverageGapAllowlist = map[string]struct{}{
 	// Slice #123 closed AC-DB-04/21/22/23/24/30/31/40/42/44/45 by
 	// tagging existing internal/store/* and internal/store/migrate/*
 	// tests with their AC-DB IDs (no new test code — same annotate-
-	// only pattern as Slice #122 for AC-DS). Remaining AC-DB gaps
-	// are genuine future work: AC-DB-01/02/03 (schema introspection
-	// against §1–§5), AC-DB-05/25 (partial-index Blocked-not-
-	// matched negative tests), AC-DB-06/07/08/09 (FK + enum CHECK
-	// tests), AC-DB-10/11 (PRAGMA per-conn parity + WAL persistence),
-	// AC-DB-20/26/27/28 (Q-* registry + EXPLAIN goldens + perf),
-	// AC-DB-32..36 (migrate gap/checksum/downgrade/crash/legacy
-	// rename tests), AC-DB-37 (DDL-only-in-migrate AST), AC-DB-41
-	// (Q-OPEN-PRUNE-BLOCKED scope), AC-DB-46 (idle-probe defer test).
+	// only pattern as Slice #122 for AC-DS). Slice #129 closed
+	// AC-DB-10 (PRAGMA per-conn parity, with a documented spec-drift
+	// note about synchronous=FULL vs spec'd NORMAL — fixing the DSN
+	// belongs in a behaviour slice) and AC-DB-11 (WAL mode persists
+	// across close/reopen) via Test_Store_PragmaOnEveryConn and
+	// Test_Store_WalPersists in pragma_persist_test.go. Remaining
+	// AC-DB gaps describe a future-target schema (singular table
+	// names, Decision/Origin enum CHECKs, ON DELETE SET NULL FK,
+	// HasAttachment column) or runtime features (gap/checksum/
+	// downgrade detection in the migrate runner) that the current
+	// implementation has not adopted: AC-DB-01/02/03 (schema
+	// introspection against §1–§5), AC-DB-05/25 (partial-index
+	// Blocked-not-matched negative tests), AC-DB-06/07/08/09 (FK +
+	// enum CHECK tests), AC-DB-20/26/27/28 (Q-* registry + EXPLAIN
+	// goldens + perf), AC-DB-32..36 (migrate gap/checksum/downgrade/
+	// crash/legacy rename tests), AC-DB-41 (Q-OPEN-PRUNE-BLOCKED
+	// scope), AC-DB-46 (idle-probe defer test).
 	"AC-DB-01": {},
 	"AC-DB-02": {},
 	"AC-DB-03": {},
@@ -217,8 +225,6 @@ var coverageGapAllowlist = map[string]struct{}{
 	"AC-DB-07": {},
 	"AC-DB-08": {},
 	"AC-DB-09": {},
-	"AC-DB-10": {},
-	"AC-DB-11": {},
 	"AC-DB-20": {},
 	"AC-DB-25": {},
 	"AC-DB-26": {},
