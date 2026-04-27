@@ -355,3 +355,50 @@ green.
   sentinelErr helper)
 - edited `internal/ui/app.go` (errLogPath var + openLogFileWithFyne
   + NavErrorLog wiring + net/url + errtrace imports)
+
+## Phase 4.3 — `email-read errors tail` CLI subcommand (2026-04-27)
+
+Shipped a CLI counterpart to the in-app Error Log view so users can
+forward the persisted log without launching the desktop UI.
+
+### Surface
+- New command group `errors` (reserved for future siblings) with one
+  subcommand: `errors tail [-f|--follow] [-n|--lines N]`.
+- Reads `<dataDir>/error-log.jsonl` via `errlog.LoadFromFile` (same
+  parser as the UI; corrupt lines skipped, 1 MiB max line).
+- Prints each entry as `[seq] RFC3339  component  summary` followed
+  by 4-space-indented `errtrace.Format` trace lines + a blank line
+  separator. Trace block elided when identical to summary.
+- `--lines N` trims to the newest N before printing.
+- `--follow` polls every 1 s; emits any entry whose `Seq > lastSeq`,
+  so rotations stream correctly (Seq is monotonic across rotations).
+  Cancels cleanly on Ctrl-C / SIGTERM via `signal.NotifyContext`.
+
+### Test seam
+`runErrorsTail` resolves the log path through a package-level
+`errLogPathResolver` var (default = `config.DataDir() +
+"error-log.jsonl"`). Tests override it to point at a tempdir
+fixture, avoiding a `chdir` dance and keeping `config` untouched.
+
+### Tests (6 new in `internal/cli/errors_tail_test.go`)
+- `TestWriteEntry_HeaderAndIndentedTrace`: header format + 4-space
+  indent + trailing blank.
+- `TestWriteEntry_SkipsTraceWhenSameAsSummary`: dedup of one-liner
+  errors.
+- `TestWriteEntry_FallbackComponent`: empty Component → `-`.
+- `TestRunErrorsTail_EmptyFile`: missing file → friendly empty-state
+  naming the resolved path.
+- `TestRunErrorsTail_PrintsOldestFirst`: file order preserved.
+- `TestRunErrorsTail_LinesFlagTrims`: `--lines 1` keeps only newest.
+- `TestRunErrorsTail_FollowPicksUpNewEntries`: appended Seq=2 after
+  follow start surfaces on stdout, then ctx-cancel exits cleanly.
+
+### Verification
+- `go vet -tags nofyne ./...` clean.
+- `go test -tags nofyne ./internal/cli/...` green (suite ~1.5 s).
+- All three errtrace lints still **0 violations** at `LINT_MODE=fail`.
+
+### Files changed
+- created `internal/cli/errors_tail.go`
+- created `internal/cli/errors_tail_test.go`
+- edited `internal/cli/cli.go` (registered `newErrorsCmd()` on root)
