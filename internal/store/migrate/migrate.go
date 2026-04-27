@@ -121,10 +121,80 @@ func All() []Migration {
 // Reset clears the registry. **Test-only**: production code never
 // calls this. Exposed (vs. unexported) so external test packages
 // (e.g. `migrate_test` black-box tests) can isolate fixtures.
+//
+// **Prefer** SwapRegistryForTest + RestoreBaselineRegistryForTest in
+// new tests — Reset wipes the production builtins for the rest of the
+// process, which breaks `-count>1` runs of in-package m00xx_*_test.go
+// files that read the registry directly.
 func Reset() {
 	registryMu.Lock()
 	defer registryMu.Unlock()
 	registry = make(map[int]Migration)
+}
+
+// baselineOnce captures the registry state at the moment the first
+// test helper runs — i.e. after every sibling `init()` has registered
+// its production migration. Subsequent RestoreBaselineRegistryForTest
+// calls reset to this snapshot regardless of what individual tests
+// did in between, so `-count>1` runs stay deterministic.
+var (
+	baselineOnce sync.Once
+	baseline     map[int]Migration
+)
+
+// captureBaselineLocked snapshots the current registry into baseline
+// the first time it is called. Caller must hold registryMu.
+func captureBaselineLocked() {
+	baselineOnce.Do(func() {
+		baseline = make(map[int]Migration, len(registry))
+		for v, m := range registry {
+			baseline[v] = m
+		}
+	})
+}
+
+// SwapRegistryForTest atomically replaces the package-level registry
+// with `next` (defensively copied) and returns the prior contents.
+// Captures the production baseline on first call so
+// RestoreBaselineRegistryForTest can put things back even after a
+// chain of swaps. **Test-only.**
+func SwapRegistryForTest(next map[int]Migration) map[int]Migration {
+	registryMu.Lock()
+	defer registryMu.Unlock()
+	captureBaselineLocked()
+	prev := registry
+	if next == nil {
+		next = make(map[int]Migration)
+	} else {
+		cp := make(map[int]Migration, len(next))
+		for k, v := range next {
+			cp[k] = v
+		}
+		next = cp
+	}
+	registry = next
+	return prev
+}
+
+// RestoreBaselineRegistryForTest restores the registry to the snapshot
+// captured the first time SwapRegistryForTest ran (i.e. the production
+// migrations registered via init()). Returns the registry contents
+// being displaced. Safe to call even if no swap happened — falls back
+// to clearing the registry when no baseline exists. **Test-only.**
+func RestoreBaselineRegistryForTest() map[int]Migration {
+	registryMu.Lock()
+	defer registryMu.Unlock()
+	prev := registry
+	if baseline == nil {
+		registry = make(map[int]Migration)
+		return prev
+	}
+	cp := make(map[int]Migration, len(baseline))
+	for k, v := range baseline {
+		cp[k] = v
+	}
+	registry = cp
+	return prev
 }
 
 // schemaVersionDDL is the bookkeeping table. `IF NOT EXISTS` makes
