@@ -252,20 +252,11 @@ func runSettingsValidationCase(t *testing.T, tc settingsValidationCase) {
 	}
 }
 
-// codeOf unwraps the errtrace.*Coded chain and returns the
-// outermost code, or empty string when the error is uncoded.
-// Mirrors the lookup pattern used by other `core` tests so a
-// future move to a public helper is mechanical.
-func codeOf(err error) errtrace.Code {
-	if err == nil {
-		return errtrace.Code("")
-	}
-	var coded *errtrace.Coded
-	if errors.As(err, &coded) {
-		return coded.Code
-	}
-	return errtrace.Code("")
-}
+// codeOf is reused from `dashboard_test.go` (same package). It walks
+// the Unwrap chain and returns the first `*errtrace.Coded` code, or
+// "" when none is found. Re-declaring it here would duplicate the
+// helper; the matrix relies on the dashboard_test.go definition.
+
 
 func mustConfigPath(t *testing.T) string {
 	t.Helper()
