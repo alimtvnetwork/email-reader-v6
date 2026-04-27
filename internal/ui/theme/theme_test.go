@@ -81,7 +81,8 @@ func Test_Color_RawLogBadgeCodeTokens(t *testing.T) {
 		{core.ThemeDark, ColorRawLogHeartbeat, color.NRGBA{90, 96, 110, 255}},
 		{core.ThemeDark, ColorRawLogNewMail, color.NRGBA{235, 237, 242, 255}},
 		{core.ThemeDark, ColorRawLogError, color.NRGBA{240, 90, 105, 255}},
-		{core.ThemeDark, ColorRawLogTimestamp, color.NRGBA{120, 125, 135, 255}},
+		// Slice #118d palette tune: was {120,125,135}; lifted for WCAG AA.
+		{core.ThemeDark, ColorRawLogTimestamp, color.NRGBA{140, 145, 155, 255}},
 		// §2.7 badges — dark
 		{core.ThemeDark, ColorRuleMatchBadge, color.NRGBA{170, 130, 255, 255}},
 		{core.ThemeDark, ColorBadgeNeutralBg, color.NRGBA{46, 49, 58, 255}},

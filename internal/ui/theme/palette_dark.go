@@ -50,7 +50,10 @@ var paletteDark = map[ColorName]color.NRGBA{
 	ColorRawLogHeartbeat: {90, 96, 110, 255},
 	ColorRawLogNewMail:   {235, 237, 242, 255},
 	ColorRawLogError:     {240, 90, 105, 255},
-	ColorRawLogTimestamp: {120, 125, 135, 255},
+	// Slice #118d palette tune: lightened from (120,125,135) — WCAG
+	// ratio against ColorCodeBg rose from 4.42 → 5.77, clearing the
+	// `RawLogTimestamp on CodeBg (Dark)` row's `knownDrift` flag.
+	ColorRawLogTimestamp: {140, 145, 155, 255},
 
 	// §2.7 badges
 	ColorRuleMatchBadge: {170, 130, 255, 255},
