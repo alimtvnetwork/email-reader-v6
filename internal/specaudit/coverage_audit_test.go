@@ -313,8 +313,6 @@ var coverageGapAllowlist = map[string]struct{}{
 	"AC-PROJ-11": {},
 	"AC-PROJ-14": {},
 	"AC-PROJ-15": {},
-	"AC-PROJ-31": {},
-	"AC-PROJ-33": {},
 	"AC-PROJ-35": {},
 	"AC-PROJ-36": {},
 	// Slice #126 closed AC-SB-01/02/11/15/16/17/19/22 by tagging the
