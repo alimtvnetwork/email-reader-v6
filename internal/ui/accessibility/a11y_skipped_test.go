@@ -33,7 +33,7 @@ func Test_Contrast_Matrix(t *testing.T) {
 	t.Skip("Slice #118b — live test runs in internal/ui/theme/contrast_test.go (cannot live here without import cycle)")
 }
 
-// Spec §8 #2 — Test_FocusOrder_Declared
+// Spec §8 #2 — Test_FocusOrder_Declared (AC-DS-61)
 //
 // **Slice #118c: lit up.** Lives in `a11y_render_harness_test.go`
 // in this package as a pure AST scan (no Fyne runtime needed).
@@ -41,7 +41,7 @@ func Test_Contrast_Matrix(t *testing.T) {
 // allowlist must shrink monotonically as Slice #118e rolls out
 // `FocusOrder()` declarations across the views package.
 
-// Spec §8 #3 — Test_FocusOrder_NoHiddenInOrder
+// Spec §8 #3 — Test_FocusOrder_NoHiddenInOrder (AC-DS-62)
 //
 // Once `FocusOrder()` declarations exist (Slice #118e), asserts the
 // returned slice contains no widgets whose `Hidden` or `Disabled`
