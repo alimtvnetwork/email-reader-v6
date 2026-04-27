@@ -142,10 +142,13 @@ func walkSpecMarkdown(t *testing.T, root string, fn func(abs, rel, body string))
 	}
 }
 
-// stripCodeFences removes fenced code blocks (``` ... ```) from a markdown
-// body so registry-like content inside examples doesn't confuse a "is this
-// the definition site?" check. Inline-code spans are preserved because
-// references like `ER-CFG-21001` legitimately appear inside backticks.
+// stripCodeFences removes fenced code blocks (``` ... ```) AND inline
+// code spans (`...`) from a markdown body so example/prose content
+// doesn't masquerade as real refs or links. Real ref tokens like
+// `ER-CFG-21001` that legitimately live in inline code are still found
+// by the registry's own definition site, so removing them here only
+// affects how *referenced* tokens are counted on the call sites — the
+// caller compares to the registry's `defined` set built from raw text.
 func stripCodeFences(body string) string {
 	var out strings.Builder
 	inFence := false
@@ -157,8 +160,25 @@ func stripCodeFences(body string) string {
 		if inFence {
 			continue
 		}
-		out.WriteString(line)
+		out.WriteString(stripInlineCode(line))
 		out.WriteByte('\n')
+	}
+	return out.String()
+}
+
+// stripInlineCode removes `...` spans from a single line. A backtick
+// pair toggles the span; unmatched trailing backticks are kept.
+func stripInlineCode(line string) string {
+	var out strings.Builder
+	in := false
+	for i := 0; i < len(line); i++ {
+		if line[i] == '`' {
+			in = !in
+			continue
+		}
+		if !in {
+			out.WriteByte(line[i])
+		}
 	}
 	return out.String()
 }
