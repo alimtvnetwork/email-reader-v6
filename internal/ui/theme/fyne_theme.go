@@ -143,6 +143,20 @@ var fyneColorRoute = map[fyne.ThemeColorName]ColorName{
 	fynetheme.ColorNameHeaderBackground:  ColorSurfaceMuted,
 	fynetheme.ColorNameHover:             ColorSurfaceMuted,
 	fynetheme.ColorNamePressed:           ColorSurfaceMuted,
+	// Slice #176 — proactive sweep of the remaining unmapped Fyne color
+	// names that key off the OS variant (same root cause as #175). Audit
+	// of `fyne.io/fyne/v2/theme/theme.go` ColorName* constants found 13
+	// unmapped names; routed the 6 with clean token matches. Skipped
+	// ForegroundOnError/Success/Warning (Fyne's white default is correct
+	// for status-button text in both modes; routing would require new
+	// palette tokens) and Shadow (alpha-only overlay, mode-agnostic).
+	fynetheme.ColorNameFocus:               ColorPrimary,        // focus ring = brand
+	fynetheme.ColorNameInputBorder:         ColorBorder,         // text-input outline
+	fynetheme.ColorNamePlaceHolder:         ColorForegroundMuted, // empty-entry hint
+	fynetheme.ColorNameHyperlink:           ColorPrimary,        // links use brand
+	fynetheme.ColorNameScrollBar:           ColorForegroundMuted, // subtle thumb
+	fynetheme.ColorNameDisabledButton:      ColorSurfaceMuted,   // greyed surface
+	fynetheme.ColorNameForegroundOnPrimary: ColorPrimaryForeground, // direct semantic match
 	// Selection is intentionally absent: it's special-cased in Color()
 	// to apply the §2 alpha-0.30 blend on ColorPrimary via scaleAlpha.
 }
