@@ -2,6 +2,13 @@
 // invokes core.Tools.ReadOnce with a streaming progress channel and
 // renders header rows in a scrollable list.
 //
+// **Slice #116c (Phase 6.3) refactor.** The per-call `*core.Tools`
+// constructor (`buildReadTools`) used to live here and call
+// `config.Load()` inline. It is now sourced from the injected
+// `ToolsFactory` (shared with OpenUrl / Export / Recent opens via
+// the shell's `*Services.Tools` field) — see `tools_openurl.go`
+// for the shared `buildToolsFromFactory` helper.
+//
 // Spec: spec/21-app/02-features/06-tools/02-frontend.md (Read sub-tool).
 //go:build !nofyne
 
@@ -16,8 +23,6 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 
-	"github.com/lovable/email-read/internal/browser"
-	"github.com/lovable/email-read/internal/config"
 	"github.com/lovable/email-read/internal/core"
 )
 
