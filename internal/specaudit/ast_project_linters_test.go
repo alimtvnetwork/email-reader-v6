@@ -186,7 +186,7 @@ func Test_AllErrorRefsResolveInRegistry(t *testing.T) {
 		if rel == "spec/21-app/06-error-registry.md" {
 			return // the registry itself defines, doesn't reference
 		}
-		for _, code := range uniqueMatches(errCodeRe, body) {
+		for code := range uniqueMatches(errCodeRe, body) {
 			if !defined[code] {
 				missing[code] = append(missing[code], rel)
 			}
