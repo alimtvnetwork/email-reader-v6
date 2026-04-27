@@ -24,6 +24,7 @@ Honest-scope principle: skipped tests with `t.Logf` + `t.Skip` are tripwires, no
 - [IMAP auth failed root causes](mem://decisions/03-imap-auth-debugging) — Wrong password OR hidden Unicode; check doctor first.
 - [spec/21-app folder rename](mem://decisions/04-spec-21-app-rename) — 2026-04-25 merge of 21-golang-email-reader + 22-fyne-ui.
 - [Error stack traces preference](mem://preferences/01-error-stack-traces) — Always use `internal/errtrace`.
+- [Error-trace migration rollout](mem://features/02-error-trace-rollout) — Phase 1 baseline (46 production sites still bypass errtrace); update after each Phase-2 slice. Lint scripts wired into run.sh / run.ps1 (warn-only).
 - [Testing guide](mem://testing-guide) — Project-wide test conventions.
 - [Session 2026-04-21](mem://sessions/01-2026-04-21) — IMAP auth debugging session.
 - [Session 2026-04-21 debugging](mem://sessions/02-2026-04-21-debugging) — Verbose poll logging round.
