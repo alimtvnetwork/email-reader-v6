@@ -12,12 +12,12 @@
 //   - AC-PROJ-34  Every folder under `spec/21-app/02-features/` contains
 //                 exactly the five canonical files. No extras, no missing.
 //
-// AC-PROJ-35 (no open `OI-N` references at merge time) is intentionally
-// NOT closed in this slice — `spec/21-app/02-features/06-tools/99-...`
-// still lists OI-1..OI-6 as scheduled (not ✅ Closed). Closing AC-PROJ-35
-// requires either resolving those OIs or rewriting their status; both are
-// behaviour/spec work outside the scope of an AC-coverage slice. The
-// allowlist comment block tracks this honestly.
+// The "no open OI-N references at merge time" row is intentionally NOT
+// closed in this slice — the tools/99 consistency report still lists
+// scheduled OIs without ✅ status. Closing it is documentation work
+// outside the scope of an AC-coverage slice; that row stays in the
+// coverage allowlist and is NOT cited from this file (so the audit's
+// stale-ref guard doesn't see false coverage).
 //
 // Spec: spec/21-app/97-acceptance-criteria.md §AC-PROJ.
 package specaudit
