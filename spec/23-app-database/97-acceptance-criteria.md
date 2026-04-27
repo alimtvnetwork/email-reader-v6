@@ -23,7 +23,7 @@ Binary, machine-checkable acceptance criteria for `spec/23-app-database/`. Each 
 | AC-DB-03 | Every index listed in `01-schema.md` exists. No additional indexes exist beyond those listed. | `Test_Schema_IndexesMatchSpec` |
 | AC-DB-04 | `UX_Email_Alias_MessageId` is enforced (insert two rows with same `(Alias, MessageId)` → conflict). | `Test_Email_UniqueAliasMessageId` |
 | AC-DB-05 | `UX_OpenedUrl_Dedup` is partial (`WHERE Decision='Launched'`); inserting two `Blocked` rows with identical key columns succeeds. | `Test_OpenedUrl_Dedup_PartialIndex` |
-| AC-DB-06 | `OpenedUrl.EmailId` is `ON DELETE SET NULL` (delete an Email row → matching OpenedUrl rows have `EmailId = NULL`, not deleted). | `Test_OpenedUrl_FkSetNull` |
+| AC-DB-06 | `OpenedUrls.EmailId` is `ON DELETE SET NULL` (delete an `Emails` row → matching `OpenedUrls` rows have `EmailId = NULL`, not deleted). | `Test_OpenedUrl_FkSetNull` |
 | AC-DB-07 | `Origin` enum rejects values not in `{Watcher, Manual, Rule}`. | `Test_OpenedUrl_OriginCheck` |
 | AC-DB-08 | `Decision` enum rejects values not in `{Launched, Blocked, Skipped, Failed}`. | `Test_OpenedUrl_DecisionCheck` |
 | AC-DB-09 | `HasAttachment` only accepts `0` or `1`. | `Test_Email_HasAttachmentCheck` |
@@ -58,7 +58,7 @@ Binary, machine-checkable acceptance criteria for `spec/23-app-database/`. Each 
 | AC-DB-32 | Version gap returns `ER-MIG-21801`. | `Test_Migrate_GapDetected` |
 | AC-DB-33 | Tampered checksum returns `ER-MIG-21803`. | `Test_Migrate_ChecksumMismatch` |
 | AC-DB-34 | Stored unknown version returns `ER-MIG-21804`. | `Test_Migrate_DowngradeRejected` |
-| AC-DB-35 | Mid-tx crash leaves DB at prior version (no partial `SchemaMigration` row). | `Test_Migrate_CrashSafe` |
+| AC-DB-35 | Mid-tx crash leaves DB at prior version (no partial `_SchemaVersion` row). | `Test_Migrate_CrashSafe` |
 | AC-DB-36 | M004 renames legacy `Emails`/`OpenedUrls` when present; no-op otherwise. | `Test_Migrate_LegacyRename` |
 | AC-DB-37 | AST scan: only `internal/store/migrate` issues `CREATE`/`ALTER`/`DROP`. | `Test_AST_DdlOnlyInMigrate` |
 
@@ -82,7 +82,7 @@ Binary, machine-checkable acceptance criteria for `spec/23-app-database/`. Each 
 | AC-DB-50 | AST scan: only `internal/store` (and its sub-packages) imports a SQL driver. | `Test_AST_DriverImportLimit` |
 | AC-DB-51 | AST scan: no `*sql.DB`, `*sql.Tx`, or `*sql.Rows` value escapes `internal/store/...` (return types of public methods do not include them). | `Test_AST_NoSqlTypeLeak` |
 | AC-DB-52 | AST scan: feature backends (`internal/core/*`) call typed `store.*` methods only. | `Test_AST_CoreUsesStoreOnly` |
-| AC-DB-53 | All datetime values in `Email`, `WatchState`, `OpenedUrl` are stored as RFC 3339 UTC strings (regex on a sample fetch). | `Test_DateTime_FormatUtc` |
+| AC-DB-53 | All datetime values in `Emails`, `WatchState`, `OpenedUrls` are stored as RFC 3339 UTC strings (regex on a sample fetch). | `Test_DateTime_FormatUtc` |
 | AC-DB-54 | All boolean columns are positive-named (no `Is` / `Has` columns whose `0` value means a positive condition). | `Test_BooleanPositive` |
 | AC-DB-55 | `OriginalUrl` value never appears in test logger output above DEBUG. | `Test_LogScan_NoOriginalUrlLeak` |
 
@@ -93,7 +93,7 @@ Binary, machine-checkable acceptance criteria for `spec/23-app-database/`. Each 
 | AC-DBP-01 | Cold `Open()` on 100 k-row DB | ≤ 80 ms p95 |
 | AC-DBP-02 | Watch per-message tx (`Q-EMAIL-UPSERT`) | ≤ 5 ms p95 |
 | AC-DBP-03 | `Q-EMAIL-LIST` (`Limit=50`, alias set) on 100 k rows | ≤ 25 ms p95 |
-| AC-DBP-04 | `Q-OPEN-DEDUP` within 10-min window on 100 k OpenedUrl rows | ≤ 2 ms p95 |
+| AC-DBP-04 | `Q-OPEN-DEDUP` within 10-min window on 100 k OpenedUrls rows | ≤ 2 ms p95 |
 | AC-DBP-05 | `Q-EXPORT-STREAM` per-row | ≤ 0.5 ms p95 |
 | AC-DBP-06 | Memory used by `ExportCsv` over 100 k rows | ≤ 32 MiB peak (streaming) |
 
