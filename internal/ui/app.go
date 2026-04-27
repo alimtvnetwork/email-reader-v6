@@ -326,3 +326,32 @@ func placeholderView(item NavItem, state *AppState) fyne.CanvasObject {
 // lines of duplicated bootstrap glue. The `config` import in this
 // file is now used only by `LoadAliases`/theme code.
 
+// accountsHealthLoader returns the per-row health-badge feed used by
+// the Accounts view (Slice #112). Routes through the existing
+// `(*core.DashboardService).AccountHealth(ctx, src)` so the rollup +
+// per-row data come from the exact same query — no schema drift
+// between the two Dashboard surfaces.
+//
+// Returns nil (the view's degraded path → "— Unknown" placeholders)
+// when either the Dashboard service or the HealthSource adapter is
+// missing — e.g. store-open failure at boot. Never panics; never
+// surfaces an error to the user (the badge is a hint, not the
+// authoritative state).
+func accountsHealthLoader(services *Services) func(ctx context.Context) map[string]core.HealthLevel {
+	if services == nil || services.Dashboard == nil || services.HealthSource == nil {
+		return nil
+	}
+	return func(ctx context.Context) map[string]core.HealthLevel {
+		res := services.Dashboard.AccountHealth(ctx, services.HealthSource)
+		if res.HasError() {
+			log.Printf("ui: accountsHealthLoader: AccountHealth failed: %v", res.Error())
+			return nil
+		}
+		out := make(map[string]core.HealthLevel, len(res.Value()))
+		for _, r := range res.Value() {
+			out[r.Alias] = r.Health
+		}
+		return out
+	}
+}
+
