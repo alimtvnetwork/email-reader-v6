@@ -385,10 +385,14 @@ func scanFileForLogLeak(path, rel, needle string, levels []string) []string {
 			continue
 		}
 		if isTestingHelperCall(line) {
-			// `t.Errorf` / `t.Fatalf` / `t.Logf` are Go testing
-			// failure reporters, not application loggers; spec
-			// AC-SX targets logger output, not test failure
-			// messages (which never reach prod stdout).
+			continue
+		}
+		if isRedactedReference(line, needle) {
+			// Field flows into an explicit redactor (e.g.
+			// `redactIncognito(ev.IncognitoArg)`); the raw value
+			// never reaches the logger formatter. Spec AC-SX-04/05
+			// require the *value* not appear in logs — wrapping
+			// it satisfies that intent.
 			continue
 		}
 		for _, lvl := range levels {
@@ -399,6 +403,40 @@ func scanFileForLogLeak(path, rel, needle string, levels []string) []string {
 		}
 	}
 	return hits
+}
+
+// isRedactedReference reports whether every occurrence of the field
+// reference on the line is wrapped in a "redact*" call. Recognises
+// `redactIncognito(ev.IncognitoArg)` while still flagging raw
+// `%q", ev.IncognitoArg`-style leaks.
+func isRedactedReference(line, needle string) bool {
+	idx := 0
+	for {
+		rel := strings.Index(line[idx:], needle)
+		if rel < 0 {
+			return true
+		}
+		pos := idx + rel
+		prefix := line[:pos]
+		open := strings.LastIndex(prefix, "(")
+		if open < 0 {
+			return false
+		}
+		j := open
+		for j > 0 && isIdentByte(prefix[j-1]) {
+			j--
+		}
+		callee := strings.ToLower(prefix[j:open])
+		if !strings.Contains(callee, "redact") {
+			return false
+		}
+		idx = pos + len(needle)
+	}
+}
+
+func isIdentByte(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') ||
+		(b >= '0' && b <= '9') || b == '_'
 }
 
 // isTestingHelperCall reports whether the line invokes a *testing.T
