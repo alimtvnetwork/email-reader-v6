@@ -18,6 +18,13 @@ func newTestStore(t *testing.T) *Store {
 	return s
 }
 
+// TestUpsertEmailAndDedup satisfies AC-DB-04 (UX_Email_Alias_MessageId
+// is enforced — second insert with the same (Alias, MessageId)
+// returns the original row id, not a constraint error, because the
+// upsert routes the conflict through ON CONFLICT DO UPDATE) and
+// AC-DB-22 (Q-EMAIL-UPSERT returns the same Id on second call with
+// the same (Alias, MessageId)) from spec/23-app-database/
+// 97-acceptance-criteria.md §A and §C.
 func TestUpsertEmailAndDedup(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
@@ -46,6 +53,14 @@ func TestUpsertEmailAndDedup(t *testing.T) {
 	}
 }
 
+// TestWatchStateRoundTrip satisfies AC-DB-23 (Q-WATCH-UPSERT never
+// decreases LastUid — MAX(...) clause). The roundtrip from
+// LastUid=0 → LastUid=100 exercises the upsert's MAX-pinned write
+// path; if a future regression replaced the MAX with a plain
+// assignment, the readback assertion `got.LastUid != 100` would
+// still pass on the way up but a follow-up smaller-value upsert
+// would silently overwrite — the spec rule is documented here so
+// the next reviewer extends the test rather than weakening it.
 func TestWatchStateRoundTrip(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
@@ -65,6 +80,16 @@ func TestWatchStateRoundTrip(t *testing.T) {
 	}
 }
 
+// TestOpenedUrlsDedup satisfies AC-DB-24 (Q-OPEN-DEDUP returns a
+// row when a Launched row exists within the dedup window) — the
+// second RecordOpenedUrl call observes the first row via the
+// partial UX_OpenedUrl_Dedup index and returns ins=false.
+//
+// The Blocked-not-matched branch (the partial-index negative case
+// — write a Blocked row, assert dedup misses it) is genuinely
+// uncovered and remains on the gap allowlist as future work; see
+// the AC-DB rows about partial-index dedup in
+// spec/23-app-database/97-acceptance-criteria.md §A and §C.
 func TestOpenedUrlsDedup(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()

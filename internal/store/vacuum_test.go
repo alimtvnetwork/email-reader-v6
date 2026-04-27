@@ -8,6 +8,14 @@ import (
 	"time"
 )
 
+// TestPruneOpenedUrlsBefore_DeletesOnlyOldRows contributes to
+// AC-DB-40 (Q-OPEN-PRUNE-LAUNCHED only deletes Launched rows
+// older than cutoff) — the time-cutoff half is locked here
+// (back-dated row deletes, recent row survives). The
+// "Decision='Launched' filter" half remains uncovered: today's
+// `RecordOpenedUrl` path always writes Launched, so we cannot
+// negative-test that a Blocked row at the same age survives. That
+// branch stays on the AC backlog (kept in coverageGapAllowlist).
 func TestPruneOpenedUrlsBefore_DeletesOnlyOldRows(t *testing.T) {
 	dir := t.TempDir()
 	s, err := OpenAt(filepath.Join(dir, "ret.db"))
@@ -57,6 +65,13 @@ func TestPruneOpenedUrlsBefore_DeletesOnlyOldRows(t *testing.T) {
 	}
 }
 
+// TestPruneOpenedUrlsBefore_ZeroCutoffIsNoop satisfies AC-DB-42
+// (retention 0 disables the corresponding prune entirely — zero
+// DELETE statements observed) for the time-cutoff branch. The
+// `n != 0` assertion locks the "no rows touched" guarantee; the
+// zero-time.Time argument models the disabled-retention setting
+// from the Settings UI. Pairs with TestPruneOpenedUrlsBeforeBatched_
+// ZeroCutoffNoop in vacuum_batched_test.go for the batched path.
 func TestPruneOpenedUrlsBefore_ZeroCutoffIsNoop(t *testing.T) {
 	dir := t.TempDir()
 	s, err := OpenAt(filepath.Join(dir, "ret.db"))
@@ -81,6 +96,10 @@ func TestPruneOpenedUrlsBefore_ZeroCutoffIsNoop(t *testing.T) {
 
 // TestShouldAnalyze_AtAndAroundThreshold pins the integer comparison —
 // exactly AnalyzeThreshold triggers, one less does not, anything more does.
+//
+// Satisfies AC-DB-44 (ANALYZE only runs when ≥ 1000 rows deleted)
+// from spec/23-app-database/97-acceptance-criteria.md §E. The
+// AnalyzeThreshold constant is the spec's 1000-row gate.
 func TestShouldAnalyze_AtAndAroundThreshold(t *testing.T) {
 	cases := []struct {
 		cum  int64

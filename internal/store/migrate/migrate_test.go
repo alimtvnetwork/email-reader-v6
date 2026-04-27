@@ -58,6 +58,12 @@ func TestApply_EmptyRegistry_CreatesLedgerAndNoOps(t *testing.T) {
 	}
 }
 
+// TestApply_RunsEachMigrationOnce_InVersionOrder satisfies AC-DB-30
+// (migrate.Apply on an empty DB applies all migrations in order)
+// from spec/23-app-database/97-acceptance-criteria.md §D. Registers
+// 3 migrations out of order; asserts the ledger ends with rows
+// (1,"first"), (2,"second"), (3,"third") and the side-effect
+// tables T1/T2/T3 all exist.
 func TestApply_RunsEachMigrationOnce_InVersionOrder(t *testing.T) {
 	resetRegistry(t)
 	db := newDB(t)
@@ -109,6 +115,13 @@ func TestApply_RunsEachMigrationOnce_InVersionOrder(t *testing.T) {
 	}
 }
 
+// TestApply_Idempotent_SecondCallSkipsAppliedMigrations satisfies
+// AC-DB-31 (migrate.Apply on an up-to-date DB is a no-op) from
+// spec/23-app-database/97-acceptance-criteria.md §D. The trick:
+// the migration's Up SQL has no `IF NOT EXISTS`, so a second exec
+// would raise "table already exists" — the test passing on pass=2
+// proves the ledger short-circuits the second call, not SQL
+// idempotency.
 func TestApply_Idempotent_SecondCallSkipsAppliedMigrations(t *testing.T) {
 	resetRegistry(t)
 	db := newDB(t)
