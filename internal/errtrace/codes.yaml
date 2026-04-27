@@ -55,6 +55,9 @@ blocks:
       - const: ErrConfigAccountMissing
         code: "ER-CFG-21007"
         description: Lookup for an alias returned no matching account.
+      - const: ErrConfigSchemaMigration
+        code: "ER-CFG-21008"
+        description: config.json schema migration step failed (FromVersion → ToVersion).
 
   - name: Store
     prefix: ER-DB
