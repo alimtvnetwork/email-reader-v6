@@ -16,6 +16,8 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
+
+	"github.com/lovable/email-read/internal/ui/errlog"
 )
 
 // BuildRecentOpensTab returns the Recent-opens body: alias entry +
@@ -84,7 +86,8 @@ func runRecentOpensIntoUI(factory ToolsFactory, f RecentOpensFilter, output *wid
 	status.SetText("Querying…")
 	tools, err := buildToolsFromFactory(factory)
 	if err != nil {
-		status.SetText("⚠ " + err.Error())
+		errlog.ReportError("tools.recent_opens.setup", err)
+		status.SetText("⚠ " + err.Error() + " — see Diagnostics → Error Log")
 		return
 	}
 	spec := BuildRecentOpensSpec(f)
@@ -92,7 +95,8 @@ func runRecentOpensIntoUI(factory ToolsFactory, f RecentOpensFilter, output *wid
 	res := tools.RecentOpenedUrls(context.Background(), spec)
 	elapsed := time.Since(start)
 	if res.HasError() {
-		status.SetText("⚠ " + res.Error().Error())
+		errlog.ReportError("tools.recent_opens", res.Error())
+		status.SetText("⚠ " + res.Error().Error() + " — see Diagnostics → Error Log")
 		appendOutput(output, "ERROR: "+res.Error().Error())
 		return
 	}

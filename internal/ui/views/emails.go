@@ -13,6 +13,7 @@ import (
 
 	"github.com/lovable/email-read/internal/core"
 	"github.com/lovable/email-read/internal/errtrace"
+	"github.com/lovable/email-read/internal/ui/errlog"
 )
 
 // EmailsOptions wires the emails view to data + actions.
@@ -179,9 +180,12 @@ func emailsEmptyAlias(heading fyne.CanvasObject) fyne.CanvasObject {
 	return container.NewVBox(heading, widget.NewSeparator(), hint)
 }
 
-// emailsErrorView renders a load-failure warning.
+// emailsErrorView renders a load-failure warning. The full trace is
+// also routed through errlog so the Diagnostics → Error Log view shows
+// the file:line chain even though the inline label is one line.
 func emailsErrorView(heading fyne.CanvasObject, err error) fyne.CanvasObject {
-	warn := widget.NewLabel("⚠ Failed to load emails: " + err.Error())
+	errlog.ReportError("emails", err)
+	warn := widget.NewLabel("⚠ Failed to load emails: " + err.Error() + " — see Diagnostics → Error Log")
 	warn.Wrapping = fyne.TextWrapWord
 	return container.NewVBox(heading, widget.NewSeparator(), warn)
 }
@@ -216,7 +220,8 @@ func buildEmailsBrowser(heading fyne.CanvasObject, opts EmailsOptions, rows []co
 // row — used by the per-render `buildEmailsBody` swap path where the
 // heading is owned by the outer Border.
 func emailsErrorBody(err error) fyne.CanvasObject {
-	warn := widget.NewLabel("⚠ Failed to load emails: " + err.Error())
+	errlog.ReportError("emails", err)
+	warn := widget.NewLabel("⚠ Failed to load emails: " + err.Error() + " — see Diagnostics → Error Log")
 	warn.Wrapping = fyne.TextWrapWord
 	return container.NewVBox(warn)
 }
@@ -333,7 +338,8 @@ func renderDetail(d *core.EmailDetail, open func(string) error, status *widget.L
 			u := u
 			btn := widget.NewButton(u, func() {
 				if err := open(u); err != nil {
-					status.SetText("⚠ Open failed: " + err.Error())
+					errlog.ReportError("emails.open_url", err)
+					status.SetText("⚠ Open failed: " + err.Error() + " — see Diagnostics → Error Log")
 					return
 				}
 				status.SetText("Opened: " + u)

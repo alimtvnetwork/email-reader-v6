@@ -28,6 +28,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/lovable/email-read/internal/core"
+	"github.com/lovable/email-read/internal/ui/errlog"
 )
 
 // BuildOpenUrlTab returns the manual URL launcher body: an URL input,
@@ -63,13 +64,15 @@ func BuildOpenUrlTab(factory ToolsFactory) fyne.CanvasObject {
 func runOpenUrlIntoUI(factory ToolsFactory, rawurl string, status *widget.Label) {
 	tools, err := buildToolsFromFactory(factory)
 	if err != nil {
-		status.SetText("⚠ setup: " + err.Error())
+		errlog.ReportError("tools.openurl.setup", err)
+		status.SetText("⚠ setup: " + err.Error() + " — see Diagnostics → Error Log")
 		return
 	}
 	r := tools.OpenUrl(context.Background(),
 		core.OpenUrlSpec{Url: rawurl, Origin: core.OriginManual})
 	if r.HasError() {
-		status.SetText("⚠ " + r.Error().Error())
+		errlog.ReportError("tools.openurl", r.Error())
+		status.SetText("⚠ " + r.Error().Error() + " — see Diagnostics → Error Log")
 		return
 	}
 	rep := r.Value()
