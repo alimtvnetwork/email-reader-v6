@@ -125,6 +125,9 @@ func Test_AST_T2_FyneThemeImportConfinedToTheme(t *testing.T) {
 }
 
 // AST-T4: no file under internal/ui/views/ imports "image/color".
+//
+// Satisfies AC-DS-20 (AST: no file under internal/ui/views/
+// imports image/color).
 func Test_AST_T4_ViewsDoNotImportImageColor(t *testing.T) {
 	root := repoRoot(t)
 	viewsPrefix := filepath.Join(root, "internal", "ui", "views") + string(filepath.Separator)
