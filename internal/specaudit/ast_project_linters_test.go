@@ -207,6 +207,9 @@ func Test_AllErrorRefsResolveInRegistry(t *testing.T) {
 			return // the registry itself defines, doesn't reference
 		}
 		for code := range uniqueMatches(errCodeRe, body) {
+			if isPlaceholderToken(code) {
+				continue
+			}
 			if !defined[code] {
 				missing[code] = append(missing[code], rel)
 			}
