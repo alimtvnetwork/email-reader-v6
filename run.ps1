@@ -199,6 +199,28 @@ if ($LASTEXITCODE -ne 0) {
 Write-Ok "Modules resolved."
 
 # =====================================================================
+# Step C.1: Error-trace lint guardrails (Phase 1, warn-only)
+# Print error-handling debt without failing the build. Set
+# $env:LINT_MODE = 'fail' to enforce in CI.
+# =====================================================================
+Write-Step "Error-trace guardrails (warn-only)"
+$guards = @(
+    Join-Path $RepoRoot 'linter-scripts/check-no-fmt-errorf.sh'
+    Join-Path $RepoRoot 'linter-scripts/check-no-bare-return-err.sh'
+    Join-Path $RepoRoot 'linter-scripts/check-no-errors-new.sh'
+)
+$bash = Get-Command bash -ErrorAction SilentlyContinue
+if ($null -eq $bash) {
+    Write-WarnLine "bash not found on PATH; skipping error-trace guardrails. Install Git Bash or WSL to enable them."
+} else {
+    foreach ($g in $guards) {
+        if (Test-Path $g) {
+            try { & bash $g } catch { Write-WarnLine "guardrail $g exited non-zero (warn-only)" }
+        }
+    }
+}
+
+# =====================================================================
 # INSTALL MODE — stop here.
 # =====================================================================
 if ($Install) {
