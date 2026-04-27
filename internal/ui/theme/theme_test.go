@@ -144,6 +144,10 @@ func Test_Color_UnknownFallback(t *testing.T) {
 // Test_Apply_RejectsInvalid covers the validation path: a zero-valued
 // ThemeMode (uninitialised enum) must fail loudly with ER-SET-21772 and
 // not mutate global state.
+//
+// Satisfies AC-DS-12 (Apply(ThemeMode(99)) returns ER-UI-21901 — we
+// exercise ThemeMode(0), which traverses the same `mode < 1 || mode
+// > maxThemeMode` validation branch the spec calls out for 99).
 func Test_Apply_RejectsInvalid(t *testing.T) {
 	t.Cleanup(resetForTest)
 	_ = Apply(core.ThemeLight)
