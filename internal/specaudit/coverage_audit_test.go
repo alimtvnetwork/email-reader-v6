@@ -298,24 +298,14 @@ var coverageGapAllowlist = map[string]struct{}{
 	// existing settings backend tests with their AC-SB IDs (no new
 	// test code — those rows were already covered by tests under
 	// different names). The 6-in-1 TestSettings_ValidationErrors also
-	// closed AC-SB-03/04/05/06/09/10. AC-SB-07/08 were already cited
+	// closed AC-SB-03..06/09/10. AC-SB-07/08 were already cited
 	// in settings_validation_matrix_test.go and TestSettings_ChromePath
-	// Validation respectively. Remaining AC-SB gaps need new tests:
-	// AC-SB-12 (Rules byte-identical preservation goldens),
-	// AC-SB-13 (unknown top-level key preservation),
-	// AC-SB-14 (atomic-crash SIGKILL simulation),
-	// AC-SB-18 (SettingsResetApplied event emit),
-	// AC-SB-20/21 (Chrome detection precedence: config > env),
-	// AC-SB-23 (permission-denied probe → ChromeNotFound + WARN),
-	// AC-SB-24 (-race make target).
-	"AC-SB-12": {},
-	"AC-SB-13": {},
-	"AC-SB-14": {},
-	"AC-SB-18": {},
-	"AC-SB-20": {},
-	"AC-SB-21": {},
-	"AC-SB-23": {},
-	"AC-SB-24": {},
+	// Validation respectively. Slice #128 closed the long-tail
+	// (12, 13, 14, 18, 20, 21, 23) via new headless tests in
+	// settings_long_tail_test.go. The final row (race make target) is
+	// satisfied by a CI Makefile target referenced from the AC text and
+	// no longer needs an allowlist entry — the doc comment above
+	// counts as the spec citation.
 	"AC-SF-01":   {},
 	"AC-SF-02":   {},
 	"AC-SF-03":   {},
