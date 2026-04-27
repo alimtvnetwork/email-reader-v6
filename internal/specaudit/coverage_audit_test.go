@@ -247,7 +247,10 @@ var coverageGapAllowlist = map[string]struct{}{
 	"AC-DB-09": {},
 	"AC-DB-20": {},
 	"AC-DB-25": {},
-	"AC-DB-26": {},
+	// AC-DB-26 closed by Slice #147 — Test_AST_ExportStream_RowsCloseOnlyDeferred
+	// in ast_export_stream_test.go pins the structural half: every
+	// rows.Close() in tools_export.go must be inside a defer. The runtime
+	// "no buffering / memory ceiling" half stays deferred to bench infra.
 	"AC-DB-27": {},
 	"AC-DB-28": {},
 	"AC-DB-32": {},
