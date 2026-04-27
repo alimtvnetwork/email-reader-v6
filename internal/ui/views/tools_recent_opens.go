@@ -79,10 +79,10 @@ func buildRecentOpensHeader(in recentOpensInputs, refreshBtn *widget.Button, sta
 
 // runRecentOpensIntoUI builds the spec, calls core.Tools.RecentOpenedUrls,
 // and renders the result lines + summary into the output entry.
-func runRecentOpensIntoUI(f RecentOpensFilter, output *widget.Entry, status *widget.Label) {
+func runRecentOpensIntoUI(factory ToolsFactory, f RecentOpensFilter, output *widget.Entry, status *widget.Label) {
 	output.SetText("")
 	status.SetText("Querying…")
-	tools, err := buildReadTools()
+	tools, err := buildToolsFromFactory(factory)
 	if err != nil {
 		status.SetText("⚠ " + err.Error())
 		return
