@@ -247,6 +247,12 @@ func subscribeWatchBus(opts WatchOptions, cardsRefresh func(WatchCard), rawRefre
 		if ev.Alias != opts.Alias {
 			continue
 		}
+		// Mirror error-bearing events into the process-wide error log
+		// so Diagnostics → Error Log + data/error-log.jsonl capture
+		// what the user sees in the Raw log tab. Without this hook the
+		// Error Log file stays empty during a noisy poll-failure run,
+		// which is the regression the user reported.
+		ReportWatchEventError(ev)
 		rawRefresh(FormatRawLogLine(ev))
 		counters = AccumulateCounters(counters, ev)
 		counterRefresh(counters)
