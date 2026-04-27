@@ -293,22 +293,28 @@ var coverageGapAllowlist = map[string]struct{}{
 	"AC-PROJ-34": {},
 	"AC-PROJ-35": {},
 	"AC-PROJ-36": {},
-	"AC-SB-01":   {},
-	"AC-SB-02":   {},
-	"AC-SB-11":   {},
-	"AC-SB-12":   {},
-	"AC-SB-13":   {},
-	"AC-SB-14":   {},
-	"AC-SB-15":   {},
-	"AC-SB-16":   {},
-	"AC-SB-17":   {},
-	"AC-SB-18":   {},
-	"AC-SB-19":   {},
-	"AC-SB-20":   {},
-	"AC-SB-21":   {},
-	"AC-SB-22":   {},
-	"AC-SB-23":   {},
-	"AC-SB-24":   {},
+	// Slice #126 closed AC-SB-01/02/11/15/16/17/19/22 by tagging the
+	// existing settings backend tests with their AC-SB IDs (no new
+	// test code — those rows were already covered by tests under
+	// different names). The 6-in-1 TestSettings_ValidationErrors also
+	// closed AC-SB-03/04/05/06/09/10. AC-SB-07/08 were already cited
+	// in settings_validation_matrix_test.go and TestSettings_ChromePath
+	// Validation respectively. Remaining AC-SB gaps need new tests:
+	// AC-SB-12 (Rules byte-identical preservation goldens),
+	// AC-SB-13 (unknown top-level key preservation),
+	// AC-SB-14 (atomic-crash SIGKILL simulation),
+	// AC-SB-18 (SettingsResetApplied event emit),
+	// AC-SB-20/21 (Chrome detection precedence: config > env),
+	// AC-SB-23 (permission-denied probe → ChromeNotFound + WARN),
+	// AC-SB-24 (-race make target).
+	"AC-SB-12": {},
+	"AC-SB-13": {},
+	"AC-SB-14": {},
+	"AC-SB-18": {},
+	"AC-SB-20": {},
+	"AC-SB-21": {},
+	"AC-SB-23": {},
+	"AC-SB-24": {},
 	"AC-SF-01":   {},
 	"AC-SF-02":   {},
 	"AC-SF-03":   {},
