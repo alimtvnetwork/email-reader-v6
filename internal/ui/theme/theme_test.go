@@ -85,7 +85,9 @@ func Test_Color_KnownTokens(t *testing.T) {
 
 // Test_Color_RawLogBadgeCodeTokens locks every spec value in §2.6, §2.7,
 // §2.8 (resolves OI-1 second half + AC-DS-04). Both modes exercised so a
-// drift in either palette fails the build.
+// drift in either palette fails the build. Also covers AC-DS-11
+// (Apply(ThemeLight) → Color(...) returns light RGB) via the
+// `light-mode spot checks` block at the bottom of the case table.
 func Test_Color_RawLogBadgeCodeTokens(t *testing.T) {
 	t.Cleanup(resetForTest)
 	cases := []struct {
