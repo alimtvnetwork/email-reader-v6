@@ -292,7 +292,7 @@ func saveRaw(raw *rawConfigWithSettings) error {
 	}
 	root, err := readConfigAsMap(p)
 	if err != nil {
-		return err
+		return errtrace.Wrap(err, "saveRaw: readConfigAsMap")
 	}
 	// Marshal the typed config and merge its top-level keys into root so we
 	// preserve unknown keys.

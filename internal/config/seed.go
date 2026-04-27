@@ -12,6 +12,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+
+	"github.com/lovable/email-read/internal/errtrace"
 )
 
 // DefaultSeedAccounts is the list of accounts pre-provisioned for the
@@ -82,7 +84,7 @@ func MarkSeedDeleted(alias string) error {
 	}
 	tomb, err := loadTombstones()
 	if err != nil {
-		return err
+		return errtrace.Wrap(err, "MarkSeedDeleted.loadTombstones")
 	}
 	if tomb[alias] {
 		return nil
@@ -94,17 +96,17 @@ func MarkSeedDeleted(alias string) error {
 	}
 	b, err := json.MarshalIndent(aliases, "", "  ")
 	if err != nil {
-		return err
+		return errtrace.Wrap(err, "MarkSeedDeleted.marshal")
 	}
 	p, err := tombstonePath()
 	if err != nil {
-		return err
+		return errtrace.Wrap(err, "MarkSeedDeleted.tombstonePath")
 	}
 	tmp := p + ".tmp"
 	if err := os.WriteFile(tmp, b, 0o600); err != nil {
-		return err
+		return errtrace.Wrap(err, "MarkSeedDeleted.writeTmp")
 	}
-	return os.Rename(tmp, p)
+	return errtrace.Wrap(os.Rename(tmp, p), "MarkSeedDeleted.rename")
 }
 
 // isDefaultSeed reports whether alias is part of the default seed set.

@@ -225,12 +225,12 @@ func openURLAdapter(factory BrowserFactory) func(rawurl string) error {
 	return func(rawurl string) error {
 		l, err := factory()
 		if err != nil {
-			return err
+			return errtrace.Wrap(err, "openURLAdapter: browser factory")
 		}
 		if l == nil {
 			return errBrowserUnavailable
 		}
-		return l.Open(rawurl)
+		return errtrace.Wrap(l.Open(rawurl), "openURLAdapter: launcher.Open")
 	}
 }
 

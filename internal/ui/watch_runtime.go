@@ -144,10 +144,10 @@ func attachRuntimeServices(ctx context.Context, rt *WatchRuntime) error {
 	}
 	lf, err := buildLoopFactory(rt, engine, launcher)
 	if err != nil {
-		return err
+		return errtrace.Wrap(err, "watch_runtime: buildLoopFactory")
 	}
 	if err := attachWatchAndBridge(ctx, rt, lf); err != nil {
-		return err
+		return errtrace.Wrap(err, "watch_runtime: attachWatchAndBridge")
 	}
 	rt.Refresher = buildRefresherRegistry(rt, engine, launcher)
 	startMaintenance(ctx, rt)

@@ -75,28 +75,28 @@ func canonSchemes(in []string) []string {
 // validateInput runs each §6 rule in code order, returning the first error.
 func validateInput(in SettingsInput) error {
 	if err := validatePollSeconds(in.PollSeconds); err != nil {
-		return err
+		return errtrace.Wrap(err, "validateInput.PollSeconds")
 	}
 	if err := validateTheme(in.Theme); err != nil {
-		return err
+		return errtrace.Wrap(err, "validateInput.Theme")
 	}
 	if err := validateDensity(in.Density); err != nil {
-		return err
+		return errtrace.Wrap(err, "validateInput.Density")
 	}
 	if err := validateSchemes(in.OpenUrlAllowedSchemes); err != nil {
-		return err
+		return errtrace.Wrap(err, "validateInput.Schemes")
 	}
 	if err := validateChromePath(in.BrowserOverride.ChromePath); err != nil {
-		return err
+		return errtrace.Wrap(err, "validateInput.ChromePath")
 	}
 	if err := validateIncognitoArg(in.BrowserOverride.IncognitoArg); err != nil {
-		return err
+		return errtrace.Wrap(err, "validateInput.IncognitoArg")
 	}
 	if err := validateRetentionDays(in.OpenUrlsRetentionDays); err != nil {
-		return err
+		return errtrace.Wrap(err, "validateInput.RetentionDays")
 	}
 	if err := validateMaintenanceKnobs(in); err != nil {
-		return err
+		return errtrace.Wrap(err, "validateInput.MaintenanceKnobs")
 	}
 	return validateLocalhostComposite(in)
 }

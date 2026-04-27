@@ -81,7 +81,7 @@ func (l *Launcher) resolvedSnapshot() (string, error) {
 func (l *Launcher) Open(url string) error {
 	path, err := l.Path()
 	if err != nil {
-		return err
+		return errtrace.Wrap(err, "browser.Open: resolve path")
 	}
 	arg := l.IncognitoArg()
 	args := []string{}
