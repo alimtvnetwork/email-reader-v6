@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"fyne.io/fyne/v2/widget"
+
 	"github.com/lovable/email-read/internal/core"
 )
 
