@@ -10,17 +10,20 @@
 
 Estimates assume the next AI has: (a) read `.lovable/memory/index.md`, (b) read this report, (c) access to the same sandbox (no Go toolchain by default; `nix run nixpkgs#go -- ...` works for vet/test with `-tags nofyne`).
 
-| Tier | Examples | Success | Confidence | Why |
-|---|---|---|---|---|
-| **T1 — Trivial spec/doc edits** | Grow `06-error-registry.md`, fix broken cross-tree links, flip OI-1..6 closed | **90–95%** | High | Pure markdown; deferred-skip tests auto-ratchet on success. |
-| **T2 — Headless AST/log scanners** (Slice #132 pattern) | AC-DS AST gaps, AC-DS long-tail headless | **80–88%** | High | Strong template (`internal/specaudit/ast_*_test.go`); audit ratchet enforces honesty. |
-| **T3 — Headless behaviour tests** | New `internal/core` / `internal/store` unit tests citing AC IDs | **70–80%** | Medium | Project-specific patterns (`errtrace.Result`, slog `event=…` tail format) need careful imitation. |
-| **T4 — Schema-evolution behaviour** | Table rename `WatchEvents`→`WatchEvent`, enum CHECKs, FK SET NULL, gap/checksum/downgrade | **45–60%** | Medium | Touches `internal/store/migrate`; high blast radius; hard to verify without seed data. |
-| **T5 — Fyne UI canvas slices** | AC-SF (21 rows), AC-DS canvas (~22), AC-SX-06 frontend | **15–25%** | Low | Sandbox lacks cgo/X11/GL — cannot compile or render; AI will guess and ship dead code. |
-| **T6 — Perf gates** | AC-DBP (6), AC-SP (5) p95 budgets | **10–20%** | Low | No bench infra in CI; numbers are unverifiable. |
-| **T7 — Multi-process E2E** | AC-PROJ-01..11/14/15 | **20–30%** | Low | No E2E harness; requires real IMAP fixture + Chrome process control. |
+> **Tier ↔ Sandbox-feasibility tag mapping (Slice #184).** Every per-feature `97-acceptance-criteria.md` (plus `23-app-database/97` and `24-app-design-system-and-ui/97`) now carries a `**Sandbox:**` tag under each section heading: 🟢 = T1/T2/T3, 🟡 = T5, 🔴 = T6/T7. A fresh AI can decide tier without reading this report by scanning tags inline. See the legend block at the top of any AC file.
 
-**Weighted overall** (by remaining-row count): **~55%** if the next AI tries the whole backlog. **~85%** if the next AI restricts to T1+T2+T3 (which is what the *Phase 3 — AC coverage rollout* milestone explicitly says to do).
+| Tier | Examples | Sandbox tag | Success | Confidence | Why |
+|---|---|---|---|---|---|
+| **T1 — Trivial spec/doc edits** | Grow `06-error-registry.md`, fix broken cross-tree links, flip OI-1..6 closed | 🟢 | **90–95%** | High | Pure markdown; deferred-skip tests auto-ratchet on success. |
+| **T2 — Headless AST/log scanners** (Slice #132 pattern) | AC-DS AST gaps, AC-DS long-tail headless | 🟢 | **80–88%** | High | Strong template (`internal/specaudit/ast_*_test.go`); audit ratchet enforces honesty. |
+| **T3 — Headless behaviour tests** | New `internal/core` / `internal/store` unit tests citing AC IDs | 🟢 | **70–80%** | Medium | Project-specific patterns (`errtrace.Result`, slog `event=…` tail format) need careful imitation. |
+| **T4 — Schema-evolution behaviour** | Table rename `WatchEvents`→`WatchEvent`, enum CHECKs, FK SET NULL, gap/checksum/downgrade | 🟢 (most) — but locked in §4/§5 of `23-app-database/01-schema.md` (Slice #183) | **45–60%** | Medium | Touches `internal/store/migrate`; high blast radius; hard to verify without seed data. |
+| **T5 — Fyne UI canvas slices** | AC-SF (21 rows), AC-DS canvas (~22), AC-SX-06 frontend | 🟡 | **15–25%** | Low | Sandbox lacks cgo/X11/GL — cannot compile or render; AI will guess and ship dead code. **Planned** via `mem://workflow/canvas-harness-starter.md` (Slice #180). |
+| **T6 — Perf gates** | AC-DBP (6), AC-SP (5) p95 budgets | 🔴 | **10–20%** | Low | No bench infra in CI; numbers are unverifiable. **Planned** via `mem://workflow/bench-infra-starter.md` (Slice #178). |
+| **T7 — Multi-process E2E** | AC-PROJ-01..11/14/15 | 🔴 | **20–30%** | Low | No E2E harness; requires real IMAP fixture + Chrome process control. **Planned** via `mem://workflow/e2e-harness-starter.md` (Slice #179). |
+
+**Weighted overall** (by remaining-row count): **~55%** if the next AI tries the whole backlog. **~85%** if the next AI restricts to T1+T2+T3 — the work that carries the 🟢 tag (which is what the *Phase 3 — AC coverage rollout* milestone explicitly says to do).
+
 
 ---
 
