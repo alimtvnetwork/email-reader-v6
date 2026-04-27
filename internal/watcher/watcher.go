@@ -299,7 +299,7 @@ func connectAndSelect(opts Options, logger *log.Logger, start time.Time) (*mailc
 	}
 	mc, err := mailclient.Dial(opts.Account)
 	if err != nil {
-		return nil, mailclient.MailboxStats{}, errtrace.Wrap(err, "dial imap")
+		return nil, mailclient.MailboxStats{}, errtrace.WrapCode(err, errtrace.ErrMailDial, "watcher.connectAndSelect: dial imap")
 	}
 	if v {
 		logger.Printf("%s  · [%s] connected (%s)", ts(), alias, time.Since(start).Round(time.Millisecond))
@@ -307,7 +307,7 @@ func connectAndSelect(opts Options, logger *log.Logger, start time.Time) (*mailc
 	stats, err := mc.SelectInbox()
 	if err != nil {
 		mc.Close()
-		return nil, mailclient.MailboxStats{}, errtrace.Wrap(err, "select inbox")
+		return nil, mailclient.MailboxStats{}, errtrace.WrapCode(err, errtrace.ErrMailSelectMailbox, "watcher.connectAndSelect: select inbox")
 	}
 	if v {
 		logger.Printf("%s  · [%s] mailbox %q messages=%d unseen=%d uidNext=%d uidValidity=%d",
@@ -328,7 +328,7 @@ func handleBaseline(ctx context.Context, opts Options, logger *log.Logger, ws *s
 	}
 	ws.LastUid = baseline
 	if err := opts.Store.UpsertWatchState(ctx, *ws); err != nil {
-		return true, errtrace.Wrap(err, "baseline watch state")
+		return true, errtrace.WrapCode(err, errtrace.ErrDbWatchState, "watcher.handleBaseline: upsert baseline watch state")
 	}
 	logger.Printf("")
 	logger.Printf("%s  ⚑ [%s] baseline set: UID=%d (history skipped, watching for UID > %d)",
@@ -453,14 +453,14 @@ func advanceCursor(ws *store.WatchState, m *mailclient.Message) {
 // post-cycle cooldown when any URL was launched in this batch.
 func finalizeBatch(ctx context.Context, opts Options, logger *log.Logger, ws store.WatchState, openedAny bool) error {
 	if err := opts.Store.UpsertWatchState(ctx, ws); err != nil {
-		return errtrace.Wrap(err, "update watch state")
+		return errtrace.WrapCode(err, errtrace.ErrDbWatchState, "watcher.finalizeBatch: update watch state")
 	}
 	if !openedAny {
 		return nil
 	}
 	logger.Printf("        ⏳ waiting 10s before next poll cycle…")
 	if err := sleepCtx(ctx, postOpenCooldown); err != nil {
-		return errtrace.Wrap(err, "cooldown before next poll")
+		return errtrace.WrapCode(err, errtrace.ErrCoreContextCancelled, "watcher.finalizeBatch: cooldown before next poll")
 	}
 	return nil
 }
@@ -474,7 +474,7 @@ func fetchAndCheckEmpty(opts Options, logger *log.Logger, mc *mailclient.Client,
 	}
 	msgs, err := mc.FetchSince(ws.LastUid)
 	if err != nil {
-		return nil, false, errtrace.Wrap(err, "fetch since")
+		return nil, false, errtrace.WrapCode(err, errtrace.ErrMailFetchUid, "watcher.fetchAndCheckEmpty: FETCH since")
 	}
 	if len(msgs) == 0 {
 		if v {
@@ -494,7 +494,7 @@ func loadWatchState(ctx context.Context, opts Options, logger *log.Logger) (stor
 	}
 	ws, err := opts.Store.GetWatchState(ctx, alias)
 	if err != nil {
-		return ws, errtrace.Wrap(err, "get watch state")
+		return ws, errtrace.WrapCode(err, errtrace.ErrDbWatchState, "watcher.loadWatchState: get watch state")
 	}
 	if opts.Verbose {
 		logger.Printf("%s  · [%s] watch state: lastUid=%d lastSubject=%q", ts(), alias, ws.LastUid, ws.LastSubject)
@@ -547,12 +547,12 @@ func processBatch(ctx context.Context, opts Options, logger *log.Logger, ws *sto
 	openedAny, batchOpened := false, false
 	for i, m := range msgs {
 		if err := ctx.Err(); err != nil {
-			return batchOpened, errtrace.Wrap(err, "context cancelled mid-batch")
+			return batchOpened, errtrace.WrapCode(err, errtrace.ErrCoreContextCancelled, "watcher.processBatch: context cancelled mid-batch")
 		}
 		if openedAny && i > 0 {
 			logger.Printf("        ⏳ waiting 10s before next message in batch…")
 			if err := sleepCtx(ctx, postOpenCooldown); err != nil {
-				return batchOpened, errtrace.Wrap(err, "cooldown between messages")
+				return batchOpened, errtrace.WrapCode(err, errtrace.ErrCoreContextCancelled, "watcher.processBatch: cooldown between messages")
 			}
 			openedAny = false
 		}

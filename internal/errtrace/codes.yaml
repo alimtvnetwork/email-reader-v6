@@ -115,6 +115,9 @@ blocks:
       - const: ErrMailIdleUnsupported
         code: "ER-MAIL-21209"
         description: Server advertised no IDLE capability; falling back to polling.
+      - const: ErrMailSelectMailbox
+        code: "ER-MAIL-21210"
+        description: SELECT (mailbox open) command failed after a successful login.
 
   - name: Rules
     prefix: ER-RUL
