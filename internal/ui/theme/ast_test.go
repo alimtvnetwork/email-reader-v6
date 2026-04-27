@@ -105,6 +105,9 @@ func Test_AST_T1_ColorLiteralsConfinedToTheme(t *testing.T) {
 }
 
 // AST-T2: only internal/ui/theme/ imports "fyne.io/fyne/v2/theme".
+//
+// Satisfies AC-DS-18 (AST: only internal/ui/theme/ imports
+// fyne.io/fyne/v2/theme).
 func Test_AST_T2_FyneThemeImportConfinedToTheme(t *testing.T) {
 	root := repoRoot(t)
 	allowedPrefix := filepath.Join(root, "internal", "ui", "theme") + string(filepath.Separator)
