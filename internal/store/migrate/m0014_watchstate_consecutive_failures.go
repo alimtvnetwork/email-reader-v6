@@ -38,7 +38,8 @@ package migrate
 import (
 	"context"
 	"database/sql"
-	"fmt"
+
+	"github.com/lovable/email-read/internal/errtrace"
 )
 
 func init() {
@@ -55,14 +56,14 @@ func init() {
 func applyAddConsecutiveFailures(ctx context.Context, db *sql.DB) error {
 	have, err := watchStateColumns(ctx, db)
 	if err != nil {
-		return fmt.Errorf("introspect WatchState: %w", err)
+		return errtrace.Wrapf(err, "introspect WatchState")
 	}
 	if have["ConsecutiveFailures"] {
 		return nil
 	}
 	const ddl = `ALTER TABLE WatchState ADD COLUMN ConsecutiveFailures INTEGER NOT NULL DEFAULT 0`
 	if _, err := db.ExecContext(ctx, ddl); err != nil {
-		return fmt.Errorf("add column ConsecutiveFailures: %w", err)
+		return errtrace.Wrapf(err, "add column ConsecutiveFailures")
 	}
 	return nil
 }

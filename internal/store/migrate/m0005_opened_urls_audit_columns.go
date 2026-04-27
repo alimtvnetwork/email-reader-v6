@@ -13,7 +13,8 @@ package migrate
 import (
 	"context"
 	"database/sql"
-	"fmt"
+
+	"github.com/lovable/email-read/internal/errtrace"
 )
 
 func init() {

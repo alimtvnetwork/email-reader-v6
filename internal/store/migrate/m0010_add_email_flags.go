@@ -34,7 +34,8 @@ package migrate
 import (
 	"context"
 	"database/sql"
-	"fmt"
+
+	"github.com/lovable/email-read/internal/errtrace"
 )
 
 func init() {
@@ -50,7 +51,7 @@ func init() {
 func applyAddEmailFlags(ctx context.Context, db *sql.DB) error {
 	have, err := emailsColumns(ctx, db)
 	if err != nil {
-		return fmt.Errorf("introspect Emails: %w", err)
+		return errtrace.Wrapf(err, "introspect Emails")
 	}
 	adds := []struct{ name, ddl string }{
 		{"IsRead", `ALTER TABLE Emails ADD COLUMN IsRead INTEGER NOT NULL DEFAULT 0`},
@@ -61,7 +62,7 @@ func applyAddEmailFlags(ctx context.Context, db *sql.DB) error {
 			continue
 		}
 		if _, err := db.ExecContext(ctx, a.ddl); err != nil {
-			return fmt.Errorf("add column %s: %w", a.name, err)
+			return errtrace.Wrapf(err, "add column %s", a.name)
 		}
 	}
 	return nil
