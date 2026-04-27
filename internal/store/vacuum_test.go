@@ -96,6 +96,10 @@ func TestPruneOpenedUrlsBefore_ZeroCutoffIsNoop(t *testing.T) {
 
 // TestShouldAnalyze_AtAndAroundThreshold pins the integer comparison —
 // exactly AnalyzeThreshold triggers, one less does not, anything more does.
+//
+// Satisfies AC-DB-44 (ANALYZE only runs when ≥ 1000 rows deleted)
+// from spec/23-app-database/97-acceptance-criteria.md §E. The
+// AnalyzeThreshold constant is the spec's 1000-row gate.
 func TestShouldAnalyze_AtAndAroundThreshold(t *testing.T) {
 	cases := []struct {
 		cum  int64
