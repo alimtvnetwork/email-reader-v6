@@ -467,3 +467,57 @@ the same demo account leak into their assertions.
 - created `internal/config/seed_disable_test.go`
 - edited `internal/core/accounts_test.go`
 - edited `.lovable/memory/features/02-error-trace-rollout.md` (this file)
+
+## Phase 6 — Watch poll-error capture + GetWatchState scan fix (2026-04-27)
+
+User-reported regression from screenshot: Watch view's Raw log showed
+repeated `[attobond-admin] poll error: get watch state: get watch
+state: sql: Scan error on column index 3, name "LastReceivedAt":
+unsupported Scan, storing driver.Value type string into type
+*time.Time` lines, BUT the Diagnostics → Error Log file was empty
+AND the Raw log entries were not selectable/copyable.
+
+Three independent fixes shipped:
+
+**A. `internal/store/store.go::GetWatchState` — scan bug.**
+The schema stores `LastReceivedAt` and `UpdatedAt` as RFC3339 strings
+(see `formatRFC3339UTC` + `sqliteRFC3339NowExpr`), but the function
+was scanning into `sql.NullTime` / `time.Time` directly. The
+modernc/sqlite driver returns string for those columns → poll loop
+crashed every cycle. Fixed by scanning into `sql.NullString` /
+`string` and parsing via `parseSqliteRFC3339`. Regression coverage:
+`internal/store/watch_state_scan_test.go` (raw INSERT with
+`2026-04-26T10:05:00.123Z` payload + null-LastReceivedAt path).
+
+**B. `internal/ui/views/watch_events.go::ReportWatchEventError` (new) +
+`watch.go::subscribeWatchBus` wiring.**
+Watch poll errors and URL-open failures now also flow into
+`errlog.ReportError("watcher.<alias>", ev.Err)` so they land in the
+ring buffer, the persisted `data/error-log.jsonl`, and the
+`email-read errors tail` CLI — not just the Raw log tab.
+Coverage: 4 tests in `watch_event_errlog_test.go` (poll error,
+open-fail, open-success negative, all benign-kind negatives).
+
+**C. `internal/ui/views/watch.go::buildWatchRawLogTab` — copyable Raw log.**
+Replaced `widget.Label` (non-selectable SimpleText) with a
+read-only multiline `widget.Entry` (monospace, OnChanged guard
+reverts edits) plus an explicit "Copy all" button wired to
+`opts.Clipboard`. Threaded `Clipboard fyne.Clipboard` through
+`WatchOptions`; `app.go::viewFor` populates it from
+`fyne.CurrentApp().Driver().AllWindows()[0].Clipboard()` (mirrors
+the Error Log view's wiring).
+
+### Verification
+- `go vet -tags nofyne ./...` clean.
+- `go test -tags nofyne -count=1 ./internal/...` — all green
+  (config, core, store, ui/views, ui/errlog, watcher, …).
+- All three errtrace lints still report **0 violations**.
+
+### Files changed
+- edited `internal/store/store.go`
+- created `internal/store/watch_state_scan_test.go`
+- edited `internal/ui/views/watch_events.go`
+- edited `internal/ui/views/watch.go`
+- created `internal/ui/views/watch_event_errlog_test.go`
+- edited `internal/ui/app.go`
+- edited `.lovable/memory/features/02-error-trace-rollout.md` (this file)
