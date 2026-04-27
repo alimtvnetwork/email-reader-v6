@@ -81,7 +81,7 @@ func BuildDashboard(opts DashboardOptions) fyne.CanvasObject {
 	// least one row OR an explicit error message — keeps boot quiet.
 	var activityRows []core.ActivityRow
 	activityHeader := widget.NewLabelWithStyle(
-		"Recent activity:", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+		"Recent activity", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	activityHeader.Hide()
 	activityList := newActivityList(&activityRows, status)
 	activityList.Hide()
@@ -102,7 +102,13 @@ func BuildDashboard(opts DashboardOptions) fyne.CanvasObject {
 	activityScroll := container.NewVScroll(activityList)
 	activityScroll.SetMinSize(fyne.NewSize(0, activityListMaxHeight))
 	activityListSlot := container.New(fixedHeightLayout{Height: activityListMaxHeight}, activityScroll)
-	activityBox := container.NewVBox(activityHeader, activityErr, activityListSlot)
+	// Card-wrap the activity feed so it reads as a distinct, titled
+	// panel instead of bleeding into the surrounding VBox. The Card
+	// title doubles as the section header; activityHeader is kept
+	// inside the body only to surface the "(no recent activity)"
+	// empty-state message — hidden when rows exist.
+	activityBody := container.NewVBox(activityErr, activityHeader, activityListSlot)
+	activityCard := widget.NewCard("Recent activity", "Latest watcher events", activityBody)
 
 	autoStart := newAutoStartIndicator()
 	refresh := makeDashboardRefresh(opts, cards, status)
@@ -117,25 +123,33 @@ func BuildDashboard(opts DashboardOptions) fyne.CanvasObject {
 
 	actions := newDashboardActions(opts, combined)
 	live := newDashboardLiveRow(opts, combined)
+	// Wrap the live counters in a Card so they read as a distinct
+	// section like Recent activity. Keeps visual rhythm consistent.
+	liveCard := widget.NewCard("Live counters", "Updates while the watcher is running", live)
 	// Vertical rhythm: separators between every major band so the
 	// activity list, live-counters row, and action buttons read as
 	// distinct sections instead of running together. Padded wraps
 	// give every block consistent inset breathing room.
-	return container.NewVBox(
+	content := container.NewVBox(
 		container.NewPadded(heading),
 		container.NewPadded(subtitle),
 		widget.NewSeparator(),
 		container.NewPadded(cards.Row),
 		widget.NewSeparator(),
 		container.NewPadded(health),
-		container.NewPadded(activityBox),
-		widget.NewSeparator(),
-		container.NewPadded(live),
+		container.NewPadded(activityCard),
+		container.NewPadded(liveCard),
 		widget.NewSeparator(),
 		container.NewPadded(actions),
 		container.NewPadded(autoStart),
 		container.NewPadded(status),
 	)
+	// Outer VScroll so the dashboard remains fully reachable on
+	// short windows — without it, the bottom section (actions /
+	// status) is unreachable when the window is shorter than the
+	// natural content height. Reported by the user as "I cannot
+	// scroll down from the top section".
+	return container.NewVScroll(content)
 }
 
 // activityListMaxHeight caps the recent-activity list at ~10 rows so
