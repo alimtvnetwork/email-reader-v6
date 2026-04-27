@@ -206,7 +206,17 @@ func Test_AllErrorRefsResolveInRegistry(t *testing.T) {
 		if rel == "spec/21-app/06-error-registry.md" {
 			return // the registry itself defines, doesn't reference
 		}
-		for code := range uniqueMatches(errCodeRe, body) {
+		// Slice #159 (Cat-B regex artifacts): strip code fences AND
+		// inline-code spans before scanning. The schema spec
+		// (`spec/23-app-database/01-schema.md`) intentionally uses
+		// glob-style tokens like `ER-MAIL-2120X` and `ER-TLS-2176X`
+		// inside inline code to document column-value *shapes*. The
+		// regex `ER-[A-Z]+-[0-9]+` greedily matches `ER-MAIL-2120`
+		// out of `ER-MAIL-2120X`, surfacing a phantom undefined
+		// code. Mirroring AC-PROJ-32's approach (strip fences +
+		// inline) eliminates those false positives at the source.
+		clean := stripCodeFences(body)
+		for code := range uniqueMatches(errCodeRe, clean) {
 			if isPlaceholderToken(code) {
 				continue
 			}
