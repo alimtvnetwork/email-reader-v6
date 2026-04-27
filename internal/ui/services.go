@@ -35,6 +35,22 @@ import (
 	"github.com/lovable/email-read/internal/store"
 )
 
+// BrowserFactory builds a fresh `*browser.Launcher` per invocation
+// using the *current* `cfg.Browser` block. Re-evaluating per call
+// preserves the same live-config-edit semantics the pre-Slice-#117
+// `views/launch.go::launchInBrowser` had: editing the browser path
+// or incognito-arg list in Settings takes effect on the very next
+// link click without a process restart. Returns an error rather
+// than panicking so callers (typically the Emails view's link
+// buttons) can surface a status banner instead of crashing.
+//
+// Slice #117 (Phase 6.5) wire-up: this is the seam that lets the
+// shell inject browser-launching capability into `views/emails.go`,
+// removing the last `config.Load()` call site under
+// `internal/ui/views/` (`views/launch.go`) and clearing the final
+// entry on the AST guard's `viewLayerGlobalsAllowlist`.
+type BrowserFactory = func() (*browser.Launcher, error)
+
 // ToolsFactory builds a fresh `*core.Tools` per invocation so that
 // live config edits (browser path, dedup window, allow-localhost)
 // take effect without a process restart. Returned `*core.Tools`
