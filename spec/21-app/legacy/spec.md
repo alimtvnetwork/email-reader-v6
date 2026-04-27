@@ -116,15 +116,21 @@ For dev/testing, the following account is pre-known and will be offered as the d
 
 | Field | Value |
 |---|---|
-| alias | `atto` |
-| email | `lovable.admin@attobondcleaning.store` |
-| imapHost | `mail.attobondcleaning.store` |
+| alias | `«REDACTED-ALIAS»` |
+| email | `«REDACTED-EMAIL»` |
+| imapHost | `«REDACTED-HOST»` |
 | imapPort | `993` |
 | useTLS | `true` |
 | mailbox | `INBOX` |
 | password | (provided by user, stored Base64 in `passwordB64`) |
 
-> ⚠️ Security note: this password is in the repo's spec file because the user supplied it explicitly for this prototype. For real deployment it must be rotated and only stored inside `data/config.json` (which is gitignored), never in source.
+> ⚠️ **Security note (REDACTED Slice #185, 2026-04-27).** This block originally
+> carried a real account alias / email / IMAP host. They have been replaced with
+> `«REDACTED-*»` placeholders to scrub PII from the legacy spec. The user MUST
+> rotate the corresponding IMAP app password before relying on this account
+> again. Real per-developer defaults belong in `data/config.json` (gitignored),
+> never in source. Original spec lived in this file pre-2026-04-25 merge of
+> `spec/21-golang-email-reader/` + `spec/22-fyne-ui/` into `spec/21-app/legacy/`.
 
 ## 6. Rules Engine
 
