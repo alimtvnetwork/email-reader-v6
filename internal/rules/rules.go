@@ -45,20 +45,26 @@ func New(rs []config.Rule) (*Engine, error) {
 		}
 		c := compiled{rule: r}
 		var err error
-		if c.from, err = compileOpt(r.FromRegex); err != nil && firstErr == nil {
-			firstErr = errtrace.Wrapf(err, "rule %q fromRegex", r.Name)
-			continue
+		bad := false
+		recordErr := func(field string, e error) {
+			bad = true
+			if firstErr == nil {
+				firstErr = errtrace.Wrapf(e, "rule %q %s", r.Name, field)
+			}
 		}
-		if c.subject, err = compileOpt(r.SubjectRegex); err != nil && firstErr == nil {
-			firstErr = errtrace.Wrapf(err, "rule %q subjectRegex", r.Name)
-			continue
+		if c.from, err = compileOpt(r.FromRegex); err != nil {
+			recordErr("fromRegex", err)
 		}
-		if c.body, err = compileOpt(r.BodyRegex); err != nil && firstErr == nil {
-			firstErr = errtrace.Wrapf(err, "rule %q bodyRegex", r.Name)
-			continue
+		if c.subject, err = compileOpt(r.SubjectRegex); err != nil {
+			recordErr("subjectRegex", err)
 		}
-		if c.url, err = compileOpt(r.UrlRegex); err != nil && firstErr == nil {
-			firstErr = errtrace.Wrapf(err, "rule %q urlRegex", r.Name)
+		if c.body, err = compileOpt(r.BodyRegex); err != nil {
+			recordErr("bodyRegex", err)
+		}
+		if c.url, err = compileOpt(r.UrlRegex); err != nil {
+			recordErr("urlRegex", err)
+		}
+		if bad {
 			continue
 		}
 		e.compiled = append(e.compiled, c)
