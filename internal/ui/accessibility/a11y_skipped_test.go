@@ -80,7 +80,7 @@ func Test_ReducedMotion_CollapsesTokens(t *testing.T) {
 	t.Skip("Slice #118b — live test runs in internal/ui/theme/motion_test.go (cannot live here without import cycle)")
 }
 
-// Spec §8 #6 — Test_ReducedMotion_WatchDotSteady
+// Spec §8 #6 — Test_ReducedMotion_WatchDotSteady (AC-DS-48)
 //
 // Pairs with #5: when the probe returns true, the `WatchDot` pulse
 // animation must not be started (steady solid colour instead).
