@@ -46,6 +46,7 @@ const (
 	ErrMailTLSHandshake    Code = "ER-MAIL-21207"
 	ErrMailTimeout         Code = "ER-MAIL-21208"
 	ErrMailIdleUnsupported Code = "ER-MAIL-21209"
+	ErrMailSelectMailbox   Code = "ER-MAIL-21210"
 
 	// ER-RUL (Rules) — block 21300–21399
 	ErrRulePatternInvalid Code = "ER-RUL-21301"
