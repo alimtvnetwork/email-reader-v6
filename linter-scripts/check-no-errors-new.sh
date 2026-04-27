@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # check-no-errors-new.sh
 #
-# Phase 1 (warn-only) error-trace guardrail.
+# Phase 2 (enforcing) error-trace guardrail. Default LINT_MODE=fail.
 #
 # Flags `errors.New(` calls that should be `errtrace.New(` so the sentinel
 # itself carries a frame.

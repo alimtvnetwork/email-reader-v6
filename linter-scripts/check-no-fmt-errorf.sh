@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # check-no-fmt-errorf.sh
 #
-# Phase 1 (warn-only) error-trace guardrail.
+# Phase 2 (enforcing) error-trace guardrail. Default LINT_MODE=fail.
 #
 # Flags every production-code use of `fmt.Errorf(` so the team can migrate
 # them to `errtrace.Wrap` / `errtrace.Wrapf` / `errtrace.New`. See
