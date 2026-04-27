@@ -115,3 +115,20 @@ Linter delta: `check-no-fmt-errorf` 18 → **16**;
 (unchanged). Total 46 → **43**.
 
 Watcher tests + UI tests still green under `-tags nofyne`.
+
+## Phase 2.2 — store/migrate m000{5,10,12,14} migrated (2026-04-27)
+
+8 sites across 4 migration files: every `fmt.Errorf("…: %w", err)` →
+`errtrace.Wrapf(err, "…")`. Identical mechanical pattern; `fmt`
+import removed from each.
+
+- m0005 (opened_urls_audit_columns): 2 sites (introspect + per-column ADD).
+- m0010 (add_email_flags): 2 sites.
+- m0012 (add_email_deletedat): 2 sites.
+- m0014 (watchstate_consecutive_failures): 2 sites.
+
+Linter delta: `check-no-fmt-errorf` 16 → **8** (eight migrations
+sites cleared). `check-no-bare-return-err` 23 (unchanged).
+`check-no-errors-new` 4 (unchanged). Total 43 → **35**.
+
+`go vet -tags nofyne ./...` clean; `internal/store/...` tests green.

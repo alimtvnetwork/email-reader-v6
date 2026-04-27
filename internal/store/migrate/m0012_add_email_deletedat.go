@@ -31,7 +31,8 @@ package migrate
 import (
 	"context"
 	"database/sql"
-	"fmt"
+
+	"github.com/lovable/email-read/internal/errtrace"
 )
 
 func init() {
@@ -48,7 +49,7 @@ func init() {
 func applyAddEmailDeletedAt(ctx context.Context, db *sql.DB) error {
 	have, err := emailsColumns(ctx, db)
 	if err != nil {
-		return fmt.Errorf("introspect Emails: %w", err)
+		return errtrace.Wrapf(err, "introspect Emails")
 	}
 	if have["DeletedAt"] {
 		return nil
@@ -58,7 +59,7 @@ func applyAddEmailDeletedAt(ctx context.Context, db *sql.DB) error {
 	// rows pick up NULL, which is exactly the "not deleted" sentinel
 	// — no backfill required.
 	if _, err := db.ExecContext(ctx, `ALTER TABLE Emails ADD COLUMN DeletedAt INTEGER`); err != nil {
-		return fmt.Errorf("add column DeletedAt: %w", err)
+		return errtrace.Wrapf(err, "add column DeletedAt")
 	}
 	return nil
 }
