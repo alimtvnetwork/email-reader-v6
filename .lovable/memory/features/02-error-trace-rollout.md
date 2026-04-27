@@ -355,3 +355,40 @@ green.
   sentinelErr helper)
 - edited `internal/ui/app.go` (errLogPath var + openLogFileWithFyne
   + NavErrorLog wiring + net/url + errtrace imports)
+
+## Phase 5.1 — Spec page shipped (2026-04-27)
+
+Created `spec/03-error-manage/04-app-error-log-view/00-overview.md`
+formalizing the desktop Error Log surface so future regressions have
+a documented baseline to lint against.
+
+### Contents
+- **System Boundary** ASCII diagram: errtrace.Wrap call sites →
+  errlog.Store → {Subscribe → badge/toast, persister → JSONL → CLI tail}.
+- **Components & Source Map** table: 8 layers, each pinned to its
+  source file (errtrace, errlog Store, persistence, boot wiring,
+  view, sidebar badge, toast notifier, CLI tail).
+- **Data Model**: Entry struct + JSONL-on-disk format + rotation policy.
+- **12 Acceptance Criteria** (AC-ELV-01 … AC-ELV-12) covering:
+  - capture with stack trace + nil-error / empty-component edges,
+  - bounded ring + monotonic Seq,
+  - non-blocking subscriber fan-out,
+  - badge label format with 99+ collapse,
+  - first-error toast with quiet-period re-arm + 140-char body cap,
+  - persistence round-trip across restart with Seq monotonicity,
+  - rotation at 5 MiB with at-most-2-files invariant,
+  - graceful degradation when boot persistence fails,
+  - "Open log file" routing (4 status branches),
+  - Copy/Clear footer (Clear is view-only, JSONL preserved),
+  - `errors tail` CLI output contract incl. -n, -f, missing-file,
+  - errtrace lints stay at 0 violations under LINT_MODE=fail.
+- **Cross-references** to peer Error Modal spec (web surface) +
+  README §9 + memory files + runtime sources.
+
+### Registry update
+- Appended row 04 to the parent `spec/03-error-manage/00-overview.md`
+  Categories table so the spec is discoverable from the index.
+
+### Files changed
+- created `spec/03-error-manage/04-app-error-log-view/00-overview.md`
+- edited `spec/03-error-manage/00-overview.md` (added category row 04)
