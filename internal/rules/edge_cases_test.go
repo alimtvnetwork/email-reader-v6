@@ -22,22 +22,13 @@ import (
 	"github.com/lovable/email-read/internal/mailclient"
 )
 
-// (1) Invalid regex must not crash New(); the bad rule is at minimum
-// reported via the returned error and any survivor rules still load.
+// (1) Invalid regex must not crash New(); every malformed rule is skipped
+// and the returned error reports the FIRST failure. Survivor rules still load.
 //
-// **Note on current `rules.go` behaviour (Slice #186 finding).** The
-// `firstErr == nil` guard in `New()` (lines 48/52/56/60) means only the
-// FIRST invalid regex causes `continue` (rule skipped). For invalid regexes
-// in subsequent rules, `firstErr` is already set so the `&&` is false,
-// `continue` does NOT fire, and the rule is appended to `e.compiled` with
-// whatever fields compiled — effectively a partial/silent acceptance of
-// later malformed rules. This test pins the **observable contract**
-// ("no panic; firstErr non-nil; at least the fully-good rule loaded")
-// and explicitly does NOT assert the count of loaded rules so a future
-// fix of the latent bug doesn't break this test. See the FIXME below.
-//
-// FIXME(rules.go): drop `&& firstErr == nil` from each compileOpt branch
-// so every malformed rule is uniformly skipped, not just the first.
+// Fixed in Slice #187: previously a `firstErr == nil` guard short-circuited
+// the per-branch `continue`, allowing later malformed rules to be appended
+// with partially-nil compiled fields. New() now uniformly skips any rule
+// whose regex compilation fails.
 func TestEdgeCase_InvalidRegex_NoPanic_ValidRuleStillLoads(t *testing.T) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -60,11 +51,10 @@ func TestEdgeCase_InvalidRegex_NoPanic_ValidRuleStillLoads(t *testing.T) {
 	if e == nil {
 		t.Fatal("New() returned nil engine despite at least one valid rule")
 	}
-	// The fully-good rule MUST be loaded. The exact count of OTHER rules
-	// loaded is currently >= 1 due to the latent firstErr-guard bug
-	// (see FIXME above) — pin the lower bound only.
-	if got := e.RuleCount(); got < 1 {
-		t.Fatalf("expected at least the fully-good rule to load, got %d", got)
+	// Post-fix: exactly the one fully-good rule must load; all four
+	// malformed rules must be uniformly skipped.
+	if got := e.RuleCount(); got != 1 {
+		t.Fatalf("expected exactly 1 loaded rule (the good one), got %d", got)
 	}
 
 	// Sanity: evaluating against a benign message must not panic, even if
