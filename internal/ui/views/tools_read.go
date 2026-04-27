@@ -124,14 +124,9 @@ func parseLimit(s string) int {
 	return 0
 }
 
-func buildReadTools() (*core.Tools, error) {
-	cfg, err := config.Load()
-	if err != nil {
-		return nil, err
-	}
-	r := core.NewTools(browser.New(cfg.Browser), noopOpenedUrlStore{}, core.DefaultToolsConfig())
-	if r.HasError() {
-		return nil, r.Error()
-	}
-	return r.Value(), nil
-}
+
+// Slice #116c removed `buildReadTools` — replaced by the injected
+// `ToolsFactory` (see `BuildOpenUrlTab` for the contract and
+// `internal/ui/services.go::defaultToolsFactory` for the production
+// implementation).
+
