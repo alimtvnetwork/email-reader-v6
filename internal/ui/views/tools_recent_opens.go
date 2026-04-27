@@ -20,11 +20,14 @@ import (
 
 // BuildRecentOpensTab returns the Recent-opens body: alias entry +
 // origin dropdown + limit entry + Refresh button + scrolling result.
-func BuildRecentOpensTab() fyne.CanvasObject {
+//
+// `factory` is the injected per-call `*core.Tools` builder; see
+// `BuildOpenUrlTab` for the contract.
+func BuildRecentOpensTab(factory ToolsFactory) fyne.CanvasObject {
 	in := newRecentOpensInputs()
 	output, status := newRecentOpensOutput()
 	refreshBtn := widget.NewButton("Refresh", func() {
-		runRecentOpensIntoUI(RecentOpensFilter{
+		runRecentOpensIntoUI(factory, RecentOpensFilter{
 			Alias:    in.alias.Text,
 			Origin:   in.origin.Selected,
 			LimitStr: in.limit.Text,
@@ -76,10 +79,10 @@ func buildRecentOpensHeader(in recentOpensInputs, refreshBtn *widget.Button, sta
 
 // runRecentOpensIntoUI builds the spec, calls core.Tools.RecentOpenedUrls,
 // and renders the result lines + summary into the output entry.
-func runRecentOpensIntoUI(f RecentOpensFilter, output *widget.Entry, status *widget.Label) {
+func runRecentOpensIntoUI(factory ToolsFactory, f RecentOpensFilter, output *widget.Entry, status *widget.Label) {
 	output.SetText("")
 	status.SetText("Querying…")
-	tools, err := buildReadTools()
+	tools, err := buildToolsFromFactory(factory)
 	if err != nil {
 		status.SetText("⚠ " + err.Error())
 		return

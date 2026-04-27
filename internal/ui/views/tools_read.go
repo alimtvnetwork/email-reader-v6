@@ -2,6 +2,13 @@
 // invokes core.Tools.ReadOnce with a streaming progress channel and
 // renders header rows in a scrollable list.
 //
+// **Slice #116c (Phase 6.3) refactor.** The per-call `*core.Tools`
+// constructor (`buildReadTools`) used to live here and call
+// `config.Load()` inline. It is now sourced from the injected
+// `ToolsFactory` (shared with OpenUrl / Export / Recent opens via
+// the shell's `*Services.Tools` field) — see `tools_openurl.go`
+// for the shared `buildToolsFromFactory` helper.
+//
 // Spec: spec/21-app/02-features/06-tools/02-frontend.md (Read sub-tool).
 //go:build !nofyne
 
@@ -16,21 +23,22 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 
-	"github.com/lovable/email-read/internal/browser"
-	"github.com/lovable/email-read/internal/config"
 	"github.com/lovable/email-read/internal/core"
 )
 
 // BuildReadTab returns the Read sub-tool body: alias + limit inputs,
 // Run button, and a streaming output panel for progress + headers.
-func BuildReadTab() fyne.CanvasObject {
+//
+// `factory` is the injected per-call `*core.Tools` builder; see
+// `BuildOpenUrlTab` for the contract.
+func BuildReadTab(factory ToolsFactory) fyne.CanvasObject {
 	heading := widget.NewLabelWithStyle("Read — one-shot fetch",
 		fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	subtitle := newReadSubtitle()
 	aliasEntry, limitEntry := newReadInputs()
 	output, status := newReadOutputs()
 	runBtn := widget.NewButton("Run", func() {
-		runReadIntoUI(aliasEntry.Text, limitEntry.Text, output, status)
+		runReadIntoUI(factory, aliasEntry.Text, limitEntry.Text, output, status)
 	})
 	runBtn.Importance = widget.HighImportance
 	form := container.NewGridWithColumns(2,
@@ -62,10 +70,10 @@ func newReadOutputs() (*widget.Entry, *widget.Label) {
 }
 
 // runReadIntoUI invokes core.Tools.ReadOnce and reflects progress + result.
-func runReadIntoUI(alias, limitStr string, output *widget.Entry, status *widget.Label) {
+func runReadIntoUI(factory ToolsFactory, alias, limitStr string, output *widget.Entry, status *widget.Label) {
 	output.SetText("")
 	status.SetText("Connecting…")
-	tools, err := buildReadTools()
+	tools, err := buildToolsFromFactory(factory)
 	if err != nil {
 		status.SetText("⚠ setup: " + err.Error())
 		return
@@ -116,14 +124,9 @@ func parseLimit(s string) int {
 	return 0
 }
 
-func buildReadTools() (*core.Tools, error) {
-	cfg, err := config.Load()
-	if err != nil {
-		return nil, err
-	}
-	r := core.NewTools(browser.New(cfg.Browser), noopOpenedUrlStore{}, core.DefaultToolsConfig())
-	if r.HasError() {
-		return nil, r.Error()
-	}
-	return r.Value(), nil
-}
+
+// Slice #116c removed `buildReadTools` — replaced by the injected
+// `ToolsFactory` (see `BuildOpenUrlTab` for the contract and
+// `internal/ui/services.go::defaultToolsFactory` for the production
+// implementation).
+

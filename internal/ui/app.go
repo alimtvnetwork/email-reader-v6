@@ -304,6 +304,7 @@ func viewFor(item NavItem, state *AppState, services *Services, gotoNav func(Nav
 			OnAccountsChanged: onAccountsChanged,
 			OnRulesChanged:    onAccountsChanged, // same shell-rebuild trigger
 			RulesService:      services.Rules,
+			ToolsFactory:      services.Tools, // Slice #116c (Phase 6.3)
 		})
 	case NavSettings:
 		return views.BuildSettings(views.SettingsOptions{})
