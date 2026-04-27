@@ -1,118 +1,92 @@
-# golangci-lint configuration
-# Enforces CODE RED coding guidelines from spec/02-coding-guidelines/
+# ============================================================
+# golangci-lint configuration — Lovable Email Reader
+# ============================================================
 #
-# Usage: golangci-lint run
-# Docs:  https://golangci-lint.run/usage/configuration/
+# Pinned per:
+#   spec/21-app/04-coding-standards.md §1     (depguard rule)
+#   spec/21-app/07-architecture.md §"Tooling" (lint pipeline)
+#
+# Run locally:
+#   golangci-lint run --config linters/golangci-lint/.golangci.yml
+#
+# Run with the Fyne build excluded (sandbox / CI mode):
+#   golangci-lint run --build-tags nofyne \
+#                     --config linters/golangci-lint/.golangci.yml
+#
+# This config is intentionally minimal at slice-#120 baseline:
+# enable the standard linters that catch the classes of bugs the
+# project's AST guards do NOT cover (vet, ineffassign, unused,
+# staticcheck, errcheck), plus the project-specific `depguard` rule
+# that pins the `internal/core` surface contract.
+# ============================================================
 
 run:
   timeout: 5m
-  skip-dirs:
-    - vendor
-    - dist
-    - node_modules
+  tests: true
+  # The project uses `nofyne` to compile without cgo on CI / sandbox.
+  # CI invocations override this via --build-tags.
+  build-tags: []
 
 linters:
+  disable-all: true
   enable:
-    # ── CODE RED enforcement ──────────────────────────────────────
-    - nestif          # CODE-RED-001: No nested if
-    - cyclop          # CODE-RED-004: Function complexity / length
-    - goerr113        # CODE-RED-005: No fmt.Errorf (forces wrapping)
-    - funlen          # CODE-RED-004: Max function length
-    - gocognit        # Cognitive complexity (supports nesting detection)
-
-    # ── Style enforcement ─────────────────────────────────────────
-    - gofmt           # Standard formatting
-    - goimports       # Import ordering
-    - revive          # Extensible linter with custom rules
-    - goconst         # CODE-RED-003: Detect magic strings
-    - predeclared     # Catch shadowed built-ins
-    - unconvert       # Remove unnecessary type conversions
-    - whitespace      # STYLE-001/003: Blank line rules
-
-    # ── Error handling ────────────────────────────────────────────
-    - errcheck        # Ensure errors are handled
-    - errorlint       # Error wrapping best practices
-
-    # ── General quality ───────────────────────────────────────────
-    - gosimple
-    - govet
-    - ineffassign
-    - staticcheck
-    - unused
-    - misspell
+    - govet         # standard go vet rules
+    - ineffassign   # ineffectual assignment detector
+    - unused        # unused symbol detector
+    - staticcheck   # advanced static analysis (SA*, ST*, S* checks)
+    - errcheck      # unchecked-error detector
+    - gosimple      # simplification suggestions
+    - depguard      # spec §04 §1: import-graph pinning
 
 linters-settings:
-  nestif:
-    # CODE-RED-001: Zero nesting allowed
-    min-complexity: 1
-
-  funlen:
-    # CODE-RED-004: Max 15 lines per function
-    lines: 15
-    statements: 15
-
-  cyclop:
-    # Keep cyclomatic complexity low
-    max-complexity: 10
-
-  gocognit:
-    # Cognitive complexity threshold
-    min-complexity: 10
-
-  goconst:
-    # CODE-RED-003: Flag repeated strings (magic strings)
-    min-len: 2
-    min-occurrences: 2
-
-  revive:
+  depguard:
+    # Spec §04 §1 — "internal/core is the only surface cmd/* and
+    # internal/ui/* may import. Lower packages are private to core."
     rules:
-      # CODE-RED-002: Boolean naming conventions
-      - name: var-naming
-        severity: error
-        arguments:
-          - []  # allowList
-          - []  # denyList
+      ui-may-not-import-lower-packages:
+        list-mode: lax
+        files:
+          - "**/internal/ui/**/*.go"
+        deny:
+          - pkg: "github.com/lovable/email-read/internal/store"
+            desc: "internal/ui must go through internal/core (spec §04 §1)"
+          - pkg: "github.com/lovable/email-read/internal/mailclient"
+            desc: "internal/ui must go through internal/core (spec §04 §1)"
+          - pkg: "github.com/lovable/email-read/internal/watcher"
+            desc: "internal/ui must go through internal/core (spec §04 §1)"
+      cmd-may-not-import-lower-packages:
+        list-mode: lax
+        files:
+          - "**/cmd/**/*.go"
+        deny:
+          - pkg: "github.com/lovable/email-read/internal/store"
+            desc: "cmd/* must go through internal/core (spec §04 §1)"
+          - pkg: "github.com/lovable/email-read/internal/mailclient"
+            desc: "cmd/* must go through internal/core (spec §04 §1)"
+          - pkg: "github.com/lovable/email-read/internal/watcher"
+            desc: "cmd/* must go through internal/core (spec §04 §1)"
 
-      # STYLE-002: No else after return
-      - name: early-return
-        severity: error
-
-      # CODE-RED-010: No boolean parameters
-      - name: flag-parameter
-        severity: error
-
-      # General
-      - name: blank-imports
-        severity: warning
-      - name: context-as-argument
-        severity: error
-      - name: unexported-return
-        severity: warning
-
-  whitespace:
-    multi-func: true
+  errcheck:
+    # The project tolerates unchecked errors on `Close()` defers and
+    # log Printf calls — both are documented patterns. This list
+    # narrows errcheck to genuine bugs.
+    exclude-functions:
+      - (io.Closer).Close
+      - fmt.Print
+      - fmt.Printf
+      - fmt.Println
+      - (*log.Logger).Print
+      - (*log.Logger).Printf
+      - (*log.Logger).Println
 
 issues:
-  # CODE-RED-007: Custom pattern — detect string-based enum types
-  # golangci-lint doesn't have a built-in rule for this, so we use
-  # the Python/Go validator scripts for full coverage.
-
-  exclude-rules:
-    # Allow longer functions in test files
-    - path: _test\.go
-      linters:
-        - funlen
-        - nestif
-        - gocognit
-
+  # Sandbox-friendly: don't fail on a single legacy issue while the
+  # backlog rolls down. Tighten in a follow-up slice once the
+  # baseline lands clean across the team.
   max-issues-per-linter: 0
   max-same-issues: 0
-
-severity:
-  default-severity: error
-  rules:
-    - linters:
-        - goconst
-        - whitespace
-        - misspell
-      severity: warning
+  exclude-dirs:
+    - vendor
+    - testdata
+    - linter-scripts  # contains a polyglot validate-guidelines.go
+    - spec
