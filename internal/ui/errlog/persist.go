@@ -44,7 +44,7 @@ const DefaultSizeCap int64 = 5 * 1024 * 1024
 // has already been Close()d. Production callers (Store.Append) swallow
 // it; tests that hold the *Persistence directly can assert against it
 // via errors.Is.
-var ErrPersistenceClosed = errors.New("errlog: persistence is closed")
+var ErrPersistenceClosed = errtrace.New("errlog: persistence is closed")
 
 // Persistence owns the open log file plus the rotation policy. One
 // instance per Store. Public so tests can construct it directly with
