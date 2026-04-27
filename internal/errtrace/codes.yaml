@@ -338,6 +338,11 @@ blocks:
   - name: Tools
     prefix: ER-TLS
     range: [21750, 21769]
+    # NOTE: prefix `ER-TLS` is a historical abbreviation for "Tools" (the
+    # service in `internal/core/tools*.go`) and is NOT the TLS network
+    # protocol. TLS-handshake errors live in the `Mail` block above
+    # (e.g. `ErrMailTLSHandshake`). This range is uniquely allocated to
+    # the Tools service — see Tools 06 spec OI-2 (closed 2026-04-27).
     description: Tools service (read, diagnose, export, open-url).
     codes:
       - const: ErrToolsInvalidArgument
