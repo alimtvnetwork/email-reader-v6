@@ -193,24 +193,55 @@ func buildWatchCardsTab(opts WatchOptions) (fyne.CanvasObject, func(WatchCard)) 
 }
 
 // buildWatchRawLogTab mirrors buildWatchCardsTab for the raw line
-// log. The buffer is much larger (events stream faster than cards)
-// and we use a multiline label inside a vscroll so the user can
-// scrollback through poll history.
+// log. The buffer is much larger (events stream faster than cards) so
+// we use a multiline read-only Entry (selectable + native
+// keyboard-shortcut copy) plus an explicit "Copy all" button so the
+// user can grab the entire visible buffer for a bug report.
+//
+// Why Entry instead of Label: widget.Label renders as static
+// SimpleText and intercepts no pointer events — the user can't
+// highlight a sentence to copy, which is the regression the user
+// reported in the screenshot.
 func buildWatchRawLogTab(opts WatchOptions) (fyne.CanvasObject, func(string)) {
 	if opts.Bus == nil || opts.Alias == "" {
 		l := widget.NewLabel("(raw log — start watching to stream events)")
 		l.Wrapping = fyne.TextWrapWord
 		return container.NewPadded(l), func(string) {}
 	}
-	body := widget.NewLabel("")
+	body := widget.NewMultiLineEntry()
 	body.Wrapping = fyne.TextWrapWord
+	body.TextStyle = fyne.TextStyle{Monospace: true}
+	// Read-only-but-selectable: Disable() keeps text greyed and blocks
+	// selection on some Fyne versions, so we re-enable selection by
+	// installing an OnChanged guard that reverts user edits. This
+	// preserves "select to copy" + Cmd/Ctrl-C while preventing typing.
+	currentText := ""
+	body.OnChanged = func(s string) {
+		if s != currentText {
+			body.SetText(currentText)
+		}
+	}
 	scroll := container.NewVScroll(body)
+
 	var lines []string
 	refresh := func(line string) {
 		lines = AppendBounded(lines, line, watchRawLogCap)
-		body.SetText(joinLines(lines))
+		currentText = joinLines(lines)
+		body.SetText(currentText)
 	}
-	return scroll, refresh
+
+	copyAll := widget.NewButton("Copy all", func() {
+		if opts.Clipboard == nil || currentText == "" {
+			return
+		}
+		opts.Clipboard.SetContent(currentText)
+	})
+	if opts.Clipboard == nil {
+		copyAll.Disable()
+	}
+
+	toolbar := container.NewBorder(nil, nil, nil, copyAll, widget.NewLabel(""))
+	return container.NewBorder(toolbar, nil, nil, nil, scroll), refresh
 }
 
 // buildWatchFooter renders the footer (§2.5): live cadence label
