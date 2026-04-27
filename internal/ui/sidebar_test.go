@@ -6,7 +6,7 @@ import "testing"
 // every NavKind constant has exactly one matching entry. Catches typos like
 // duplicating "rules" or accidentally dropping an item during a refactor.
 func TestNavItemsCoverAllKinds(t *testing.T) {
-	want := []NavKind{NavDashboard, NavEmails, NavRules, NavAccounts, NavWatch, NavTools, NavSettings}
+	want := []NavKind{NavDashboard, NavEmails, NavRules, NavAccounts, NavWatch, NavTools, NavSettings, NavErrorLog}
 	if len(NavItems) != len(want) {
 		t.Fatalf("NavItems has %d entries, want %d", len(NavItems), len(want))
 	}

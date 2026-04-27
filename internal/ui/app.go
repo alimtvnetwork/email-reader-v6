@@ -309,6 +309,18 @@ func viewFor(item NavItem, state *AppState, services *Services, gotoNav func(Nav
 		})
 	case NavSettings:
 		return views.BuildSettings(views.SettingsOptions{})
+	case NavErrorLog:
+		// Phase 3.3 — Diagnostics → Error Log. The view pulls from
+		// the process-wide errlog ring buffer (defaults filled in
+		// inside BuildErrorLog when fields are nil) and uses the
+		// Fyne app's clipboard for the Copy button.
+		opts := views.ErrorLogOptions{}
+		if a := fyne.CurrentApp(); a != nil {
+			if w := a.Driver().AllWindows(); len(w) > 0 {
+				opts.Clipboard = w[0].Clipboard()
+			}
+		}
+		return views.BuildErrorLog(opts)
 	default:
 		return placeholderView(item, state)
 	}
