@@ -143,6 +143,57 @@ Used by the OpenUrl provenance chip in `internal/ui/views/tools_openurl.go` and 
 
 47 color tokens × 2 variants = 94 concrete values. Adding any token requires updating both variants AND `97-acceptance-criteria.md` parity table.
 
+### 2.12 Named-alias carve-out (AC-DS-05)
+
+The duplicate-RGB guard (`Test_Tokens_NoDuplicateValues`, AC-DS-05) is **not** "no two tokens share an RGB". Two tokens may legitimately share a value when the design intent is "this surface IS that surface in this mode" — e.g. `ColorWatchDotWatching` re-uses `ColorSuccess` so the green-running dot is exactly the success green. Forbidding all duplicates would force decorative variation that breaks semantic intent.
+
+The guard is therefore **registry-gated**: every legitimate duplicate is declared in `internal/ui/theme/aliases.go` as a row in `NamedAliases`. Each row pins a `From` token, a `To` token, and an `AliasScope` (`AliasBoth` / `AliasDarkOnly` / `AliasLightOnly`). The test then enforces three normative clauses:
+
+1. **Pairwise scan with allowlist.** For every variant ∈ {Dark, Light}, every unordered pair of tokens that share an RGB triple in that variant MUST appear in `NamedAliases` with a scope covering that variant.
+2. **Asymmetric-scope parity.** A row tagged `AliasDarkOnly` MUST share RGB in Dark AND have distinct RGBs in Light (and symmetrically for `AliasLightOnly`). Promoting a one-variant alias to `AliasBoth` (or vice versa) requires a palette change.
+3. **Registry hygiene.** No reflexive entries (`From == To`); no duplicate `(From, To)` pairs after canonicalisation (alphabetical order).
+
+The 22 normative aliases below are the exact set produced by the current Dark + Light palettes (regenerate with `python3` over `palette_dark.go`/`palette_light.go` if a future palette tune adds or removes a collision).
+
+**`AliasBoth` (13 pairs — RGB matches in both variants):**
+
+| `From` | `To` | Why intentional |
+|---|---|---|
+| `ColorAccent` | `ColorRuleMatchBadge` | Rule-match badge IS the accent purple in both modes. |
+| `ColorBadgeNeutralBg` | `ColorBorder` | Neutral badge background IS the 1px-separator surface. |
+| `ColorBadgeNeutralBg` | `ColorCodeBorder` | Border-clique 4-clique pair (a). |
+| `ColorBadgeNeutralBg` | `ColorSidebarBorder` | Border-clique 4-clique pair (b). |
+| `ColorBadgeNeutralFg` | `ColorSidebarForeground` | Neutral badge text IS sidebar foreground (mid-grey muted). |
+| `ColorBorder` | `ColorCodeBorder` | Border-clique 4-clique pair (c). |
+| `ColorBorder` | `ColorSidebarBorder` | Border-clique 4-clique pair (d). |
+| `ColorCodeBorder` | `ColorSidebarBorder` | Border-clique 4-clique pair (e). |
+| `ColorError` | `ColorRawLogError` | Error 3-clique pair (a) — raw-log error IS status error. |
+| `ColorError` | `ColorWatchDotError` | Error 3-clique pair (b) — watch-dot error IS status error. |
+| `ColorForeground` | `ColorRawLogNewMail` | Raw-log "new mail" line IS primary text colour. |
+| `ColorRawLogError` | `ColorWatchDotError` | Error 3-clique pair (c) — transitive closure pinned explicitly. |
+| `ColorWarning` | `ColorWatchDotReconnecting` | Reconnecting dot IS the warning amber. |
+
+**`AliasDarkOnly` (5 pairs — RGB matches in Dark, distinct in Light):**
+
+| `From` | `To` | Why distinct in Light |
+|---|---|---|
+| `ColorCodeBg` | `ColorSidebar` | Light sidebar `(247,248,251)` ≠ Light code `(244,245,248)` — sidebar gets a hint cooler tone. |
+| `ColorCodeLineHighlight` | `ColorSurfaceMuted` | Light line-highlight `(234,240,250)` is blue-tinted; muted surface `(244,245,248)` is neutral. |
+| `ColorForegroundDisabled` | `ColorRawLogHeartbeat` | Light disabled `(170,175,185)` vs Light heartbeat `(150,155,165)` — heartbeat sits darker than disabled in Light. |
+| `ColorPrimaryForeground` | `ColorSidebarItemActiveForeground` | Both white in Dark; in Light the active sidebar item shows the primary blue `(42,100,245)` not white-on-blue. |
+| `ColorSuccess` | `ColorWatchDotWatching` | Light watching `(34,160,90)` differs from Light success `(20,130,70)` — watching dot sits brighter so it reads on grey backgrounds. |
+
+**`AliasLightOnly` (4 pairs — RGB matches in Light, distinct in Dark):**
+
+| `From` | `To` | Why distinct in Dark |
+|---|---|---|
+| `ColorCodeBg` | `ColorSurfaceMuted` | Dark code `(19,21,26)` is the deepest surface; Dark muted `(30,33,40)` is one step lighter. |
+| `ColorPrimary` | `ColorSidebarItemActiveForeground` | Dark active foreground is white `(255,255,255)`; Dark primary is blue `(82,136,255)`. |
+| `ColorPrimaryForeground` | `ColorSurface` | Dark surface `(23,25,31)` ≠ Dark primary-fg `(255,255,255)`. |
+| `ColorRawLogTimestamp` | `ColorWatchDotIdle` | Dark idle `(120,125,135)` vs Dark timestamp `(140,145,155)` — Slice #118d palette tune lifted the timestamp so it clears WCAG against `ColorCodeBg`. |
+
+Cliques are listed pair-by-pair (not "X canonicalises to Y") so when a future palette change accidentally collapses one leg, the failure message names the precise colliding pair, not just the canonical representative.
+
 ---
 
 ## 3. Typography
