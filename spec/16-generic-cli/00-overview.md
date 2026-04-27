@@ -34,7 +34,7 @@ concrete examples. Adapt syntax to your target language.
 
 | # | File | Topic |
 |---|------|-------|
-| 01 | [01-overview.md](01-overview.md) | This document — philosophy, scope, index |
+| 00 | [00-overview.md](00-overview.md) | This document — philosophy, scope, index |
 | 02 | [02-project-structure.md](02-project-structure.md) | Package layout, file organization, naming |
 | 03 | [03-subcommand-architecture.md](03-subcommand-architecture.md) | Routing, dispatch, handler pattern |
 | 04 | [04-flag-parsing.md](04-flag-parsing.md) | Per-command flags, defaults, validation |

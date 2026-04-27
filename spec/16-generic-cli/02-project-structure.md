@@ -1,7 +1,7 @@
 # Project Structure
 
 > **Related specs:**
-> - [01-overview.md](01-overview.md) — design philosophy and document index
+> - [00-overview.md](00-overview.md) — design philosophy and document index
 > - [08-code-style.md](08-code-style.md) — code style rules enforced within this structure
 > - [15-constants-reference.md](15-constants-reference.md) — constants file organization within the package layout
 
