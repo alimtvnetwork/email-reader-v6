@@ -156,6 +156,9 @@ func scanIDs(t *testing.T, root string, accept func(path string, info os.FileInf
 			if templatePlaceholder.MatchString(id) {
 				continue
 			}
+			if _, isPlaceholder := namedPlaceholderIDs[id]; isPlaceholder {
+				continue
+			}
 			out[id] = struct{}{}
 		}
 		return nil
