@@ -81,11 +81,14 @@ func Run() {
 
 // enableErrorLogPersistence wires the process-wide errlog singleton to
 // `<dataDir>/error-log.jsonl`, restoring prior history into the ring
-// and routing future appends to disk. Returns the *Persistence so the
-// caller can Close() it on shutdown. Returns nil (and logs) if the
-// data dir cannot be resolved or persistence cannot be opened — in
-// that degraded mode the in-memory ring still works, the user only
-// loses cross-restart history.
+// and routing future appends to disk. Stores the resolved path in
+// `errLogPath` so the Error Log view's "Open log file" button can
+// reach it without re-resolving the data dir on every nav switch.
+// Returns the *Persistence so the caller can Close() it on shutdown.
+// Returns nil (and logs) if the data dir cannot be resolved or
+// persistence cannot be opened — in that degraded mode the in-memory
+// ring still works, the user only loses cross-restart history (and
+// the "Open log file" button stays disabled).
 func enableErrorLogPersistence() *errlog.Persistence {
 	dir, err := config.DataDir()
 	if err != nil {
@@ -98,8 +101,15 @@ func enableErrorLogPersistence() *errlog.Persistence {
 		log.Printf("ui: errlog persistence: enable: %v (continuing in-memory only)", err)
 		return nil
 	}
+	errLogPath = path
 	return p
 }
+
+// errLogPath holds the resolved on-disk path of the persisted error
+// log after enableErrorLogPersistence succeeds. Empty string means
+// persistence is disabled (boot fallback) — the Error Log view
+// disables its "Open log file" button in that case.
+var errLogPath string
 
 // errLogNotifier is the process-wide first-error toast dispatcher,
 // wired in Run(). nil under unit tests / headless harnesses where
