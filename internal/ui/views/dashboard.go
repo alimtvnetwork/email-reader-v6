@@ -57,7 +57,8 @@ func BuildDashboard(opts DashboardOptions) fyne.CanvasObject {
 		opts.Summary = opts.Service.Summary
 	}
 	heading := widget.NewLabelWithStyle("Dashboard", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-	subtitle := widget.NewLabel("Live counts from data/config.json + data/emails.db.")
+	subtitle := widget.NewLabel("At-a-glance counts and live watcher activity for the selected account.")
+	subtitle.Wrapping = fyne.TextWrapWord
 
 	cards := newDashboardCards()
 	status := widget.NewLabel("Loaded just now.")
