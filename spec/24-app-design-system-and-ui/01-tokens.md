@@ -143,6 +143,46 @@ Used by the OpenUrl provenance chip in `internal/ui/views/tools_openurl.go` and 
 
 47 color tokens × 2 variants = 94 concrete values. Adding any token requires updating both variants AND `97-acceptance-criteria.md` parity table.
 
+### 2.12 Named-alias carve-out (AC-DS-05 narrowing)
+
+A naive "no two tokens share the same RGB triple in the same variant" rule (the original AC-DS-05 wording) is **too strong**: the palette intentionally re-uses semantic values across categories so that a status concept (e.g. "watcher is healthy") and the underlying status color (e.g. `Success`) stay visually unified — changing one MUST change both. Forcing every duplicate to be a unique RGB triple would split the palette into ~13 fork colors that drift apart over time.
+
+**Rule (replaces the naive form):**
+
+> No two distinct tokens share the same RGB triple in the same variant **unless the pair is listed in the alias registry below**. The registry is normative — adding or removing a row requires bumping this spec's MINOR version. The acceptance test (`Test_Tokens_NoDuplicateValues`) reads from the same registry that ships in `internal/ui/theme/aliases.go::NamedAliases`, so spec and code cannot drift.
+
+**Why a registry (not a per-token `AliasOf` field):** keeping the alias relation in one auditable table makes review trivial ("did this PR add a new alias? show diff of `aliases.go`") and lets the test file present a precise failure: *"WatchDotWatching duplicates Success in Dark — this pair is **not** in NamedAliases. Either register the alias or pick a distinct RGB."* A per-token field scatters the same information across 13 sites and makes the "add one token, accidentally collide" failure mode silent.
+
+**Alias registry — both Dark and Light variants must hold for the alias to be valid:**
+
+| Alias token (the "named" use) | Source token (the "semantic" definition) | Why aliased |
+|---|---|---|
+| `ColorWatchDotWatching` | `ColorSuccess` | Healthy watcher = Success-green; one knob, one decision. |
+| `ColorWatchDotReconnecting` | `ColorWarning` | Reconnecting = Warning-amber. |
+| `ColorWatchDotError` | `ColorError` | Error dot = Error-red. |
+| `ColorRawLogError` | `ColorError` | Error log lines = Error-red. |
+| `ColorRawLogNewMail` | `ColorForeground` | New-mail lines render at full text contrast. |
+| `ColorRawLogHeartbeat` *(Dark only)* | `ColorForegroundDisabled` | Heartbeat lines fade to disabled-text grey. |
+| `ColorRawLogTimestamp` *(Light only)* | `ColorForegroundDisabled` | Timestamps fade to disabled-text grey. *(Dark variant is intentionally lifted by Slice #118d for WCAG — see palette_dark.go comment.)* |
+| `ColorRuleMatchBadge` | `ColorAccent` | Rule-match badge inherits the accent hue. |
+| `ColorBadgeNeutralBg` | `ColorBorder` | Neutral badge sits on the same surface tone as borders. |
+| `ColorBadgeNeutralFg` *(Dark only)* | `ColorSidebarForeground` | Neutral badge text matches sidebar muted text. |
+| `ColorCodeBorder` | `ColorBorder` | Code surfaces use the standard 1 px border. |
+| `ColorSidebarBorder` | `ColorBorder` | Sidebar separator uses the standard 1 px border. |
+| `ColorSidebarItemActiveForeground` | `ColorPrimaryForeground` | Active sidebar item is a primary-action surface. |
+
+13 registered aliases. Asymmetric rows (Dark-only / Light-only) are explicitly marked — the registry validator in `aliases.go` enforces the asymmetry, not just the dark-and-light parity that applies to the rest of the palette.
+
+**Test contract:** `Test_Tokens_NoDuplicateValues` (AC-DS-05)
+1. For every pair `(a, b)` of distinct `ColorName`s and every variant `v ∈ {Dark, Light}`:
+   - if `palette[v][a] == palette[v][b]` and `(a, b)` is **not** in `NamedAliases` → fail with the precise pair + variant.
+2. For every entry in `NamedAliases`:
+   - if the alias is "both variants": both Dark and Light RGB triples MUST be equal — otherwise the alias is bogus and fails.
+   - if the alias is "Dark only" / "Light only": the named variant MUST be equal AND the other variant MUST be **distinct** — otherwise the asymmetry tag is wrong.
+3. No reflexive entries (`(X, X)`) and no duplicate pairs (canonicalized as alphabetical).
+
+This shape moves from binary to **registry-aware**: the test cannot be silenced by adding a duplicate, it can only be satisfied by either picking a distinct RGB or explicitly registering the alias with a one-line rationale review.
+
 ---
 
 ## 3. Typography
