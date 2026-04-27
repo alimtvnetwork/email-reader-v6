@@ -136,3 +136,13 @@ func shortAddrCli(s string) string {
 	}
 	return s
 }
+
+// redactIncognito returns a constant marker indicating whether an
+// incognito argument is configured, without revealing the value.
+// Spec AC-SX-05: IncognitoArg never appears in any log line.
+func redactIncognito(arg string) string {
+	if arg == "" {
+		return "<none>"
+	}
+	return "<set>"
+}
