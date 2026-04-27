@@ -1,7 +1,7 @@
 # 01 — Schema
 
-**Version:** 1.0.0
-**Updated:** 2026-04-25
+**Version:** 1.0.1
+**Updated:** 2026-04-27
 **Status:** Approved
 **AI Confidence:** Production-Ready
 **Ambiguity:** None
@@ -143,6 +143,12 @@ CREATE TABLE WatchState (
 
 ## 4. Table `OpenedUrls`
 
+> **🔒 Naming lock (Phase 2.1, LOCKED 2026-04-26 — see `mem://design/schema-naming-convention`).**
+> Table name is **`OpenedUrls`** (plural — entity collection). Go struct is **`OpenedUrl`** (singular — one row). **Do NOT rename** — Slice #137 already pluralised the table; reverting would re-break Tools (`02-features/06-tools`) and Rules (`02-features/03-rules`) callers.
+>
+> **🔒 `Decision` enum rollout (Q-OPEN-PRUNE split, deferred to schema-evolution work).**
+> The `Decision` column shown below (`Launched`/`Blocked`/`Skipped`/`Failed`) is a **spec-side target** not yet emitted by any migration. The canonical, in-database shape comes from `m0004` + `m0005` + `m0006` + `m0009` (see Drift notice). Any future migration that adds `Decision` MUST: (a) seed existing rows to `Launched` (forensic safe default), (b) keep `BlockedReason` populated only when `Decision != 'Launched'`, (c) re-create `UX_OpenedUrls_Dedup` as a partial unique index over `Decision = 'Launched'` only, (d) bump the partial-unique migration in lockstep — see Tools backend §3.4 step 7 for the decision matrix that must remain stable across the rename.
+
 Forensic ledger for every URL the app considers opening — including blocked decisions. Used both for deduplication (don't double-launch the same URL within `OpenUrlDedupWindow`) and for the Tools "Recent opened URLs" view.
 
 > **Drift notice (Slice #137).** The DDL block below shows the **logical** shape (with `Origin`/`Decision`/`BlockedReason`/`LaunchedAt`, `ON DELETE SET NULL`, partial unique on `Decision='Launched'`). The **canonical, in-database** shape is whatever `internal/store/migrate/m0004_opened_urls_table.go` (+ `m0005_opened_urls_audit_columns.go` adding `Alias/Origin/OriginalUrl/IsDeduped/IsIncognito/TraceId`, `m0006_opened_urls_alias_opened_at_index.go`, `m0009_opened_urls_opened_at_index.go`) emits. m0004 uses `(EmailId, Url)` UNIQUE + `ON DELETE CASCADE` — the partial-unique-on-`Decision='Launched'` and the `ON DELETE SET NULL` shown here are spec-side targets that need new numbered migrations. Tracked in deferred "schema-evolution work". The table **name** (plural `OpenedUrls`) is authoritative.
@@ -192,6 +198,9 @@ CREATE UNIQUE INDEX UX_OpenedUrls_Dedup
 ---
 
 ## 5. Table `WatchEvents`
+
+> **🔒 Naming lock (Phase 2.1, LOCKED 2026-04-26 — see `mem://design/schema-naming-convention`).**
+> Table name is **`WatchEvents`** (plural — entity collection). Go struct/event type is **`WatchEvent`** (singular — one row). **Do NOT rename** — both the migration `internal/store/migrate/m0008_add_watch_events.go`, the in-memory event type `core.WatchEvent`, and the bus `eventbus.Bus[WatchEvent]` depend on this exact pair. Any future rename attempt must (a) add a new numbered migration, (b) update the Go event type in lockstep, (c) bump this spec version. AI contributors: prefer additive evolution (new column, new index) over rename.
 
 Durable audit log of watcher events — one row per event. Mirrors the in-memory `core.WatchEvent` stream (which lives only on `eventbus.Bus[WatchEvent]` and is lost on restart) so the Watch view can render an activity feed across restarts and per-alias forensics ("why did poll #847 error?") become possible.
 
