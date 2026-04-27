@@ -109,6 +109,14 @@ func NewSidebar(opts SidebarOptions) fyne.CanvasObject {
 		if opts.OnSelectNav != nil {
 			opts.OnSelectNav(item)
 		}
+		// Opening NavErrorLog calls errlog.MarkRead inside
+		// BuildErrorLog (synchronously, before this callback
+		// returns). MarkRead doesn't fan out on the Subscribe
+		// channel, so refresh the list explicitly here so the
+		// "(N)" suffix vanishes the instant the view opens.
+		if item.Kind == NavErrorLog {
+			list.Refresh()
+		}
 	}
 	// Pre-select the row matching state.Nav() (or the first nav row).
 	preIdx := firstNavRow(rows)
