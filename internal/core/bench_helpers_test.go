@@ -27,8 +27,22 @@ import (
 // and restores it. Same contract as withIsolatedConfig but accepts
 // `testing.TB` so it can be called from both `*testing.T` and
 // `*testing.B`.
+//
+// Also sets EMAIL_READ_DISABLE_SEED=1 for the duration of fn — mirrors
+// the gate in `withIsolatedConfig` so benchmarks don't get a re-seeded
+// demo account between iterations (which would skew per-op timing the
+// first time `config.Load()` is called after the wipe). Slice #141.
 func withIsolatedConfigTB(tb testing.TB, fn func()) {
 	tb.Helper()
+	prevSeed, hadSeed := os.LookupEnv("EMAIL_READ_DISABLE_SEED")
+	_ = os.Setenv("EMAIL_READ_DISABLE_SEED", "1")
+	tb.Cleanup(func() {
+		if hadSeed {
+			_ = os.Setenv("EMAIL_READ_DISABLE_SEED", prevSeed)
+		} else {
+			_ = os.Unsetenv("EMAIL_READ_DISABLE_SEED")
+		}
+	})
 	p, err := config.Path()
 	if err != nil {
 		tb.Fatalf("config path: %v", err)
