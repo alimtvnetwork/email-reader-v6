@@ -145,6 +145,8 @@ CREATE TABLE WatchState (
 
 Forensic ledger for every URL the app considers opening — including blocked decisions. Used both for deduplication (don't double-launch the same URL within `OpenUrlDedupWindow`) and for the Tools "Recent opened URLs" view.
 
+> **Drift notice (Slice #137).** The DDL block below shows the **logical** shape (with `Origin`/`Decision`/`BlockedReason`/`LaunchedAt`, `ON DELETE SET NULL`, partial unique on `Decision='Launched'`). The **canonical, in-database** shape is whatever `internal/store/migrate/m0004_opened_urls_table.go` (+ `m0005_opened_urls_audit_columns.go` adding `Alias/Origin/OriginalUrl/IsDeduped/IsIncognito/TraceId`, `m0006_opened_urls_alias_opened_at_index.go`, `m0009_opened_urls_opened_at_index.go`) emits. m0004 uses `(EmailId, Url)` UNIQUE + `ON DELETE CASCADE` — the partial-unique-on-`Decision='Launched'` and the `ON DELETE SET NULL` shown here are spec-side targets that need new numbered migrations. Tracked in deferred "schema-evolution work". The table **name** (plural `OpenedUrls`) is authoritative.
+
 ```sql
 CREATE TABLE OpenedUrls (
     Id             INTEGER PRIMARY KEY AUTOINCREMENT,
