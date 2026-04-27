@@ -53,6 +53,8 @@ Total: 5 tables. No others. Adding a table requires bumping this spec's MAJOR ve
 
 Persisted copy of every IMAP message that the watcher has fetched. The on-disk `.eml` file is the source of truth for body bytes; this table indexes metadata for search and filtering.
 
+> **Drift notice (Slice #137).** The DDL block below shows the **logical / specified** shape (post-Phase-2.1: `HasAttachment`, `ReceivedAt NOT NULL`, four named indexes). The **canonical, in-database** shape is whatever `internal/store/migrate/m0001_emails_table.go` (+ additive `m0010_add_email_flags.go`, `m0012_add_email_deletedat.go`, `m0013_email_deletedat_index.go`) emits. Differences (e.g. `ReceivedAt` is nullable in m0001; `MessageId UNIQUE` is inline rather than via the named `UX_Emails_Alias_MessageId`; flags & soft-delete columns are not reflected here yet) are tracked in the deferred "schema-evolution work, ~12 AC-DB rows" backlog item — they require new numbered migrations to reconcile, not edits to this prose. The table **name** (plural `Emails`) and the convention rule are now authoritative; column-by-column reconciliation lands later.
+
 ```sql
 CREATE TABLE Emails (
     Id            INTEGER PRIMARY KEY AUTOINCREMENT,
