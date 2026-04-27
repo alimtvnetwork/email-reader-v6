@@ -69,16 +69,30 @@ func BuildDashboard(opts DashboardOptions) fyne.CanvasObject {
 	health.Wrapping = fyne.TextWrapWord
 	health.Hide()
 
-	// Slice #105: recent-activity readout. Hidden when neither
-	// the Service nor an ActivitySource is wired (degraded boot).
-	activity := widget.NewLabel("")
-	activity.Wrapping = fyne.TextWrapWord
-	activity.Hide()
+	// Slice #113: recent-activity feed as a virtualised, clickable
+	// `widget.List`. Replaces the previous multi-line `widget.Label`
+	// — gives us per-row severity coloring, scroll on overflow, and
+	// click-to-toggle row expansion (clicking a row prints its full
+	// payload to `status` so error-code messages aren't truncated).
+	//
+	// State: `activityRows` is the live slice driving the list; the
+	// closure below mutates it on Refresh. Hidden until we have at
+	// least one row OR an explicit error message — keeps boot quiet.
+	var activityRows []core.ActivityRow
+	activityHeader := widget.NewLabelWithStyle(
+		"Recent activity:", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	activityHeader.Hide()
+	activityList := newActivityList(&activityRows, status)
+	activityList.Hide()
+	activityErr := widget.NewLabel("")
+	activityErr.Wrapping = fyne.TextWrapWord
+	activityErr.Hide()
+	activityBox := container.NewVBox(activityHeader, activityErr, activityList)
 
 	autoStart := newAutoStartIndicator()
 	refresh := makeDashboardRefresh(opts, cards, status)
 	refreshHealth := makeDashboardHealthRefresh(opts, health)
-	refreshActivity := makeDashboardActivityRefresh(opts, activity)
+	refreshActivity := makeDashboardActivityRefresh(opts, &activityRows, activityHeader, activityList, activityErr)
 	combined := func() {
 		refresh()
 		refreshHealth()
@@ -92,10 +106,72 @@ func BuildDashboard(opts DashboardOptions) fyne.CanvasObject {
 		heading, subtitle, widget.NewSeparator(),
 		cards.Row, widget.NewSeparator(),
 		health,
-		activity,
+		activityBox,
 		live, widget.NewSeparator(),
 		actions, autoStart, status,
 	)
+}
+
+// activityListMaxHeight caps the recent-activity list at ~10 rows so
+// the dashboard's vertical rhythm stays predictable. Picked to match
+// `recentActivityRenderLimit` × ~24px row height.
+const activityListMaxHeight = 240
+
+// newActivityList constructs the virtualised activity feed. The list
+// reads from `*rows` on every refresh tick (caller mutates the slice
+// in-place then calls `list.Refresh()`), so we own zero state here —
+// matches Fyne's `widget.List` data-binding contract.
+//
+// Click handler echoes the clicked row's full payload into `status`
+// so a long error message that the truncated row hid is recoverable
+// without leaving the dashboard.
+func newActivityList(rows *[]core.ActivityRow, status *widget.Label) *widget.List {
+	list := widget.NewList(
+		func() int { return len(*rows) },
+		func() fyne.CanvasObject {
+			// Template row: a single label that will be SetText'd per
+			// row. Wrapping is OFF on purpose — long error messages
+			// truncate with "…" rather than reflowing the row height,
+			// which would break the virtualised-scroll height math.
+			return widget.NewLabel("")
+		},
+		func(i widget.ListItemID, o fyne.CanvasObject) {
+			lbl := o.(*widget.Label)
+			r := (*rows)[i]
+			lbl.SetText(formatActivityRow(r))
+			// Severity-based importance hint — Fyne's theme renders
+			// HighImportance in the accent colour and DangerImportance
+			// in red, so PollFailed rows pop without hard-coding HSL.
+			lbl.Importance = activityImportance(r.Kind)
+		},
+	)
+	list.OnSelected = func(i widget.ListItemID) {
+		if i < 0 || i >= len(*rows) {
+			return
+		}
+		r := (*rows)[i]
+		status.SetText(formatActivityRowDetail(r))
+		// Deselect immediately so a second click on the same row
+		// re-fires the handler — `widget.List` swallows repeats on a
+		// sticky selection.
+		list.UnselectAll()
+	}
+	return list
+}
+
+// activityImportance maps an ActivityKind to a Fyne importance level
+// so the row colour mirrors severity without hard-coding theme HSL.
+func activityImportance(k core.ActivityKind) widget.Importance {
+	switch k {
+	case core.ActivityPollFailed:
+		return widget.DangerImportance
+	case core.ActivityPollSucceeded, core.ActivityEmailStored:
+		return widget.SuccessImportance
+	case core.ActivityRuleMatched:
+		return widget.HighImportance
+	default:
+		return widget.MediumImportance
+	}
 }
 
 // makeDashboardHealthRefresh returns a closure that loads per-account
