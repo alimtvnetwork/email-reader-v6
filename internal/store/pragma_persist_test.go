@@ -53,11 +53,11 @@ func Test_Store_PragmaOnEveryConn(t *testing.T) {
 	// Hold all four txns open simultaneously so each comes from a
 	// distinct physical connection. SQLite's WAL mode permits
 	// multiple concurrent readers.
-	txs := make([]*txProbe, probes)
+	txs := make([]*sql.Tx, probes)
 	defer func() {
-		for _, p := range txs {
-			if p != nil && p.tx != nil {
-				_ = p.tx.Rollback()
+		for _, tx := range txs {
+			if tx != nil {
+				_ = tx.Rollback()
 			}
 		}
 	}()
@@ -67,7 +67,7 @@ func Test_Store_PragmaOnEveryConn(t *testing.T) {
 		if err != nil {
 			t.Fatalf("begin tx %d: %v", i, err)
 		}
-		txs[i] = &txProbe{tx: tx}
+		txs[i] = tx
 
 		row := tx.QueryRowContext(ctx, `PRAGMA journal_mode`)
 		if err := row.Scan(&samples[i].journalMode); err != nil {
