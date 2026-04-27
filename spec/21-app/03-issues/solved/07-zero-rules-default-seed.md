@@ -74,7 +74,7 @@ Logged a clear line so the user knows the seed happened and where the file lives
 
 - `spec/21-app/02-features/03-rules/01-backend.md` §Default seed — formalises the seed regex, the trigger condition (`countEnabledRules == 0`), and the persistence requirement.
 - `spec/21-app/02-features/03-rules/02-frontend.md` §Empty state — the GUI rules list shows a one-click "Seed default rule" CTA when the list is empty, mirroring the CLI behaviour.
-- `spec/21-app/02-features/05-watch/01-backend.md` §Pre-flight checks — the rule-count check at watcher startup now distinguishes "0 rules and seed disabled" from "0 rules and seed allowed but failed to write" (the latter is `ER-RUL-21260`).
+- `spec/21-app/02-features/05-watch/01-backend.md` §Pre-flight checks — the rule-count check at watcher startup now distinguishes "0 rules and seed disabled" from "0 rules and seed allowed but failed to write" (the latter is `ER-RUL-21305` / `ErrRuleSeedDefault`). *(Slice #157: corrected from `ER-RUL-21260` — that number falls in the MAIL block `21200–21299`, not Rules `21300–21399`. The seed-failure semantic is already covered by the existing registered code `ER-RUL-21305 ErrRuleSeedDefault` in `internal/errtrace/codes.yaml`; no new registry row needed.)*
 
 ## What NOT to repeat
 
