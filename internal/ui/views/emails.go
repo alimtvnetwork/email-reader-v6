@@ -5,7 +5,6 @@ package views
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -344,12 +343,4 @@ func renderDetail(d *core.EmailDetail, open func(string) error, status *widget.L
 		}
 	}
 	return objs
-}
-
-func openExternal(rawurl string) error {
-	u, err := url.Parse(rawurl)
-	if err != nil {
-		return err
-	}
-	return launchInBrowser(u.String())
 }
