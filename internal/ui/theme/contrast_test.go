@@ -81,7 +81,7 @@ var contrastMatrix = []contrastCase{
 	{id: "Error on Background (Dark)", mode: core.ThemeDark, fg: ColorError, bg: ColorBackground, threshold: 4.5},
 	{id: "Error on Background (Light)", mode: core.ThemeLight, fg: ColorError, bg: ColorBackground, threshold: 4.5},
 	{id: "Success on Background (Dark)", mode: core.ThemeDark, fg: ColorSuccess, bg: ColorBackground, threshold: 4.5},
-	{id: "Success on Background (Light)", mode: core.ThemeLight, fg: ColorSuccess, bg: ColorBackground, threshold: 4.5, knownDrift: true},
+	{id: "Success on Background (Light)", mode: core.ThemeLight, fg: ColorSuccess, bg: ColorBackground, threshold: 4.5},
 	{id: "Warning on Background (Dark)", mode: core.ThemeDark, fg: ColorWarning, bg: ColorBackground, threshold: 4.5},
 	{id: "RawLogTimestamp on CodeBg (Dark)", mode: core.ThemeDark, fg: ColorRawLogTimestamp, bg: ColorCodeBg, threshold: 4.5, knownDrift: true},
 	{id: "SidebarItemActiveForeground on SidebarItemActive (Dark)", mode: core.ThemeDark, fg: ColorSidebarItemActiveForeground, bg: ColorSidebarItemActive, threshold: 4.5},
