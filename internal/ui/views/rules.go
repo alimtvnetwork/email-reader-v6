@@ -256,7 +256,7 @@ func openRenameRuleDialog(r config.Rule, opts RulesOptions, status *widget.Label
 	entry.SetText(r.Name)
 	entry.Validator = func(s string) error {
 		if len(s) == 0 {
-			return fmt.Errorf("name required")
+			return errtrace.New("name required")
 		}
 		return nil
 	}

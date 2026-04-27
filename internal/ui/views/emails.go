@@ -47,7 +47,7 @@ func BuildEmails(opts EmailsOptions) fyne.CanvasObject {
 		// test overrides were supplied. Surface the wiring gap instead
 		// of panicking on the first list call.
 		return emailsErrorView(heading,
-			fmt.Errorf("emails service not wired (no Service or List/Get overrides injected)"))
+			errtrace.New("emails service not wired (no Service or List/Get overrides injected)"))
 	}
 
 	// Body is a swappable container so the Refresh button can
@@ -159,7 +159,7 @@ func applyEmailsDefaults(opts EmailsOptions) EmailsOptions {
 // `openExternal` → `launchInBrowser` chain that called
 // `config.Load()` directly from the view layer.
 func openURLUnwired(string) error {
-	return fmt.Errorf("browser launcher not wired (no OpenURL injected)")
+	return errtrace.New("browser launcher not wired (no OpenURL injected)")
 }
 
 // loadEmailRows fetches the email summary list with a 5s timeout.
