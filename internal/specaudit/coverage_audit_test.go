@@ -252,7 +252,10 @@ var coverageGapAllowlist = map[string]struct{}{
 	// names). Remaining AC-DS gaps are genuine future work (most
 	// need the deferred Slice #118e Fyne canvas harness).
 	"AC-DS-05": {},
-	"AC-DS-15": {},
+	// AC-DS-15 closed by Slice #145 — Test_Theme_SystemResolves in
+	// internal/ui/theme/fyne_theme_resolve_test.go pins the four
+	// resolvedMode(variant) branches: ThemeSystem follows the OS
+	// variant (Light/Dark); explicit modes ignore the OS hint.
 	// AC-DS-19 closed by Slice (this) — Test_AST_AnimImportLimit in
 	// ast_design_system_test.go pins the "only internal/ui/anim/ may
 	// use canvas.NewColorRGBAAnimation" rule (vacuously true today).
