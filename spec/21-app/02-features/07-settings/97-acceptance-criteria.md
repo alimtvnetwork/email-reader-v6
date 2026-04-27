@@ -40,7 +40,6 @@ Each criterion below is tagged for the implementing AI so it can pick sandbox-im
 See also: [`mem://design/schema-naming-convention.md`](mem://design/schema-naming-convention.md), `.lovable/cicd-issues/03-fyne-canvas-needs-cgo.md`, `.lovable/cicd-issues/05-no-bench-infra.md`.
 
 ---
----
 
 ## A. Functional — Backend
 
