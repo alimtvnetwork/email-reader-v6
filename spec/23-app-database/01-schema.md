@@ -195,6 +195,8 @@ CREATE UNIQUE INDEX UX_OpenedUrls_Dedup
 
 Owned by `internal/store/migrate`. Feature code MUST NOT read or write this table.
 
+> **Drift notice (Slice #137).** The DDL block below shows the **logical** shape (with `Checksum` for tamper detection per `03-migrations.md` §4). The **canonical, in-database** shape is `internal/store/migrate/migrate.go` `schemaVersionDDL`, which has `Version`/`Name`/`AppliedAt` only — **no `Checksum` column**. The runner's checksum-on-startup check is currently in-memory only (compares each registered migration's SQL hash against itself, not against a stored value), so the spec'd column is aspirational. Adding it requires a numbered migration; tracked in deferred "schema-evolution work". The table **name** (`_SchemaVersion`, leading underscore = bookkeeping per the §1 verdict matrix) is authoritative — the legacy `SchemaMigration` name is superseded.
+
 ```sql
 CREATE TABLE _SchemaVersion (
     Version    INTEGER PRIMARY KEY,
