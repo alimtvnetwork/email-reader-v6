@@ -44,6 +44,14 @@ func Run() {
 	ctx, cancelLive := context.WithCancel(context.Background())
 	defer cancelLive()
 	startThemeLiveConsumer(ctx)
+	// Phase 3.5 — first-error toast notifier. Wires the
+	// Fyne app's SendNotification to the errlog 0→1 transition
+	// rule (badge-only after the first error in a storm). Held
+	// in a package var so BuildShell can reach it for the
+	// "user opened the Error Log" reset hook.
+	errLogNotifier = NewErrLogNotifier(func(title, body string) {
+		a.SendNotification(&fyne.Notification{Title: title, Content: body})
+	})
 	w := a.NewWindow("email-read · v" + AppVersion)
 	w.SetContent(BuildShell(LoadAliases()))
 	w.Resize(fyne.NewSize(1000, 680))
@@ -54,6 +62,22 @@ func Run() {
 		}
 	}()
 	w.ShowAndRun()
+}
+
+// errLogNotifier is the process-wide first-error toast dispatcher,
+// wired in Run(). nil under unit tests / headless harnesses where
+// Run is never called — sidebarErrorLogReset() is nil-safe.
+var errLogNotifier *ErrLogNotifier
+
+// sidebarErrorLogReset is the OnErrorLogOpened hook handed to every
+// NewSidebar call. Pulled out as a function so both BuildShell sites
+// (initial build + rebuildShell) share one definition and stay in
+// sync. nil-safe so the package compiles + tests run when Run() was
+// never called (errLogNotifier == nil).
+func sidebarErrorLogReset() {
+	if errLogNotifier != nil {
+		errLogNotifier.ResetQuietPeriod()
+	}
 }
 
 // startThemeLiveConsumer subscribes to core.Settings and re-applies the
