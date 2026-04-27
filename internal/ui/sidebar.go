@@ -9,19 +9,38 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
+
+	"github.com/lovable/email-read/internal/ui/errlog"
 )
 
 // SidebarOptions wires the sidebar to the shared AppState plus the live
 // account list. OnSelectNav is invoked synchronously when the user picks
 // a row so the shell can swap the detail pane.
+//
+// BadgeFor (Phase 3.4) returns the unread-count badge to render next
+// to a nav row's title — used by NavErrorLog to show the
+// "(N)" suffix from `errlog.Unread()`. Returning 0 (or leaving the
+// field nil) renders the plain title. BadgeSubscribe returns a
+// channel that ticks whenever any badge value may have changed; the
+// sidebar refreshes the list on each tick. Both fields default to
+// the process-wide errlog singleton when nil.
 type SidebarOptions struct {
-	State       *AppState
-	Aliases     []string
-	OnSelectNav func(NavItem)
+	State            *AppState
+	Aliases          []string
+	OnSelectNav      func(NavItem)
+	BadgeFor         func(NavKind) int64
+	BadgeSubscribe   func() <-chan errlog.Entry
 }
 
 // NewSidebar builds the sidebar: header, account picker, nav list.
 func NewSidebar(opts SidebarOptions) fyne.CanvasObject {
+	if opts.BadgeFor == nil {
+		opts.BadgeFor = defaultBadgeFor
+	}
+	if opts.BadgeSubscribe == nil {
+		opts.BadgeSubscribe = errlog.Subscribe
+	}
+
 	header := widget.NewLabelWithStyle("email-read", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
 
 	var picker *widget.Select
@@ -59,7 +78,8 @@ func NewSidebar(opts SidebarOptions) fyne.CanvasObject {
 				lbl.SetText(r.header)
 				lbl.TextStyle = fyne.TextStyle{Italic: true, Bold: true}
 			} else {
-				lbl.SetText(NavItems[r.navIdx].Title)
+				item := NavItems[r.navIdx]
+				lbl.SetText(formatNavRowLabel(item.Title, opts.BadgeFor(item.Kind)))
 				lbl.TextStyle = fyne.TextStyle{}
 			}
 			lbl.Refresh()
@@ -102,6 +122,16 @@ func NewSidebar(opts SidebarOptions) fyne.CanvasObject {
 	}
 	list.Select(preIdx)
 
+	// Live badge refresh: every errlog append (and MarkRead via the
+	// view) triggers a list.Refresh so the "(N)" suffix tracks reality
+	// without polling. The goroutine exits when the singleton drops
+	// the channel — see error_log.go for the same pattern.
+	go func() {
+		for range opts.BadgeSubscribe() {
+			list.Refresh()
+		}
+	}()
+
 	top := container.NewVBox(
 		header,
 		widget.NewSeparator(),
@@ -110,4 +140,14 @@ func NewSidebar(opts SidebarOptions) fyne.CanvasObject {
 		widget.NewSeparator(),
 	)
 	return container.NewBorder(top, nil, nil, nil, list)
+}
+
+// defaultBadgeFor is the production BadgeFor — wires NavErrorLog to
+// the process-wide `errlog.Unread()` counter and returns 0 for every
+// other nav kind.
+func defaultBadgeFor(k NavKind) int64 {
+	if k == NavErrorLog {
+		return errlog.Unread()
+	}
+	return 0
 }
