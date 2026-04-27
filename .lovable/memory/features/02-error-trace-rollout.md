@@ -33,3 +33,24 @@ Without a frame at every wrap site, `errtrace.Format` shortens to one
 line and the user can't paste a useful trace. The 46 production sites
 above are exactly the spots where today's logs collapse to a single
 message.
+
+## Phase 3.3 — Error Log view shipped (2026-04-27)
+
+- `internal/ui/views/error_log.go` renders the Diagnostics → Error Log
+  detail pane: split list (left, newest-first) ↔ monospace trace
+  detail (right) + Clear / Copy footer. Defaults to the
+  `internal/ui/errlog` singleton; `ErrorLogOptions` provides seams
+  for tests.
+- `internal/ui/nav.go` gains `NavErrorLog` + a `Group: "Diagnostics"`
+  field on `NavItem`. `internal/ui/sidebar_rows.go` (new, fyne-free)
+  expands NavItems into a flat row list with one italic group header
+  before the first item of each group.
+- `internal/ui/app.go::viewFor` dispatches `NavErrorLog` to
+  `views.BuildErrorLog` and threads the active window's clipboard.
+- Tests added: `views/error_log_test.go` (sort + truncate),
+  `ui/sidebar_rows_test.go` (group header inserted exactly once
+  before NavErrorLog). `ui/sidebar_test.go` updated to expect 8 nav
+  rows. `accessibility/a11y_render_harness_test.go` allowlists
+  `views/error_log.go` (passive log surface, default focus order).
+- `go vet -tags nofyne ./...` clean. `go test -tags nofyne
+  ./internal/ui/...` all green.
