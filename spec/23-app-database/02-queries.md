@@ -19,7 +19,7 @@ Cross-references:
 - Emails backend: [`../21-app/02-features/02-emails/01-backend.md`](../21-app/02-features/02-emails/01-backend.md)
 - Dashboard backend: [`../21-app/02-features/01-dashboard/01-backend.md`](../21-app/02-features/01-dashboard/01-backend.md)
 
-> **Drift notice (Slice #137).** Table-name references throughout this file (`Email`, `OpenedUrl`, `IX_Email_*`, `SCAN Email`, etc.) still use the **historical singular** forms. The locked Phase 2.1 verdict (see `01-schema.md` §1) is **plural for entity collections** — actual production tables are `Emails`, `OpenedUrls`, `WatchEvents`, with `WatchState` (singleton-per-key) and `_SchemaVersion` (bookkeeping) staying singular. The full sweep of every `Q-*` query body, projection, and EXPLAIN-plan cell is tracked in the deferred "schema-evolution work, ~12 AC-DB rows" backlog item — it requires either editing every query template here AND every callsite in `internal/store/queries/*.go` in lockstep, or a full SQL-rewrite migration. The convention rule and the canonical table names live in `01-schema.md` §1; treat that as the source of truth when this file disagrees.
+> **Drift notice (Slice #137 → narrowed by Slice #163).** The table-name singular→plural drift was closed in Slice #163: every query body and projection in §3 + every plan-snapshot row in §4 now uses the locked plural names (`Emails`, `OpenedUrls`, `WatchEvents`) per `01-schema.md` §1, with `WatchState` (singleton-per-key) and `_SchemaVersion` (bookkeeping) staying singular. **What still drifts:** the spec's `IX_Email_*` / `IX_OpenedUrl_*` / `UX_OpenedUrl_Dedup` index references describe a Pascal-Case-with-underscores naming scheme that doesn't match production (`IxEmailsAliasUid`, `IxOpenedUrlsAliasOpenedAt`, `IxOpenedUrlsUnique`, etc. — see `internal/store/migrate/m0002..m0013`), AND some of the spec's expected indexes don't exist at all (e.g. no `(Alias, ReceivedAt)` index for `Q-EMAIL-LIST`). Both are tracked under the deferred "schema-evolution work, ~12 AC-DB rows" backlog item — the index-name fix needs a coordinated decision between (a) renaming impl indexes to match spec, or (b) editing every index reference here AND every plan-snapshot expectation in lockstep. The convention rule and canonical table names live in `01-schema.md` §1; treat that as the source of truth when this file disagrees.
 
 ---
 
@@ -64,7 +64,7 @@ Total: 12 named queries. Adding one requires updating §3 below AND the consiste
 Idempotent insert of an IMAP message. Conflict on `(Alias, MessageId)` is the **expected** path on re-fetch (e.g., after a crash mid-cycle).
 
 ```sql
-INSERT INTO Email (
+INSERT INTO Emails (
     Alias, MessageId, Uid, FromAddr, ToAddr, CcAddr,
     Subject, BodyText, BodyHtml, ReceivedAt, FilePath, HasAttachment
 ) VALUES (
@@ -107,7 +107,7 @@ List/filter for the Emails view. Pagination via keyset on `(ReceivedAt, Id)`.
 ```sql
 SELECT Id, Alias, MessageId, Uid, FromAddr, ToAddr, CcAddr,
        Subject, ReceivedAt, FilePath, HasAttachment, CreatedAt
-FROM Email
+FROM Emails
 WHERE (:Alias = '' OR Alias = :Alias)
   AND (:Q     = '' OR (Subject LIKE :QLike OR FromAddr LIKE :QLike))
   AND (:Since IS NULL OR ReceivedAt >= :Since)
@@ -136,7 +136,7 @@ LIMIT :Limit;
 ```sql
 SELECT Id, Alias, MessageId, Uid, FromAddr, ToAddr, CcAddr,
        Subject, BodyText, BodyHtml, ReceivedAt, FilePath, HasAttachment, CreatedAt
-FROM Email
+FROM Emails
 WHERE Id = :Id;
 ```
 
@@ -146,7 +146,7 @@ WHERE Id = :Id;
 
 ```sql
 SELECT Alias, COUNT(*) AS Total, MAX(ReceivedAt) AS NewestReceivedAt
-FROM Email
+FROM Emails
 GROUP BY Alias;
 ```
 
@@ -198,7 +198,7 @@ ORDER BY Alias ASC;
 
 ```sql
 SELECT Id, LaunchedAt
-FROM OpenedUrl
+FROM OpenedUrls
 WHERE Alias       = :Alias
   AND OriginalUrl = :OriginalUrl
   AND Decision    = 'Launched'
@@ -219,7 +219,7 @@ LIMIT 1;
 ### 3.9 `Q-OPEN-INS` — write
 
 ```sql
-INSERT INTO OpenedUrl (
+INSERT INTO OpenedUrls (
     EmailId, Alias, RuleName, Origin,
     OriginalUrl, OpenedUrl, Decision, BlockedReason, LaunchedAt
 ) VALUES (
@@ -237,7 +237,7 @@ RETURNING Id;
 SELECT Id, EmailId, Alias, RuleName, Origin,
        OriginalUrl, OpenedUrl, Decision, BlockedReason,
        LaunchedAt, CreatedAt
-FROM OpenedUrl
+FROM OpenedUrls
 WHERE (:Alias = '' OR Alias = :Alias)
 ORDER BY CreatedAt DESC
 LIMIT :Limit;
@@ -251,7 +251,7 @@ Pre-flight count for the CSV export progress bar.
 
 ```sql
 SELECT COUNT(*) AS Total
-FROM Email
+FROM Emails
 WHERE (:Alias = '' OR Alias = :Alias)
   AND (:Since IS NULL OR ReceivedAt >= :Since)
   AND (:Until IS NULL OR ReceivedAt <  :Until);
@@ -264,7 +264,7 @@ Streaming cursor for `ExportCsv`. Driver uses `*sql.Rows` directly; no buffering
 ```sql
 SELECT Id, Alias, MessageId, Uid, FromAddr, ToAddr, CcAddr,
        Subject, ReceivedAt, FilePath, HasAttachment, CreatedAt
-FROM Email
+FROM Emails
 WHERE (:Alias = '' OR Alias = :Alias)
   AND (:Since IS NULL OR ReceivedAt >= :Since)
   AND (:Until IS NULL OR ReceivedAt <  :Until)
@@ -281,14 +281,14 @@ Each query has a golden `EXPLAIN QUERY PLAN` snapshot in `internal/store/queries
 
 | Query | Expected plan snippet |
 |---|---|
-| `Q-EMAIL-LIST` (alias set) | `SEARCH Email USING INDEX IX_Email_Alias_Received` |
-| `Q-EMAIL-LIST` (alias empty) | `SEARCH Email USING INDEX IX_Email_ReceivedAt` |
-| `Q-EMAIL-GET-BY-ID` | `SEARCH Email USING INTEGER PRIMARY KEY (rowid=?)` |
-| `Q-EMAIL-COUNT-BY-ALIAS` | `SCAN Email` + `USE TEMP B-TREE FOR GROUP BY` (acceptable for small N) |
+| `Q-EMAIL-LIST` (alias set) | `SEARCH Emails USING INDEX IX_Email_Alias_Received` |
+| `Q-EMAIL-LIST` (alias empty) | `SEARCH Emails USING INDEX IX_Email_ReceivedAt` |
+| `Q-EMAIL-GET-BY-ID` | `SEARCH Emails USING INTEGER PRIMARY KEY (rowid=?)` |
+| `Q-EMAIL-COUNT-BY-ALIAS` | `SCAN Emails` + `USE TEMP B-TREE FOR GROUP BY` (acceptable for small N) |
 | `Q-WATCH-GET` | `SEARCH WatchState USING INTEGER PRIMARY KEY` |
-| `Q-OPEN-DEDUP` | `SEARCH OpenedUrl USING INDEX IX_OpenedUrl_Alias_Created` |
-| `Q-OPEN-LIST` | `SEARCH OpenedUrl USING INDEX IX_OpenedUrl_Alias_Created` |
-| `Q-EXPORT-STREAM` (alias set) | `SEARCH Email USING INDEX IX_Email_Alias_Received` |
+| `Q-OPEN-DEDUP` | `SEARCH OpenedUrls USING INDEX IX_OpenedUrl_Alias_Created` |
+| `Q-OPEN-LIST` | `SEARCH OpenedUrls USING INDEX IX_OpenedUrl_Alias_Created` |
+| `Q-EXPORT-STREAM` (alias set) | `SEARCH Emails USING INDEX IX_Email_Alias_Received` |
 
 ---
 
