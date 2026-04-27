@@ -22,18 +22,32 @@ Cross-references:
 
 ## 1. Table Inventory
 
-| # | Table | Purpose | Owning feature backend |
-|---|---|---|---|
-| 1 | `Email` | Persisted IMAP messages and their on-disk `.eml` references. | Emails (`02-features/02-emails`) |
-| 2 | `WatchState` | Per-alias high-water mark for incremental polling. | Watch (`02-features/05-watch`) |
-| 3 | `OpenedUrl` | Audit + dedup ledger for every browser launch and every blocked-url decision. | Tools (`02-features/06-tools`) + Rules (`02-features/03-rules`) |
-| 4 | `SchemaMigration` | Migration runner ledger. Owned by `internal/store/migrate`. | infra |
+| # | Table | Kind | Purpose | Owning feature backend |
+|---|---|---|---|---|
+| 1 | `Emails` | entity collection (plural) | Persisted IMAP messages and their on-disk `.eml` references. | Emails (`02-features/02-emails`) |
+| 2 | `WatchState` | singleton-per-key state (singular) | Per-alias high-water mark for incremental polling. One row per alias = the live state, never history. | Watch (`02-features/05-watch`) |
+| 3 | `OpenedUrls` | entity collection (plural) | Audit + dedup ledger for every browser launch and every blocked-url decision. | Tools (`02-features/06-tools`) + Rules (`02-features/03-rules`) |
+| 4 | `WatchEvents` | entity collection (plural) | Audit log of watcher events (one row per event). | Watch (`02-features/05-watch`) |
+| 5 | `_SchemaVersion` | bookkeeping (singular, `_` prefix) | Migration runner ledger. Owned by `internal/store/migrate`. Leading underscore hides it from business queries. | infra |
 
-Total: 4 tables. No others. Adding a table requires bumping this spec's MAJOR version.
+Total: 5 tables. No others. Adding a table requires bumping this spec's MAJOR version.
 
-Note on naming: the *table* is singular (`Email`); the *Go struct* is singular (`Email`); a *slice* is plural (`[]Email`). Legacy plural names (`Emails`, `OpenedUrls`) from `legacy/spec.md` §7 are **superseded by this spec**. The migration runner renames them in `M-002` (see `03-migrations.md`).
+### Naming convention (LOCKED — Phase 2.1, Slice #68, 2026-04-26)
 
----
+| Table kind | Form | Reasoning |
+|---|---|---|
+| **Entity collection** (one row = one entity) | **plural** | `SELECT … FROM Emails` reads as "select from the emails". `Emails`, `OpenedUrls`, `WatchEvents`. |
+| **Singleton-per-key state** (one row = current state of one logical key) | **singular** | `WatchState` holds the *current* watch state for an alias. Pluralising would falsely imply history. |
+| **Aggregate / view** (derived rollup) | **singular** with `v_` prefix | `v_AccountHealth` — one rollup record per concept. |
+| **Bookkeeping / housekeeping** | **singular** with `_` prefix | `_SchemaVersion` — internal infrastructure, leading underscore hides it from business queries. |
+
+**Go side**: a struct that maps to one row stays singular (`Email`, `OpenedUrl`, `WatchEvent`); a slice is plural (`[]Email`). This is independent of the table-name rule.
+
+**No renames are pending.** The ledger slot `m0007_naming_convention_lock` (`internal/store/migrate/m0007_naming_convention_lock.go`) is a doc-only migration that pins this verdict next to the schema it governs — see `mem://design/schema-naming-convention.md` for the full Phase 2.1 audit. The earlier `legacy/spec.md` §7 and prior drafts of this file that referred to a singular rename (`M-002`) are **superseded**: the rename was the wrong direction and the slot is intentionally a no-op `SELECT 1`.
+
+> **Cleanup note (non-blocking)**: §2–§5 below still show DDL with the historical singular forms. The actual database uses the plural / `_`-prefixed forms shown in the inventory above. A follow-up slice will sweep §2–§5 to pluralise the DDL examples and column references; this slice locks the convention at the canonical anchor point (§1) so no future schema change can drift further.
+
+
 
 ## 2. Table `Email`
 
