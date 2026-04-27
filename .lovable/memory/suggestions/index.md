@@ -9,6 +9,7 @@
 | 20260427-141504-restate-watchevents-name-lock | ✅ closed (Slice #183 — added 🔒 callouts to §4 OpenedUrls + §5 WatchEvents in `spec/23-app-database/01-schema.md`, bumped to v1.0.1) | medium | Restate `WatchEvents` table-name lock in `23-app-database/01-schema.md` |
 | 20260427-141505-add-sandbox-feasibility-tag | ✅ closed (Slice #184 — legend + per-section tag in 9 AC files via deterministic script; risk-report Tier table cross-referenced) | medium | Add 🟢/🟡/🔴 sandbox-feasibility tag to each per-feature 97 file |
 | 20260427-155000-rotate-seeded-credentials-broader-scope | open (blocked on user policy verdict a/b/c — see Slice #185 finding) | **HIGH (security)** | Rotate seeded IMAP credentials — **plaintext password in `internal/config/seed.go` line 33** ships in binary |
+| 20260427-160000-errlog-persist-nil-writer-race | open (sandbox-doable, discovered by Slice #189 race-stress sweep) | medium | `errlog.Persistence.Write` panics with nil `*bufio.Writer` under `-race -count=2` — package-level state survives test iterations |
 
 Archive: `.lovable/memory/suggestions/archive/` (empty).
 
