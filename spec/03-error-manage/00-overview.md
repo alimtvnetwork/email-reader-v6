@@ -36,6 +36,7 @@ Consolidated error management specification covering error resolution/debugging,
 | 01 | [Error Resolution](./01-error-resolution/00-overview.md) | Debugging guides, retrospectives, verification patterns, cheat sheet, cross-reference diagram | 14 |
 | 02 | [Error Architecture](./02-error-architecture/00-overview.md) | Cross-stack 3-tier error handling, error modal, response envelope, apperror package, logging, notifications | 22 |
 | 03 | [Error Code Registry](./03-error-code-registry/00-overview.md) | Master registry, integration guide, schemas, scripts, templates, collision resolution, utilization report | 18 |
+| 04 | [App Error Log View](./04-app-error-log-view/00-overview.md) | Desktop-app diagnostics surface: errtrace ring buffer, sidebar badge, first-error toast, JSONL persistence + rotation, `email-read errors tail` CLI | 1 |
 
 > 📖 **Quick onboarding?** See [structure.md](./structure.md) for a full visual tree with role-based entry points.
 
