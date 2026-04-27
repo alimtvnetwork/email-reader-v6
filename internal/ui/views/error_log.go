@@ -216,3 +216,21 @@ func truncate(s string, n int) string {
 	}
 	return s[:n-1] + "…"
 }
+
+// openLogFile invokes opener with path and returns a short status
+// string suitable for a single-line label. Pulled out as a pure
+// helper so the headless test path can assert behavior without a
+// Fyne app. nil opener is treated as "not wired" — matches how the
+// Copy button degrades when Clipboard is nil.
+func openLogFile(path string, opener func(string) error) string {
+	if path == "" {
+		return "Disk log unavailable."
+	}
+	if opener == nil {
+		return "Open handler not wired."
+	}
+	if err := opener(path); err != nil {
+		return "Open failed: " + err.Error()
+	}
+	return "Opened " + path
+}
