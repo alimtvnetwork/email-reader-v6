@@ -51,6 +51,9 @@ func buildAccountsListPerfFixture(tb testing.TB, run func(svc *AccountsService))
 }
 
 func TestAccounts_List_50Accounts_PerfGate(t *testing.T) {
+	if perfGateSkipRace(t) {
+		return
+	}
 	if testing.Short() {
 		t.Skip("perf gate skipped under -short")
 	}

@@ -69,6 +69,9 @@ func newDefaultRulesSvcTB(tb testing.TB) *RulesService {
 }
 
 func TestRules_List_500Rules_PerfGate(t *testing.T) {
+	if perfGateSkipRace(t) {
+		return
+	}
 	if testing.Short() {
 		t.Skip("perf gate skipped under -short")
 	}

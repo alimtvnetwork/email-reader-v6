@@ -55,6 +55,9 @@ func runOneStartStop(tb testing.TB, w *Watch, alias string) time.Duration {
 }
 
 func TestWatch_StartStop_PerfGate(t *testing.T) {
+	if perfGateSkipRace(t) {
+		return
+	}
 	if testing.Short() {
 		t.Skip("perf gate skipped under -short")
 	}
