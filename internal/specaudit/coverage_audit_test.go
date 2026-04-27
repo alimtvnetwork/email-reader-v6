@@ -282,7 +282,11 @@ var coverageGapAllowlist = map[string]struct{}{
 	// AC-DS-19 closed by Slice (this) — Test_AST_AnimImportLimit in
 	// ast_design_system_test.go pins the "only internal/ui/anim/ may
 	// use canvas.NewColorRGBAAnimation" rule (vacuously true today).
-	"AC-DS-30": {},
+	// AC-DS-30 closed by Slice #148 — TestNavItemsCoverAllKinds in
+	// internal/ui/sidebar_test.go already pinned the spec's canonical
+	// 7-item sidebar order at items 0..6 (Dashboard, Emails, Rules,
+	// Accounts, Watch, Tools, Settings); slice #148 added the AC-DS-30
+	// citation comment so the audit resolves it as covered.
 	"AC-DS-31": {},
 	"AC-DS-32": {},
 	"AC-DS-33": {},
