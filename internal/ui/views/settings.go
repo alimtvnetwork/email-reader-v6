@@ -118,7 +118,24 @@ type settingsWidgets struct {
 // the loaded snapshot.
 func newSettingsWidgets(snap core.SettingsSnapshot) *settingsWidgets {
 	w := &settingsWidgets{initial: snap}
-	w.themeSelect = widget.NewSelect([]string{"Dark", "Light", "System"}, nil)
+	// Live theme preview: re-apply the Fyne theme on every dropdown
+	// change (mirrors how Density already live-previews on line 132).
+	// Without this, picking "Light" only updates the dropdown's
+	// internal state — the user has to click Save before the palette
+	// flips, which contradicts the "Restart not required — repaints
+	// live." hint shown next to the field. Save still persists the
+	// choice (via core.Settings.Save → SettingsEvent → forwardThemeEvents
+	// in app.go), so this is purely a UX-now/persist-on-save change.
+	w.themeSelect = widget.NewSelect([]string{"Dark", "Light", "System"}, func(label string) {
+		if mode, ok := core.ParseThemeMode(label); ok {
+			if r := theme.ApplyToFyne(mode); r.HasError() {
+				// Best-effort live preview — Save still rejects invalid
+				// modes via the same ParseThemeMode path, so a transient
+				// preview failure here is recoverable.
+				_ = r
+			}
+		}
+	})
 	w.themeSelect.SetSelected(snap.Theme.String())
 
 	w.pollEntry = widget.NewEntry()
