@@ -288,6 +288,12 @@ func viewFor(item NavItem, state *AppState, services *Services, gotoNav func(Nav
 		rt := WatchRuntimeOrNil()
 		opts := views.WatchOptions{Alias: state.Alias()}
 		if rt != nil {
+			// Slice #116b (Phase 6.2): expose the singleton on the
+			// Services bundle so future view code can pick it up
+			// uniformly. The view itself still reads from `opts.Watch`
+			// for backward-compat — the AttachWatch call only
+			// populates the spec-aligned access path.
+			services.AttachWatch(rt.Watch)
 			opts.Watch = rt.Watch
 			opts.PollSeconds = rt.PollSeconds
 			opts.Bus = rt.Bus
