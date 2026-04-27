@@ -74,16 +74,28 @@ func BuildAccounts(opts AccountsOptions) fyne.CanvasObject {
 			return
 		}
 
-		header := container.NewGridWithColumns(7,
+		// 6 evenly-distributed data columns + Actions pinned right at
+		// intrinsic width via container.NewBorder. Previously the row
+		// used GridWithColumns(7) which gave Actions a full 1/7 of the
+		// window — on a 1280-wide canvas that meant ~180 px of empty
+		// space inside the Actions cell, making Edit / Delete look
+		// disproportionately huge (user feedback 2026-04-27).
+		dataHeader := container.NewGridWithColumns(6,
 			widget.NewLabelWithStyle("Alias", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 			widget.NewLabelWithStyle("Email", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 			widget.NewLabelWithStyle("Server", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 			widget.NewLabelWithStyle("Mailbox", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 			widget.NewLabelWithStyle("Last UID", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 			widget.NewLabelWithStyle("Health", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-			widget.NewLabelWithStyle("Actions", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		)
+		actionsHeader := widget.NewLabelWithStyle("Actions", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+		// Reserve a fixed-width slot for the Actions header so it lines
+		// up with the per-row buttons (~200 px = pencil-Edit + trash-Delete
+		// + inter-button padding at default density).
+		actionsHeaderCell := container.New(&fixedWidthLayout{width: actionsColumnWidth}, actionsHeader)
+		header := container.NewBorder(nil, nil, nil, actionsHeaderCell, dataHeader)
 		rows := []fyne.CanvasObject{header, widget.NewSeparator()}
+
 
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -152,20 +164,23 @@ func accountRow(a config.Account, ws store.WatchState, health core.HealthLevel, 
 	delBtn := widget.NewButtonWithIcon("Delete", theme.IconDelete(),
 		func() { confirmDeleteAccount(a, opts, status, reload) })
 	delBtn.Importance = widget.DangerImportance
-	// GridWithColumns(2) gives both buttons identical width so the
-	// Actions column reads as one tidy pair instead of the uneven
-	// HBox the user saw in the screenshot.
-	actions := container.NewGridWithColumns(2, editBtn, delBtn)
+	// HBox keeps the buttons at their intrinsic widths (Edit ≈ 80 px,
+	// Delete ≈ 90 px) instead of stretching each to fill half of a
+	// 1/7-of-window column. The whole HBox is wrapped in a
+	// fixedWidthLayout so per-row alignment with the header stays
+	// stable regardless of how Fyne measures the icons.
+	actions := container.New(&fixedWidthLayout{width: actionsColumnWidth},
+		container.NewHBox(editBtn, delBtn))
 
-	return container.NewGridWithColumns(7,
+	dataRow := container.NewGridWithColumns(6,
 		widget.NewLabel(a.Alias),
 		email,
 		server,
 		widget.NewLabel(mailbox),
 		widget.NewLabel(lastUid),
 		healthLabel,
-		actions,
 	)
+	return container.NewBorder(nil, nil, nil, actions, dataRow)
 }
 
 // openEditAccountDialog shows the Add Account form in edit mode inside a
