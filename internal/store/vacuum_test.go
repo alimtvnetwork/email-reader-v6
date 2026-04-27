@@ -8,6 +8,14 @@ import (
 	"time"
 )
 
+// TestPruneOpenedUrlsBefore_DeletesOnlyOldRows contributes to
+// AC-DB-40 (Q-OPEN-PRUNE-LAUNCHED only deletes Launched rows
+// older than cutoff) — the time-cutoff half is locked here
+// (back-dated row deletes, recent row survives). The
+// "Decision='Launched' filter" half remains uncovered: today's
+// `RecordOpenedUrl` path always writes Launched, so we cannot
+// negative-test that a Blocked row at the same age survives. That
+// branch stays on the AC backlog (kept in coverageGapAllowlist).
 func TestPruneOpenedUrlsBefore_DeletesOnlyOldRows(t *testing.T) {
 	dir := t.TempDir()
 	s, err := OpenAt(filepath.Join(dir, "ret.db"))
