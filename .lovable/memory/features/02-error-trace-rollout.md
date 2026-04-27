@@ -69,3 +69,35 @@ message.
   NavErrorLog because `errlog.MarkRead` (called synchronously
   inside `BuildErrorLog`) does not fan out on Subscribe.
 - All `internal/ui/...` tests green under `-tags nofyne`.
+
+## Phase 3.5 — First-error toast shipped (2026-04-27)
+
+**Phase 3 complete.** Every UI error path now: (1) records a full
+file:line trace into the in-memory ring, (2) bumps a sidebar badge
+with a 99+ collapse rule, (3) raises one desktop toast on the 0→1
+unread transition, then stays badge-only until the user opens the
+Error Log view (which calls `errlog.MarkRead` + resets the
+notifier's quiet-period flag).
+
+- `internal/ui/errlog_notifier.go` (new, fyne-free): `ErrLogNotifier`
+  holds an `inStorm` bool guarded by a mutex; `handle` flips it and
+  toasts on the first event. `ResetQuietPeriod` re-arms it.
+  `NewErrLogNotifier(toast ToastFn)` starts a goroutine on
+  `errlog.Subscribe()`. `toastTitle`/`toastBody` are pure helpers
+  with a 140-char body cap.
+- `internal/ui/errlog_notifier_test.go`: 6 tests covering first-fire,
+  storm collapse, reset re-arms, nil-toast no-op, title fallback,
+  body truncation. Pure handle-channel bypass = deterministic.
+- `internal/ui/sidebar.go`: `SidebarOptions` gains
+  `OnErrorLogOpened func()`. The OnSelected handler now calls it
+  alongside `list.Refresh()` when NavErrorLog opens.
+- `internal/ui/app.go`: `Run()` constructs the notifier with
+  `app.SendNotification` as the toast adapter, stores it in the
+  package-level `errLogNotifier` var. Both `NewSidebar` calls in
+  `BuildShell` thread `OnErrorLogOpened: sidebarErrorLogReset` —
+  nil-safe so headless tests (where `Run` is never called) keep
+  passing.
+- `go vet -tags nofyne ./...` clean. All `internal/ui/...` tests
+  green. (Pre-existing failures in `internal/core` from the seeded
+  Attobond account polluting fresh-dir tests are orthogonal — not
+  introduced by this slice.)
