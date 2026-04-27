@@ -126,6 +126,10 @@ var focusOrderAllowlistedViewFiles = map[string]struct{}{
 	"views/watch_events.go":              {},
 }
 
+// Test_FocusOrder_Declared satisfies AC-DS-61 (every view declares
+// FocusOrder()) from spec/24-app-design-system-and-ui/
+// 97-acceptance-criteria.md §E. Bootstrap-then-enforce via the
+// monotonically-shrinking focusOrderAllowlistedViewFiles map above.
 func Test_FocusOrder_Declared(t *testing.T) {
 	// Single pass: for every view source file, record presence in
 	// `seen` and presence-of-method in `declared`.
