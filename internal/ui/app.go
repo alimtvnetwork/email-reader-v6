@@ -386,8 +386,15 @@ func viewFor(item NavItem, state *AppState, services *Services, gotoNav func(Nav
 		// Phase 3.3 — Diagnostics → Error Log. The view pulls from
 		// the process-wide errlog ring buffer (defaults filled in
 		// inside BuildErrorLog when fields are nil) and uses the
-		// Fyne app's clipboard for the Copy button.
-		opts := views.ErrorLogOptions{}
+		// Fyne app's clipboard for the Copy button. Phase 4.2 adds
+		// the "Open log file" affordance — wired to the persisted
+		// error-log.jsonl path resolved at boot.
+		opts := views.ErrorLogOptions{
+			LogPath: errLogPath,
+			OpenPath: func(path string) error {
+				return openLogFileWithFyne(path)
+			},
+		}
 		if a := fyne.CurrentApp(); a != nil {
 			if w := a.Driver().AllWindows(); len(w) > 0 {
 				opts.Clipboard = w[0].Clipboard()
