@@ -84,17 +84,20 @@ var deletedCoreSymbols = map[string]struct{}{
 // repo-relative file path (using forward slashes for portability).
 // Anything *not* in this set must be empty.
 //
-// To remove an entry: migrate the file to receive its config via an
-// injected dependency (typically a `*core.Tools` or new service),
-// then delete the entry. The test will start enforcing purity for
-// that file from then on.
+// **Slice #117 (Phase 6.5) status: empty.** The final entry
+// (`views/launch.go`) was removed when the browser launcher was
+// hoisted onto the `*Services` bundle as `OpenURL` (a thin adapter
+// over a `BrowserFactory` closure that re-evaluates `config.Load()`
+// per call to preserve live-Settings semantics). Every view file
+// now receives its config-derived dependencies via injection — no
+// `config.Load()` or `store.Default()` call may appear anywhere
+// under `internal/ui/views/`.
+//
+// To re-add an entry: do not. Add the dependency to `*Services`
+// instead. The allowlist exists only as a documented escape hatch
+// for legacy migration and Phase 6 closed all of them.
 var viewLayerGlobalsAllowlist = map[string]struct{}{
-	"views/launch.go": {}, // browser launcher — needs cfg.Browser; planned migration via shell-injected BrowserFactory
-	// Slice #116c (Phase 6.3) removed `views/tools_openurl.go` and
-	// `views/tools_read.go` from this allowlist. Both files now consume
-	// the `*core.Tools` factory through the injected `ToolsFactory`
-	// parameter sourced from `*Services.Tools`. Re-adding inline
-	// `config.Load()` to either file would fail Contract B.
+	// intentionally empty — see Slice #117 closure note above.
 }
 
 // TestAST_NoDeletedCoreSymbolsFromUI enforces Contract A.
