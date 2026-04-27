@@ -87,7 +87,13 @@ func BuildDashboard(opts DashboardOptions) fyne.CanvasObject {
 	activityErr := widget.NewLabel("")
 	activityErr.Wrapping = fyne.TextWrapWord
 	activityErr.Hide()
-	activityBox := container.NewVBox(activityHeader, activityErr, activityList)
+	// Wrap the virtualised list in a fixed-height slot so the parent
+	// VBox reserves `activityListMaxHeight` pixels for it regardless
+	// of how many rows it currently holds. Without this, `widget.List`
+	// reports a 1-row MinSize and the rows visually overlap whatever
+	// widget VBox places below the list (the live-counters tile row).
+	activityListSlot := container.New(fixedHeightLayout{Height: activityListMaxHeight}, activityList)
+	activityBox := container.NewVBox(activityHeader, activityErr, activityListSlot)
 
 	autoStart := newAutoStartIndicator()
 	refresh := makeDashboardRefresh(opts, cards, status)
