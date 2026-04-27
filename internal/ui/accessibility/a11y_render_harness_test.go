@@ -127,13 +127,15 @@ var focusOrderAllowlistedViewFiles = map[string]struct{}{
 }
 
 func Test_FocusOrder_Declared(t *testing.T) {
-	// Pass 1: collect the set of view files that DO declare a
-	// method named FocusOrder.
+	// Single pass: for every view source file, record presence in
+	// `seen` and presence-of-method in `declared`.
 	declared := map[string]struct{}{}
+	seen := map[string]struct{}{}
 	walkUITree(t, func(rel string, file *ast.File, fset *token.FileSet) []string {
 		if !strings.HasPrefix(rel, "views/") || strings.HasSuffix(rel, "_test.go") {
 			return nil
 		}
+		seen[rel] = struct{}{}
 		for _, decl := range file.Decls {
 			fn, ok := decl.(*ast.FuncDecl)
 			if !ok || fn.Recv == nil {
@@ -147,25 +149,11 @@ func Test_FocusOrder_Declared(t *testing.T) {
 		return nil
 	})
 
-	// Pass 2: walk the views directory's source files via the
-	// allowlist — every entry in the allowlist is "expected to be
-	// missing today". Anything missing AND not in the allowlist is a
-	// violation. Anything in the allowlist that DOES declare the
-	// method is a stale row (good news: shrink it).
+	// Anything missing AND not in the allowlist is a violation.
+	// Anything in the allowlist that DOES declare the method is a
+	// stale row (good news: shrink it).
 	var unexpectedMissing []string
 	var staleAllowlist []string
-
-	// Build the set of all view source files we actually saw, so we
-	// can detect new files added without FocusOrder().
-	seen := map[string]struct{}{}
-	walkUITree(t, func(rel string, file *ast.File, fset *token.FileSet) []string {
-		if !strings.HasPrefix(rel, "views/") || strings.HasSuffix(rel, "_test.go") {
-			return nil
-		}
-		seen[rel] = struct{}{}
-		return nil
-	})
-
 	for rel := range seen {
 		_, hasMethod := declared[rel]
 		_, allowed := focusOrderAllowlistedViewFiles[rel]
