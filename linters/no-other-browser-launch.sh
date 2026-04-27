@@ -34,16 +34,14 @@ set -euo pipefail
 
 # Patterns we forbid. Quoted to survive any shell expansion that
 # would otherwise glob the asterisk in `cmd /c start`.
-PATTERNS=(
-  'xdg-open'
-  'gnome-open'
-  'kde-open'
-  'wslview'
-  '"open"'        # macOS launcher; quoted-string narrowed to avoid
-                  # matching every English use of the word "open".
-  '"start"'       # Windows launcher; same narrowing.
-  'cmd /c start'  # Explicit Windows form.
-)
+# Patterns we forbid. Each must appear inside an `exec.Command(`
+# call to count as a violation — this prevents false positives
+# from unrelated Go enum literals like `DiagnoseEventStart = "start"`.
+#
+# We model the rule as two greps composed: line must contain
+# `exec.Command(` AND any of the launcher names. Implemented below
+# as a single grep -E with the launchers union'd.
+LAUNCHER_RE='xdg-open|gnome-open|kde-open|wslview|"open"|"start"|cmd /c start'
 
 # Locations exempt from the rule. Each is a path-prefix the find
 # command will -prune. Order matters only for readability.
