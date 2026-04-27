@@ -384,6 +384,13 @@ func scanFileForLogLeak(path, rel, needle string, levels []string) []string {
 		if !strings.Contains(line, needle) {
 			continue
 		}
+		if isTestingHelperCall(line) {
+			// `t.Errorf` / `t.Fatalf` / `t.Logf` are Go testing
+			// failure reporters, not application loggers; spec
+			// AC-SX targets logger output, not test failure
+			// messages (which never reach prod stdout).
+			continue
+		}
 		for _, lvl := range levels {
 			if strings.Contains(line, lvl) {
 				hits = append(hits, formatLogHit(rel, i+1, line))
@@ -392,6 +399,22 @@ func scanFileForLogLeak(path, rel, needle string, levels []string) []string {
 		}
 	}
 	return hits
+}
+
+// isTestingHelperCall reports whether the line invokes a *testing.T
+// reporter method. The substring match on `.Errorf(` etc. would
+// otherwise flag these as slog-style logger calls.
+func isTestingHelperCall(line string) bool {
+	for _, sig := range []string{
+		"t.Errorf(", "t.Fatalf(", "t.Logf(", "t.Skipf(",
+		"t.Error(", "t.Fatal(", "t.Log(", "t.Skip(",
+		"tb.Errorf(", "tb.Fatalf(", "tb.Logf(",
+	} {
+		if strings.Contains(line, sig) {
+			return true
+		}
+	}
+	return false
 }
 
 func formatLogHit(rel string, lineNo int, line string) string {
