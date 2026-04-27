@@ -191,7 +191,40 @@ CREATE UNIQUE INDEX UX_OpenedUrls_Dedup
 
 ---
 
-## 5. Table `_SchemaVersion`
+## 5. Table `WatchEvents`
+
+Durable audit log of watcher events — one row per event. Mirrors the in-memory `core.WatchEvent` stream (which lives only on `eventbus.Bus[WatchEvent]` and is lost on restart) so the Watch view can render an activity feed across restarts and per-alias forensics ("why did poll #847 error?") become possible.
+
+> **Drift notice (Slice #166).** The DDL block below is the **canonical** shape — it matches `internal/store/migrate/m0008_add_watch_events.go` exactly (column names, types, defaults, index name `IxWatchEventsAliasOccurredAt`). No additive migrations have touched this table since m0008. Future evolution (e.g. a TEXT shadow `KindLabel` for non-Go readers) requires a new numbered migration.
+
+```sql
+CREATE TABLE WatchEvents (
+    Id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    Alias       TEXT     NOT NULL,
+    Kind        INTEGER  NOT NULL,
+    Payload     TEXT     NOT NULL DEFAULT '{}',
+    OccurredAt  DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
+CREATE INDEX IxWatchEventsAliasOccurredAt ON WatchEvents (Alias, OccurredAt);
+```
+
+| Column | Type | Notes |
+|---|---|---|
+| `Id` | `INTEGER` PK | Surrogate, autoincrement. Append-only — no UPDATE path. |
+| `Alias` | `TEXT NOT NULL` | Account alias context. Matches `Emails.Alias` / `WatchState.Alias`. No FK (events survive alias deletion for audit). |
+| `Kind` | `INTEGER NOT NULL` | Closed enum mirroring `core.WatchEventKind`: `1`=Start, `2`=Stop, `3`=Error, `4`=Heartbeat. Stored as INTEGER (not TEXT) because the enum is closed and indexed lookups stay cheap. |
+| `Payload` | `TEXT NOT NULL` | JSON blob carrying the variable parts of `core.WatchEvent` (`Message`, `Err`). Defaults to `'{}'` — **never NULL**. |
+| `OccurredAt` | `DATETIME NOT NULL` | UTC ISO-8601. Default uses the canonical `strftime('%Y-%m-%dT%H:%M:%fZ','now')` expression (AC-DB-53). |
+
+**Invariants:**
+- Append-only — no UPDATE or DELETE path in production code (retention sweep is the only allowed deletion vector; see `04-retention-and-vacuum.md`).
+- The composite index `IxWatchEventsAliasOccurredAt` covers the canonical reader query "last N events for alias X". SQLite ignores `DESC` in `CREATE INDEX` but honours column order, so `WHERE Alias = ? ORDER BY OccurredAt DESC` uses this index for both the seek and the sort.
+- `Payload` MUST be valid JSON (validated at the Go boundary by `json.Marshal`). Raw user strings MUST be wrapped in a JSON object — never written as a bare TEXT value.
+
+---
+
+## 6. Table `_SchemaVersion`
 
 Owned by `internal/store/migrate`. Feature code MUST NOT read or write this table.
 
@@ -215,7 +248,7 @@ CREATE TABLE _SchemaVersion (
 
 ---
 
-## 6. Cross-Table Constraints
+## 7. Cross-Table Constraints
 
 | # | Constraint | Mechanism |
 |---|---|---|
@@ -227,7 +260,7 @@ CREATE TABLE _SchemaVersion (
 
 ---
 
-## 7. PRAGMAs (set on every connection)
+## 8. PRAGMAs (set on every connection)
 
 ```sql
 PRAGMA journal_mode = WAL;
@@ -241,7 +274,7 @@ PRAGMA temp_store   = MEMORY;
 
 ---
 
-## 8. Forbidden Schema Changes (without spec bump)
+## 9. Forbidden Schema Changes (without spec bump)
 
 The following are **breaking** and require a MAJOR version bump of this file:
 
