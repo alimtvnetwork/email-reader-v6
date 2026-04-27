@@ -151,19 +151,39 @@ func (s *Store) UpsertEmail(ctx context.Context, e *Email) (int64, bool, error) 
 }
 
 // GetWatchState returns the last-seen state for the alias (zero value if none).
+//
+// The schema stores `LastReceivedAt` and `UpdatedAt` as RFC3339 strings
+// (see `formatRFC3339UTC` and `sqliteRFC3339NowExpr`), so we scan into
+// `sql.NullString` / `string` and parse via `parseSqliteRFC3339`.
+// Scanning straight into `sql.NullTime` / `time.Time` would crash with
+// `unsupported Scan, storing driver.Value type string into type
+// *time.Time` under the modernc/sqlite driver — which is exactly the
+// poll-error chain the user observed in the Watch view's Raw log.
 func (s *Store) GetWatchState(ctx context.Context, alias string) (WatchState, error) {
 	var ws WatchState
-	var received sql.NullTime
+	var receivedTxt sql.NullString
+	var updatedTxt string
 	err := s.DB.QueryRowContext(ctx, queries.WatchStateGet, alias,
-	).Scan(&ws.Alias, &ws.LastUid, &ws.LastSubject, &received, &ws.UpdatedAt)
+	).Scan(&ws.Alias, &ws.LastUid, &ws.LastSubject, &receivedTxt, &updatedTxt)
 	if err == sql.ErrNoRows {
 		return WatchState{Alias: alias}, nil
 	}
 	if err != nil {
 		return WatchState{}, errtrace.Wrap(err, "get watch state")
 	}
-	if received.Valid {
-		ws.LastReceivedAt = received.Time
+	if receivedTxt.Valid && receivedTxt.String != "" {
+		t, perr := parseSqliteRFC3339(receivedTxt.String)
+		if perr != nil {
+			return WatchState{}, errtrace.Wrap(perr, "get watch state: parse LastReceivedAt")
+		}
+		ws.LastReceivedAt = t
+	}
+	if updatedTxt != "" {
+		t, perr := parseSqliteRFC3339(updatedTxt)
+		if perr != nil {
+			return WatchState{}, errtrace.Wrap(perr, "get watch state: parse UpdatedAt")
+		}
+		ws.UpdatedAt = t
 	}
 	return ws, nil
 }
