@@ -1,154 +1,141 @@
-// Package theme — aliases_test.go implements the AC-DS-05
-// "Test_Tokens_NoDuplicateValues" contract from
-// spec/24-app-design-system-and-ui/97-acceptance-criteria.md.
-//
-// 3-clause contract (per spec/24-…/01-tokens.md §2.12):
-//
-//  1. Pairwise scan: for every distinct (a, b) in AllColorNames() and
-//     every variant v ∈ {Dark, Light}, if palette[v][a] == palette[v][b]
-//     and (a, b) is NOT in NamedAliases for that variant's scope, fail.
-//
-//  2. Registered-alias parity: every NamedAliases row's RGB equality
-//     must hold in its declared scope. Asymmetric rows
-//     (DarkOnly/LightOnly) MUST also have the off-variant DIFFER —
-//     otherwise the row is misleading and should be promoted to
-//     AliasBoth.
-//
-//  3. Registry hygiene: no reflexive entries (A == B) and no duplicate
-//     rows (canonicalised unordered).
 package theme
 
 import (
 	"image/color"
+	"sort"
 	"testing"
 )
 
-// Test_Tokens_NoDuplicateValues — AC-DS-05.
+// Test_Tokens_NoDuplicateValues enforces AC-DS-05 (spec/24/01-tokens.md
+// §2.12): every duplicate-RGB pair across the Dark and Light palettes
+// MUST be registered in NamedAliases, and every registered alias MUST
+// actually hold per its declared scope.
+//
+// Three sub-tests so failures localize:
+//
+//   - clause1_pairwise — every observed duplicate is registered.
+//   - clause2_scope    — every registered alias holds; asymmetric scopes
+//                        are also asymmetric in the *other* variant.
+//   - clause3_hygiene  — registry has no reflexive or duplicate entries.
 func Test_Tokens_NoDuplicateValues(t *testing.T) {
-	// Registry hygiene first — bad registry rows would poison the
-	// lookup tables built from them.
-	checkRegistryHygiene(t)
-
-	// Build per-scope lookup sets keyed by canonicalised (A,B).
-	allowedDark := allowedPairsForVariant(AliasBoth, AliasDarkOnly)
-	allowedLight := allowedPairsForVariant(AliasBoth, AliasLightOnly)
-
-	// Clause 1 — pairwise scan.
-	scanForUnregisteredDuplicates(t, "Dark", paletteDark, allowedDark)
-	scanForUnregisteredDuplicates(t, "Light", paletteLight, allowedLight)
-
-	// Clause 2 — registered-alias parity (RGB equality + asymmetry).
-	checkRegisteredAliasParity(t)
-}
-
-// pairKey is the canonical (low, high) ColorName pair used as a map key.
-type pairKey struct{ A, B ColorName }
-
-func canonicalPair(a, b ColorName) pairKey {
-	if a < b {
-		return pairKey{a, b}
-	}
-	return pairKey{b, a}
-}
-
-// allowedPairsForVariant returns the set of canonical pairs that may
-// legally collide in the named variant's palette. Pass AliasBoth plus
-// the variant-specific scope (AliasDarkOnly or AliasLightOnly).
-func allowedPairsForVariant(scopes ...AliasScope) map[pairKey]bool {
-	want := map[AliasScope]bool{}
-	for _, s := range scopes {
-		want[s] = true
-	}
-	out := map[pairKey]bool{}
-	for _, al := range NamedAliases {
-		if !want[al.Scope] {
-			continue
+	t.Run("clause1_pairwise", func(t *testing.T) {
+		checkPairwise(t, "Dark", paletteDark, scopeCoversDark)
+		checkPairwise(t, "Light", paletteLight, scopeCoversLight)
+	})
+	t.Run("clause2_scope", func(t *testing.T) {
+		for _, a := range NamedAliases {
+			d1, d2 := paletteDark[a.From], paletteDark[a.To]
+			l1, l2 := paletteLight[a.From], paletteLight[a.To]
+			darkEq, lightEq := rgbEqual(d1, d2), rgbEqual(l1, l2)
+			switch a.Scope {
+			case AliasBoth:
+				if !darkEq {
+					t.Errorf("%s↔%s: scope=both but Dark RGBs differ "+
+						"(%v vs %v) — palette change broke the alias",
+						a.From, a.To, rgbTuple(d1), rgbTuple(d2))
+				}
+				if !lightEq {
+					t.Errorf("%s↔%s: scope=both but Light RGBs differ "+
+						"(%v vs %v) — palette change broke the alias",
+						a.From, a.To, rgbTuple(l1), rgbTuple(l2))
+				}
+			case AliasDarkOnly:
+				if !darkEq {
+					t.Errorf("%s↔%s: scope=darkOnly but Dark RGBs differ "+
+						"(%v vs %v)", a.From, a.To, rgbTuple(d1), rgbTuple(d2))
+				}
+				if lightEq {
+					t.Errorf("%s↔%s: scope=darkOnly but Light RGBs ALSO match "+
+						"(%v) — promote to AliasBoth or pick a distinct Light RGB",
+						a.From, a.To, rgbTuple(l1))
+				}
+			case AliasLightOnly:
+				if !lightEq {
+					t.Errorf("%s↔%s: scope=lightOnly but Light RGBs differ "+
+						"(%v vs %v)", a.From, a.To, rgbTuple(l1), rgbTuple(l2))
+				}
+				if darkEq {
+					t.Errorf("%s↔%s: scope=lightOnly but Dark RGBs ALSO match "+
+						"(%v) — promote to AliasBoth or pick a distinct Dark RGB",
+						a.From, a.To, rgbTuple(d1))
+				}
+			default:
+				t.Errorf("%s↔%s: unknown AliasScope value %d", a.From, a.To, a.Scope)
+			}
 		}
-		lo, hi := al.canonicalise()
-		out[pairKey{lo, hi}] = true
-	}
-	return out
+	})
+	t.Run("clause3_hygiene", func(t *testing.T) {
+		seen := map[[2]ColorName]int{}
+		for i, a := range NamedAliases {
+			if a.From == a.To {
+				t.Errorf("entry #%d: reflexive alias %s↔%s is forbidden",
+					i, a.From, a.To)
+				continue
+			}
+			x, y := canonicaliseAlias(a)
+			key := [2]ColorName{x, y}
+			if prev, ok := seen[key]; ok {
+				t.Errorf("entry #%d: duplicate alias %s↔%s "+
+					"(already declared at entry #%d)", i, a.From, a.To, prev)
+				continue
+			}
+			seen[key] = i
+		}
+	})
 }
 
-// scanForUnregisteredDuplicates implements clause 1.
-func scanForUnregisteredDuplicates(t *testing.T, label string, p map[ColorName]color.NRGBA, allowed map[pairKey]bool) {
+// checkPairwise scans every unordered pair of color tokens in `pal` and
+// fails for any duplicate RGB triple that is not covered by a registry
+// entry whose Scope satisfies `scopeOK`.
+func checkPairwise(t *testing.T, label string, pal map[ColorName]color.NRGBA,
+	scopeOK func(AliasScope) bool) {
 	t.Helper()
 	names := AllColorNames()
-	for i, a := range names {
-		for j := i + 1; j < len(names); j++ {
-			b := names[j]
-			if p[a] != p[b] {
-				continue
-			}
-			key := canonicalPair(a, b)
-			if allowed[key] {
-				continue
-			}
-			t.Errorf("AC-DS-05: %s palette has unregistered duplicate: "+
-				"%s and %s both map to %v. Either pick a distinct RGB "+
-				"or register the pair in NamedAliases (aliases.go) "+
-				"with a one-line rationale.",
-				label, a, b, p[a])
-		}
-	}
-}
+	// Stable iteration so failures sort deterministically.
+	sort.Slice(names, func(i, j int) bool { return names[i] < names[j] })
 
-// checkRegisteredAliasParity implements clause 2.
-func checkRegisteredAliasParity(t *testing.T) {
-	t.Helper()
-	for _, al := range NamedAliases {
-		dEq := paletteDark[al.A] == paletteDark[al.B]
-		lEq := paletteLight[al.A] == paletteLight[al.B]
-		switch al.Scope {
-		case AliasBoth:
-			if !dEq {
-				t.Errorf("NamedAliases[%s↔%s] scope=both but Dark differs: %v vs %v",
-					al.A, al.B, paletteDark[al.A], paletteDark[al.B])
-			}
-			if !lEq {
-				t.Errorf("NamedAliases[%s↔%s] scope=both but Light differs: %v vs %v",
-					al.A, al.B, paletteLight[al.A], paletteLight[al.B])
-			}
-		case AliasDarkOnly:
-			if !dEq {
-				t.Errorf("NamedAliases[%s↔%s] scope=darkOnly but Dark differs: %v vs %v",
-					al.A, al.B, paletteDark[al.A], paletteDark[al.B])
-			}
-			if lEq {
-				t.Errorf("NamedAliases[%s↔%s] scope=darkOnly but Light is also equal (%v) — "+
-					"promote to AliasBoth or pick a distinct Light RGB.",
-					al.A, al.B, paletteLight[al.A])
-			}
-		case AliasLightOnly:
-			if !lEq {
-				t.Errorf("NamedAliases[%s↔%s] scope=lightOnly but Light differs: %v vs %v",
-					al.A, al.B, paletteLight[al.A], paletteLight[al.B])
-			}
-			if dEq {
-				t.Errorf("NamedAliases[%s↔%s] scope=lightOnly but Dark is also equal (%v) — "+
-					"promote to AliasBoth or pick a distinct Dark RGB.",
-					al.A, al.B, paletteDark[al.A])
-			}
-		default:
-			t.Errorf("NamedAliases[%s↔%s] has unknown scope %d", al.A, al.B, al.Scope)
-		}
-	}
-}
-
-// checkRegistryHygiene implements clause 3.
-func checkRegistryHygiene(t *testing.T) {
-	t.Helper()
-	seen := map[pairKey]int{}
-	for i, al := range NamedAliases {
-		if al.A == al.B {
-			t.Errorf("NamedAliases[%d] is reflexive (%s == %s); reflexive entries are forbidden", i, al.A, al.B)
+	allowed := map[[2]ColorName]struct{}{}
+	for _, a := range NamedAliases {
+		if !scopeOK(a.Scope) {
 			continue
 		}
-		lo, hi := al.canonicalise()
-		key := pairKey{lo, hi}
-		if prev, dup := seen[key]; dup {
-			t.Errorf("NamedAliases[%d] duplicates row %d (canonical pair %s↔%s)", i, prev, lo, hi)
+		x, y := canonicaliseAlias(a)
+		allowed[[2]ColorName{x, y}] = struct{}{}
+	}
+
+	for i, a := range names {
+		ca, ok := pal[a]
+		if !ok {
+			continue
 		}
-		seen[key] = i
+		for _, b := range names[i+1:] {
+			cb, ok := pal[b]
+			if !ok {
+				continue
+			}
+			if !rgbEqual(ca, cb) {
+				continue
+			}
+			x, y := a, b
+			if x > y {
+				x, y = y, x
+			}
+			if _, ok := allowed[[2]ColorName{x, y}]; ok {
+				continue
+			}
+			t.Errorf("AC-DS-05 (%s): tokens %s and %s share RGB %v "+
+				"but no NamedAliases entry covers this variant — either "+
+				"pick a distinct value or register the alias in aliases.go",
+				label, a, b, rgbTuple(ca))
+		}
 	}
 }
+
+func scopeCoversDark(s AliasScope) bool  { return s == AliasBoth || s == AliasDarkOnly }
+func scopeCoversLight(s AliasScope) bool { return s == AliasBoth || s == AliasLightOnly }
+
+func rgbEqual(a, b color.NRGBA) bool {
+	return a.R == b.R && a.G == b.G && a.B == b.B
+}
+
+func rgbTuple(c color.NRGBA) [3]uint8 { return [3]uint8{c.R, c.G, c.B} }
