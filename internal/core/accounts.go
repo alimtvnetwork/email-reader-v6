@@ -195,7 +195,9 @@ func GetAccount(alias string) errtrace.Result[config.Account] {
 	return errtrace.Ok(*p)
 }
 
-// RemoveAccount deletes the account with the given alias.
+// RemoveAccount deletes the account with the given alias. If the alias
+// is part of config.DefaultSeedAccounts, a tombstone is recorded so it
+// is not re-seeded on the next Load.
 func RemoveAccount(alias string) errtrace.Result[struct{}] {
 	var result errtrace.Result[struct{}]
 	// CF-A2: Load+Remove+Save must be atomic vs Settings.Save and
@@ -220,6 +222,10 @@ func RemoveAccount(alias string) errtrace.Result[struct{}] {
 					WithContext("Alias", alias))
 			return
 		}
+		// Persist a tombstone so seeded defaults stay deleted across
+		// restarts. Best-effort: a failure here does not undo the
+		// successful removal — worst case the seed reappears next boot.
+		_ = config.MarkSeedDeleted(alias)
 		result = errtrace.Ok(struct{}{})
 	})
 	if result.HasError() {
