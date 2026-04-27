@@ -115,7 +115,7 @@ func BuildAccounts(opts AccountsOptions) fyne.CanvasObject {
 	)
 }
 
-func accountRow(a config.Account, ws store.WatchState, opts AccountsOptions, status *widget.Label, reload func()) fyne.CanvasObject {
+func accountRow(a config.Account, ws store.WatchState, health core.HealthLevel, opts AccountsOptions, status *widget.Label, reload func()) fyne.CanvasObject {
 	mailbox := a.Mailbox
 	if mailbox == "" {
 		mailbox = "INBOX"
@@ -130,17 +130,24 @@ func accountRow(a config.Account, ws store.WatchState, opts AccountsOptions, sta
 	email := widget.NewLabel(a.Email)
 	email.Wrapping = fyne.TextWrapBreak
 
+	// Per-row health badge — uses pure-Go formatter so the glyph set
+	// stays in sync with the dashboard rollup. Importance hint nudges
+	// the Fyne theme into rendering Error rows in red without
+	// hard-coding a colour (theme-respecting; survives dark/light).
+	healthLabel := widget.NewLabel(formatAccountHealthBadge(health))
+
 	editBtn := widget.NewButton("Edit", func() { openEditAccountDialog(a, opts, status, reload) })
 	delBtn := widget.NewButton("Delete", func() { confirmDeleteAccount(a, opts, status, reload) })
 	delBtn.Importance = widget.DangerImportance
 	actions := container.NewHBox(editBtn, delBtn)
 
-	return container.NewGridWithColumns(6,
+	return container.NewGridWithColumns(7,
 		widget.NewLabel(a.Alias),
 		email,
 		server,
 		widget.NewLabel(mailbox),
 		widget.NewLabel(lastUid),
+		healthLabel,
 		actions,
 	)
 }
