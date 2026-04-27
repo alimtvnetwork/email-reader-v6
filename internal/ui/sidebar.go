@@ -120,8 +120,13 @@ func NewSidebar(opts SidebarOptions) fyne.CanvasObject {
 		// returns). MarkRead doesn't fan out on the Subscribe
 		// channel, so refresh the list explicitly here so the
 		// "(N)" suffix vanishes the instant the view opens.
+		// Also reset the toast notifier's quiet-period flag so
+		// the next batch of errors fires a fresh toast.
 		if item.Kind == NavErrorLog {
 			list.Refresh()
+			if opts.OnErrorLogOpened != nil {
+				opts.OnErrorLogOpened()
+			}
 		}
 	}
 	// Pre-select the row matching state.Nav() (or the first nav row).
