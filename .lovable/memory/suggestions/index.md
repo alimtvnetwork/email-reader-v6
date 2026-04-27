@@ -8,5 +8,14 @@
 | 20260427-141503-update-feature-overview-status | ✅ closed (Slice #181) | low | Update feature index UI status `Planned` → `✅ Done` |
 | 20260427-141504-restate-watchevents-name-lock | ✅ closed (Slice #183 — added 🔒 callouts to §4 OpenedUrls + §5 WatchEvents in `spec/23-app-database/01-schema.md`, bumped to v1.0.1) | medium | Restate `WatchEvents` table-name lock in `23-app-database/01-schema.md` |
 | 20260427-141505-add-sandbox-feasibility-tag | ✅ closed (Slice #184 — legend + per-section tag in 9 AC files via deterministic script; risk-report Tier table cross-referenced) | medium | Add 🟢/🟡/🔴 sandbox-feasibility tag to each per-feature 97 file |
+| 20260427-155000-rotate-seeded-credentials-broader-scope | open (blocked on user policy verdict a/b/c — see Slice #185 finding) | **HIGH (security)** | Rotate seeded IMAP credentials — **plaintext password in `internal/config/seed.go` line 33** ships in binary |
 
 Archive: `.lovable/memory/suggestions/archive/` (empty).
+
+---
+
+## Slice #186 — Closed-via-test (no formal suggestion file)
+
+| Origin | Closed by |
+|---|---|
+| `.lovable/suggestions.md` "Add unit tests for rules edge cases" | ✅ Slice #186 — `internal/rules/edge_cases_test.go` (4 new tests covering invalid-regex no-panic, ampersand-URL not split, multi-URL open-all, case-sensitivity via inline `(?i)`). Inline `FIXME(rules.go)` comment flags latent `firstErr == nil` short-circuit bug for future fix. |
