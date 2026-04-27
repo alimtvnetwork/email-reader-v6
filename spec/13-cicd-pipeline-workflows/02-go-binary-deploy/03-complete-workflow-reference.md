@@ -333,7 +333,7 @@ jobs:
 |-------|---------------|
 | Checkout & Setup | [Shared Conventions](../01-shared-conventions.md) |
 | Version Resolution | [Shared Conventions — Version Resolution](../01-shared-conventions.md#version-resolution) |
-| Windows Resources | [Binary Icon Branding](../13-binary-icon-branding.md) |
+| Windows Resources | [Binary Icon Branding](../09-binary-icon-branding.md) |
 | Cross-Compilation | [Cross-Compilation](../../14-self-update-app-update/10-cross-compilation.md) |
 | Multi-Module Build | [Release Pipeline — Multiple Binaries](./02-release-pipeline.md#multiple-binaries-multi-module-build) |
 | Docs-Site Bundling | [Docs-Site Bundling](./02-release-pipeline.md#docs-site-bundling) |
