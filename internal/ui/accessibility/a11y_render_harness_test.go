@@ -136,6 +136,12 @@ var focusOrderAllowlistedViewFiles = map[string]struct{}{
 	// live in this file, so a `FocusOrder()` would have nothing to
 	// return.
 	"views/fixed_height.go": {},
+	// Pure layout helper — declares a `fyne.Layout` implementation
+	// (`fixedWidthLayout`) used by the Accounts table to pin the
+	// Actions column to a stable pixel width. No interactive widgets
+	// live in this file, so a `FocusOrder()` would have nothing to
+	// return.
+	"views/accounts_layout.go": {},
 }
 
 // Test_FocusOrder_Declared satisfies AC-DS-61 (every view declares
