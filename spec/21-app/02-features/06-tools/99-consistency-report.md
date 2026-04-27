@@ -50,19 +50,19 @@ External anchors:
 |------------------------------------------------------------|---------------------|-------------------------------------|---------|
 | Overview §3 — `core.Accounts` dep                          | overview            | `04-accounts/01-backend.md`         | ✅ Methods exist (`Get`, `List`, `Subscribe`) |
 | Overview §3 — `core.Emails` dep (export SELECT)            | overview            | `02-emails/01-backend.md`           | ✅ Schema available |
-| Overview §4.2 — `OpenedUrl` schema                         | overview            | `01-backend.md` §5 + `spec/23-app-database/` (Task #32) | ⚠ Forward-ref: schema mirrored verbatim in backend §5; canonical home moves to Task #32 |
+| Overview §4.2 — `OpenedUrl` schema                         | overview            | `01-backend.md` §5 + `spec/23-app-database/01-schema.md` §4 | ✅ Closed (OI-6 2026-04-27) — canonical home is `spec/23-app-database/01-schema.md` §4 (table `OpenedUrls` after Slice #137 pluralisation); backend §5 still mirrors for in-feature reading. |
 | Backend §2.4 — `core.Tools.OpenUrl` signature              | backend             | architecture §4.6                   | ✅ Match: `OpenUrl(ctx, raw string) errtrace.Result[Unit]` (overview/backend use richer `OpenUrlSpec`+`OpenUrlReport` — see §3 below) |
-| Backend §8 — error codes 21750–21769                       | backend             | `06-error-registry.md`              | ⚠ Forward-ref: codes 21750–21769 to be added in registry update (was previously empty in this range) |
+| Backend §8 — error codes 21750–21769                       | backend             | `internal/errtrace/codes.yaml` (`Tools` block) | ✅ Closed (OI-2 2026-04-27) — range uniquely allocated to the `Tools` block in `codes.yaml`; `ER-TLS` prefix is the historical Tools abbreviation, NOT TLS network protocol (clarifying comment added in-tree). |
 | Backend §8 — wraps `ER-EXP-*`, `ER-MAIL-*`, `ER-STO-21103`, `ER-COR-21703/21704` | backend | `06-error-registry.md` | ✅ All wrapped codes pre-existing |
-| Frontend §3 — design tokens (`ColorDiagStep*`, `ColorOpenUrl*`) | frontend         | `spec/24-app-design-system-and-ui/` (Task #33) | ⚠ Forward-ref to design system task |
+| Frontend §3 — design tokens (`ColorDiagStep*`, `ColorOpenUrl*`) | frontend         | `spec/24-app-design-system-and-ui/01-tokens.md` §2.9 + §2.10 | ✅ Closed (OI-1 2026-04-27) — DiagStep dots registered in §2.9, OpenUrl badges in §2.10; §2.11 totals bumped 39 → 47. |
 | Frontend §1.2 — `WatchRawLogCap` anchor                    | frontend            | `05-watch/02-frontend.md` §1.2      | ✅ Both equal 2000 |
-| Acceptance A-01 — AST scan over `internal/**/*.go`         | acceptance          | `linters/` toolchain                | ⚠ New lint script `linters/no-other-browser-launch.sh` to be added (test name reserved: `Tools_NoOtherFile_ShellsOutToBrowser`) |
+| Acceptance A-01 — AST scan over `internal/**/*.go`         | acceptance          | `linters/no-other-browser-launch.sh` + `linters/no-incognito-false.sh` | ✅ Closed (OI-5) — both lint scripts present in-tree; reserved test name `Tools_NoOtherFile_ShellsOutToBrowser` is the AST companion still owned by the lint toolchain. |
 | Acceptance A-04/A-05 — survives delete                     | acceptance          | `internal/store/` Account/Email delete impls | ✅ No FK by design (overview §4.2) |
 | Acceptance A-06 — Watch hyperlink path                     | acceptance          | `05-watch/97-acceptance-criteria.md` U-10 | ✅ Cross-referenced; same test name |
 | Acceptance A-07 — Rules engine path                        | acceptance          | `05-watch/01-backend.md` §3.6 + `03-rules/97-acceptance-criteria.md` F-22 | ✅ Both files describe the same path |
 | Acceptance A-08 — CLI path                                 | acceptance          | `internal/cli/` (Task #28-CLI parity)| ✅ CLI subcommand `email-read open-url` declared in overview §1 #8 |
 
-**Result:** ✅ All hard references resolve. Three ⚠ forward-references documented as scheduled tasks (registry update, design tokens, lint script).
+**Result:** ✅ All references resolve — every previous ⚠ forward-ref closed by OI-1/OI-2/OI-5/OI-6 on 2026-04-27.
 
 ---
 
@@ -89,7 +89,7 @@ func (t *Tools) OpenUrl(ctx context.Context, spec OpenUrlSpec) errtrace.Result[O
 | (missing) `RecentOpenedUrls`    | `RecentOpenedUrls(ctx, OpenedUrlListSpec) Result[[]OpenedUrlRow]` | Add to arch §4.6 |
 | (missing) `OnAccountUpdate`     | `OnAccountUpdate(ctx, alias) Result[Unit]` (internal)                | Add to arch §4.6 |
 
-**Verdict:** ⚠ One pending change in `07-architecture.md` §4.6, scheduled for Task #35. Tools spec is the new source of truth.
+**Verdict:** ✅ Closed (OI-4 2026-04-27) — `spec/21-app/07-architecture.md` §4.6 was updated in Slice #135 to list all 5 public Tools methods (`ReadOnce`, `ExportCsv`, `Diagnose`, `OpenUrl`, `RecentOpenedUrls`) plus the internal `OnAccountUpdate`. Tools spec remains the source of truth; architecture is now in lockstep.
 
 ---
 
@@ -300,12 +300,20 @@ All six closed (2026-04-27). No open issues remain in the Tools spec.
 
 A merge into `main` for the Tools feature requires:
 
-- [ ] Every checkbox in §1–§13 is ✅ (none ⚠ except OI-1..OI-6 which are scheduled).
-- [ ] CI green for every test in `97-acceptance-criteria.md`.
-- [ ] OI-1..OI-6 closed when corresponding tasks merge.
+**Structural (auto-verifiable, flipped by Slice #140 2026-04-27):**
+
+- [x] Every checkbox in §1–§13 is ✅ — verified 2026-04-27: zero `⚠`/`🟡`/`TODO`/`FIXME` markers remain in §1–§13 (Slice #140 grep). The five forward-refs in §2 and the one in §3 were closed by OI-1/OI-2/OI-4/OI-5/OI-6.
+- [x] OI-1..OI-6 closed — all six rows show ✅ Closed in §14 (closed across Slices #133/#134/#135/#136; cross-test F-23 headless half pinned by Slice #139).
+- [x] Headless cross-test contract for `RulesVM_TestRule_OpenUrl_OriginManualWithRuleName` exists — `core.OpenUrlSpecForTestRulePreview` + 4 sub-tests in `internal/core/rules_preview_test.go` (Slice #139). The Fyne-bound button + click-handler assertion remains owned by Slice #118e canvas harness.
+
+**Operational (require live CI + named human reviewers, NOT auto-flippable):**
+
+- [ ] CI green for every test in `97-acceptance-criteria.md` on the merge-target SHA.
 - [ ] Code owner review by Tools lead.
 - [ ] Security lead sign-off on §10 + the OpenUrl block (acceptance §4).
 - [ ] Product lead sign-off on the single-browser-launch invariant 🔴 (since it is THE audit promise).
+
+**Slice #140 attestation:** all auto-verifiable preconditions met. The four operational boxes above are intentionally left for the merging human — flipping them in this commit would falsify the audit trail.
 
 **Reviewed by:** _________________________   **Date:** ____________
 
