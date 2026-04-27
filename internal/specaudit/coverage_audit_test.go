@@ -108,6 +108,23 @@ var acIDPattern = regexp.MustCompile(`AC-(?:DB|DBP|DS|PROJ|SB|SF|SP|SX)-[A-Z0-9]
 // gaps at slice-#119 baseline.
 var templatePlaceholder = regexp.MustCompile(`-(?:NN|XX)$`)
 
+// namedPlaceholderIDs are spec tokens that look like real AC IDs
+// but are documented "next contiguous ID" pointers used in
+// authoring guidance prose, not real acceptance-criteria rows.
+// Filtering them at scan time (instead of allowlisting them as
+// "gaps") keeps the coverage denominator honest.
+//
+// Slice #146 added AC-PROJ-36 here. The string appears once in
+// `spec/21-app/97-acceptance-criteria.md` inside the prose
+// "If a future criterion would touch ≥ 2 features OR has no
+// obvious single owner, add it as **AC-PROJ-36** (next contiguous
+// ID) …". There is no `| AC-PROJ-36 | … |` table row anywhere in
+// the spec tree. When a future slice files a real AC-PROJ-36 row,
+// remove this entry in the same diff so the audit picks it up.
+var namedPlaceholderIDs = map[string]struct{}{
+	"AC-PROJ-36": {},
+}
+
 // scanIDs walks `root` recursively, opens every file matching
 // `accept(path)`, applies `acIDPattern` to the bytes, and returns
 // the deduplicated set of matches. Template placeholders are
@@ -137,6 +154,9 @@ func scanIDs(t *testing.T, root string, accept func(path string, info os.FileInf
 		for _, m := range acIDPattern.FindAll(raw, -1) {
 			id := string(m)
 			if templatePlaceholder.MatchString(id) {
+				continue
+			}
+			if _, isPlaceholder := namedPlaceholderIDs[id]; isPlaceholder {
 				continue
 			}
 			out[id] = struct{}{}
@@ -310,7 +330,8 @@ var coverageGapAllowlist = map[string]struct{}{
 	//
 	// Remaining gaps (01-11, 14-15) are end-to-end integration scenarios
 	// requiring a multi-process harness, deferred to a future slice.
-	// AC-PROJ-36 is a placeholder ID, not a real row.
+	// AC-PROJ-36 is now filtered at scan time as a documented
+	// placeholder ID (see namedPlaceholderIDs above) — Slice #146.
 	"AC-PROJ-01": {},
 	"AC-PROJ-02": {},
 	"AC-PROJ-03": {},
@@ -328,7 +349,6 @@ var coverageGapAllowlist = map[string]struct{}{
 	// in project_no_open_oi_test.go scans every feature 99-consistency-report.md
 	// and asserts every OI-N table row carries ✅ and no in-flight marker.
 	// All 8 OI rows across Tools (OI-1..OI-6) and Watch (OI-1, OI-2) are ✅ Closed.
-	"AC-PROJ-36": {},
 	// Slice #126 closed AC-SB-01/02/11/15/16/17/19/22 by tagging the
 	// existing settings backend tests with their AC-SB IDs (no new
 	// test code — those rows were already covered by tests under
