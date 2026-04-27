@@ -183,12 +183,20 @@ func (w *Watch) Subscribe() <-chan WatchEvent  // closed on Stop
 
 ### 4.6 `core.Tools`
 
-```go
-type Tools struct{ /* Store, Exporter, Browser */ }
+Canonical surface — see `02-features/06-tools/01-backend.md` §2 for full contracts.
 
-func (t *Tools) Export(ctx context.Context, spec ExportSpec) errtrace.Result[ExportReport]
-func (t *Tools) Diagnose(ctx context.Context) errtrace.Result[DiagnosticsReport]
-func (t *Tools) OpenUrl(ctx context.Context, raw string) errtrace.Result[Unit]
+```go
+type Tools struct{ /* Store, Mailcli, Exporter, Browser, Accounts, Paths, Cfg, Clock, EventBus */ }
+
+// Public API (5 methods)
+func (t *Tools) ReadOnce(ctx context.Context, spec ReadSpec, progress chan<- string) errtrace.Result[ReadResult]
+func (t *Tools) ExportCsv(ctx context.Context, spec ExportSpec, progress chan<- ExportProgress) errtrace.Result[ExportReport]
+func (t *Tools) Diagnose(ctx context.Context, spec DiagnoseSpec, progress chan<- DiagnosticsStep) errtrace.Result[DiagnosticsReport]
+func (t *Tools) OpenUrl(ctx context.Context, spec OpenUrlSpec) errtrace.Result[OpenUrlReport]
+func (t *Tools) RecentOpenedUrls(ctx context.Context, spec OpenedUrlListSpec) errtrace.Result[[]OpenedUrlRow]
+
+// Internal (event-bus subscriber, 1 method)
+func (t *Tools) OnAccountUpdate(ctx context.Context, alias string) errtrace.Result[Unit]
 ```
 
 ### 4.7 `core.Settings`
