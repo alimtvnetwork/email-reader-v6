@@ -181,6 +181,11 @@ func TestStore_EnablePersistence_RingCapTrimsPrior(t *testing.T) {
 func TestEnableDefaultPersistence_RestoresAcrossInstances(t *testing.T) {
 	// Use a fresh process-wide singleton state by Clearing first.
 	Clear()
+	// Restore singleton to a pristine state when this test exits so a
+	// later test (or a `-count=2` re-run of this same binary) does not
+	// observe a dangling persister pointing at a now-closed file —
+	// that used to nil-deref bufio.Writer in Persistence.Write.
+	t.Cleanup(resetSingletonForTest)
 	dir := t.TempDir()
 	path := filepath.Join(dir, "subdir", "error-log.jsonl") // exercises MkdirAll
 
