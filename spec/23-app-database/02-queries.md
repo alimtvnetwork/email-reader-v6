@@ -102,34 +102,29 @@ RETURNING Id;
 
 ### 3.2 `Q-EMAIL-LIST` — read
 
-List/filter for the Emails view. Pagination via keyset on `(ReceivedAt, Id)`.
+List/filter for the Emails view. Pagination via `LIMIT/OFFSET` keyed off the per-alias monotonic `Uid` (a per-alias autoincrement), with `Id` as the deterministic tiebreaker. Production composes the WHERE clause dynamically from `EmailsListInput{Alias, Search, Limit, Offset}` (see `internal/store/queries/queries.go::EmailsList`).
 
 ```sql
 SELECT Id, Alias, MessageId, Uid, FromAddr, ToAddr, CcAddr,
-       Subject, ReceivedAt, FilePath, HasAttachment, CreatedAt
+       Subject, BodyText, BodyHtml, ReceivedAt, FilePath, CreatedAt,
+       IsRead, DeletedAt
 FROM Emails
-WHERE (:Alias = '' OR Alias = :Alias)
-  AND (:Q     = '' OR (Subject LIKE :QLike OR FromAddr LIKE :QLike))
-  AND (:Since IS NULL OR ReceivedAt >= :Since)
-  AND (:CursorReceivedAt IS NULL
-       OR ReceivedAt < :CursorReceivedAt
-       OR (ReceivedAt = :CursorReceivedAt AND Id < :CursorId))
-ORDER BY ReceivedAt DESC, Id DESC
-LIMIT :Limit;
+WHERE (:Alias  = '' OR Alias = :Alias)
+  AND (:Search = '' OR (LOWER(Subject) LIKE :SearchLike OR LOWER(FromAddr) LIKE :SearchLike))
+ORDER BY Uid DESC, Id DESC
+LIMIT :Limit OFFSET :Offset;
 ```
 
 | Param | Type | Notes |
 |---|---|---|
-| `:Alias` | string | empty = all |
-| `:Q` | string | search term |
-| `:QLike` | string | `'%'+escapeLike(Q)+'%'` |
-| `:Since` | RFC 3339 / NULL | optional lower bound |
-| `:CursorReceivedAt` | RFC 3339 / NULL | keyset cursor |
-| `:CursorId` | int64 / NULL | keyset cursor |
-| `:Limit` | int | 1..200 (per `02-emails/01-backend.md`) |
+| `:Alias` | string | empty = all aliases |
+| `:Search` | string | search term (case-folded) |
+| `:SearchLike` | string | `'%'+strings.ToLower(Search)+'%'` |
+| `:Limit` | int | required, > 0 (per `02-emails/01-backend.md`) |
+| `:Offset` | int | ≥ 0; only emitted when `Limit > 0` |
 
 **Tx:** none (read).
-**Index used:** `IxEmailsAliasUid` (m0002) when `:Alias != ''` — the leading-column match plus the implicit `Id` rowid covers the keyset cursor's secondary ordering. When `:Alias = ''`, the planner falls back to a full `SCAN Emails` filtered in-memory; that's accepted today because the Emails row count is bounded by the retention policy (§3 of `01-schema.md`). The `IsRead` predicate has no dedicated index — see `internal/store/queries/queries.go` notes on `EmailsCountUnreadAll`. Verified by the perf-budget test in `internal/store/perf_test.go`.
+**Index used:** `IxEmailsAliasUid` (m0002) when `:Alias != ''` — the leading `Alias` column drives the seek, and the index's secondary `Uid DESC` order matches the `ORDER BY Uid DESC` directly so SQLite skips the temp B-tree sort. When `:Alias = ''`, the planner falls back to a full `SCAN Emails` and an in-memory sort; that's accepted today because the Emails row count is bounded by the retention policy (§4 of `01-schema.md`). The `IsRead` predicate (driven by sibling query `EmailsCountUnreadAll`) has no dedicated index — counting the ~10² unread tail across all aliases stays under the perf budget. Verified by `internal/store/perf_test.go`.
 
 ### 3.3 `Q-EMAIL-GET-BY-ID` — read
 
@@ -155,44 +150,46 @@ GROUP BY Alias;
 ### 3.5 `Q-WATCH-GET` — read
 
 ```sql
-SELECT Alias, LastUid, LastMessageId, LastSubject, LastReceivedAt,
-       LastPolledAt, LastErrorCode, UpdatedAt
+SELECT Alias, LastUid, LastSubject, LastReceivedAt, UpdatedAt
 FROM WatchState
 WHERE Alias = :Alias;
 ```
 
-**Returns:** zero or one row. Watch backend treats "not found" as `LastUid = 0`.
+**Returns:** zero or one row. Watch backend treats "not found" as `LastUid = 0`. The m0014 `ConsecutiveFailures` counter is **not** projected here — it is read on its own dedicated path by `core.ComputeHealth` via `AccountHealthSelectAll` (see queries.go §AccountHealth). Keeping `Q-WATCH-GET` minimal preserves the per-poll cost ceiling (≤ 1 ms in §5).
 
 ### 3.6 `Q-WATCH-UPSERT` — write
 
 ```sql
-INSERT INTO WatchState (
-    Alias, LastUid, LastMessageId, LastSubject, LastReceivedAt,
-    LastPolledAt, LastErrorCode, UpdatedAt
-) VALUES (
-    :Alias, :LastUid, :LastMessageId, :LastSubject, :LastReceivedAt,
-    :LastPolledAt, :LastErrorCode, :UpdatedAt
-)
+INSERT INTO WatchState (Alias, LastUid, LastSubject, LastReceivedAt, UpdatedAt)
+VALUES (:Alias, :LastUid, :LastSubject, :LastReceivedAt, <NOW>)
 ON CONFLICT (Alias) DO UPDATE SET
-    LastUid        = MAX(WatchState.LastUid, excluded.LastUid),  -- monotonic
-    LastMessageId  = excluded.LastMessageId,
+    LastUid        = excluded.LastUid,
     LastSubject    = excluded.LastSubject,
     LastReceivedAt = excluded.LastReceivedAt,
-    LastPolledAt   = excluded.LastPolledAt,
-    LastErrorCode  = excluded.LastErrorCode,
-    UpdatedAt      = excluded.UpdatedAt;
+    UpdatedAt      = <NOW>;
 ```
 
-The `MAX(...)` clause enforces invariant W-3 from `01-schema.md` §3 at the SQL level — a stale-write race cannot rewind `LastUid`.
+`<NOW>` is the canonical SQLite RFC3339 expression `strftime('%Y-%m-%dT%H:%M:%fZ','now')` injected by `internal/store/datetime.go::sqliteRFC3339NowExpr` so the queries package stays dialect-agnostic.
+
+**Monotonic-`LastUid` invariant** — production does **not** wrap `excluded.LastUid` in `MAX(WatchState.LastUid, excluded.LastUid)`. The Go-side caller (`internal/watcher`) asserts `new >= old` before issuing the UPSERT and emits `ER-WCH-21413` on a regression (per `01-schema.md` §3 invariant W-3 + Slice #156). Pushing the guard into SQL was rejected because (a) it would mask a logic bug rather than surface it as a coded error, and (b) the runtime assertion is already covered by `Test_Watcher_LastUidMonotonic`.
+
+**Companion writes (failure path)** — the m0014 `ConsecutiveFailures` counter has its own paired entry points:
+- `WatchStateBumpFailures` — UPSERT that seeds `ConsecutiveFailures = 1` on first-boot connect failure or increments on subsequent errors. Kept separate from `Q-WATCH-UPSERT` so success-path callers don't need to know whether the call site is a poll-outcome boundary.
+- `WatchStateResetFailures` — plain UPDATE zeroing the counter on a successful poll.
+
+Both expose the same `nowExpr` parameter shape.
 
 ### 3.7 `Q-WATCH-LIST` — read
 
+`Q-WATCH-LIST` is **not** a standalone query in production today — the Dashboard's per-alias status panel reads through the `AccountHealthSelectAll` rollup (see `internal/store/queries/queries.go`), which `LEFT JOIN`s `WatchState` against the union of aliases seen in `WatchEvents ∪ Emails ∪ WatchState`. The minimal projection a future direct caller would use is:
+
 ```sql
-SELECT Alias, LastUid, LastSubject, LastReceivedAt,
-       LastPolledAt, LastErrorCode, UpdatedAt
+SELECT Alias, LastUid, LastSubject, LastReceivedAt, UpdatedAt
 FROM WatchState
 ORDER BY Alias ASC;
 ```
+
+Adding a real implementation requires bumping the inventory in §2 and registering the function in `queries.go`.
 
 ### 3.8 `Q-OPEN-DEDUP` — read
 
