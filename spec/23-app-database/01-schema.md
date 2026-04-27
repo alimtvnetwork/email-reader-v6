@@ -108,6 +108,8 @@ CREATE        INDEX IX_Emails_Alias_Received  ON Emails (Alias, ReceivedAt DESC)
 
 Per-alias high-water mark + last-seen metadata. Read at the start of every poll cycle, written at the end. Owned exclusively by the Watch backend.
 
+> **Drift notice (Slice #137).** The DDL block below shows the **logical** shape (with `LastMessageId`, `LastPolledAt`, `LastErrorCode`). The **canonical, in-database** shape is whatever `internal/store/migrate/m0003_watch_state_table.go` (+ additive `m0014_watchstate_consecutive_failures.go`) emits. m0003 currently lacks `LastMessageId`/`LastPolledAt`/`LastErrorCode`; m0014 added `ConsecutiveFailures` (not reflected here). Bringing the two into alignment is part of the deferred "schema-evolution work" backlog. The table **name** (singular — singleton-per-key state, per the §1 verdict matrix) is authoritative.
+
 ```sql
 CREATE TABLE WatchState (
     Alias          TEXT     PRIMARY KEY,
