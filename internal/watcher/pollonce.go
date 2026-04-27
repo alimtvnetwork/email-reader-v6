@@ -36,10 +36,11 @@ package watcher
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"log"
 	"sync"
+
+	"github.com/lovable/email-read/internal/errtrace"
 )
 
 // Watcher is the alias-indexed Refresher implementation that satisfies
@@ -63,7 +64,7 @@ func NewWatcher() *Watcher {
 func (w *Watcher) Register(opts Options) error {
 	alias := opts.Account.Alias
 	if alias == "" {
-		return fmt.Errorf("watcher.Register: Options.Account.Alias is empty")
+		return errtrace.New("watcher.Register: Options.Account.Alias is empty")
 	}
 	w.mu.Lock()
 	w.accounts[alias] = opts
@@ -86,12 +87,16 @@ func (w *Watcher) PollOnce(ctx context.Context, alias string) error {
 	opts, ok := w.accounts[alias]
 	w.mu.RUnlock()
 	if !ok {
-		return fmt.Errorf("watcher.PollOnce: no account registered for alias %q", alias)
+		return errtrace.Errorf("watcher.PollOnce: no account registered for alias %q", alias)
 	}
 	logger := opts.Logger
 	if logger == nil {
 		logger = log.New(io.Discard, "", 0)
 	}
 	_, err := pollOnce(ctx, opts, logger)
-	return err
+	// Wrap so the watcher.PollOnce frame is captured even when
+	// pollOnce returned a plain error from a downstream library
+	// (mailclient.Dial, store ops, …). Phase 2.1 of the
+	// error-trace logging upgrade.
+	return errtrace.Wrap(err, "watcher.PollOnce")
 }

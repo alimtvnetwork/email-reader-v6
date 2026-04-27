@@ -101,3 +101,17 @@ notifier's quiet-period flag).
   green. (Pre-existing failures in `internal/core` from the seeded
   Attobond account polluting fresh-dir tests are orthogonal — not
   introduced by this slice.)
+
+## Phase 2.1 — watcher/pollonce.go migrated (2026-04-27)
+
+3 sites converted to errtrace:
+- L66 `Register`: `fmt.Errorf` → `errtrace.New` (no cause).
+- L89 `PollOnce` no-account: `fmt.Errorf("…%q", alias)` → `errtrace.Errorf`.
+- L96 bare `return err` → `errtrace.Wrap(err, "watcher.PollOnce")`
+  (nil-safe, so the success path stays nil).
+
+Linter delta: `check-no-fmt-errorf` 18 → **16**;
+`check-no-bare-return-err` 24 → **23**; `check-no-errors-new` 4
+(unchanged). Total 46 → **43**.
+
+Watcher tests + UI tests still green under `-tags nofyne`.
