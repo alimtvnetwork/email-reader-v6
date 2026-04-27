@@ -130,6 +130,12 @@ var focusOrderAllowlistedViewFiles = map[string]struct{}{
 	// which already participate in Fyne's default focus order.
 	// No bespoke FocusOrder() needed.
 	"views/error_log.go": {},
+	// Pure layout helper — declares a `fyne.Layout` implementation
+	// (`fixedHeightLayout`) used to reserve a stable vertical slot
+	// for `widget.List` inside the dashboard. No interactive widgets
+	// live in this file, so a `FocusOrder()` would have nothing to
+	// return.
+	"views/fixed_height.go": {},
 }
 
 // Test_FocusOrder_Declared satisfies AC-DS-61 (every view declares

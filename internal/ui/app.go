@@ -253,10 +253,33 @@ func BuildShell(aliases []string) fyne.CanvasObject {
 		state.SetNav(k)
 		rebuildDetail()
 	}
+	// viewCache memoises one fyne.CanvasObject per nav kind so flipping
+	// between Dashboard / Accounts / Rules / Emails / Tools reuses the
+	// already-constructed widget tree instead of rebuilding (and re-
+	// subscribing every Settings/Watcher consumer) on every click. That
+	// rebuild on each click was the visible "flicker" the user reported.
+	//
+	// The cache is invalidated by `rebuildShell` (alias added/removed)
+	// and by an explicit `state` alias change — both already trigger a
+	// full refresh, so cached views stay in sync with truth.
+	viewCache := map[NavKind]fyne.CanvasObject{}
+	invalidateViewCache := func() {
+		for k := range viewCache {
+			delete(viewCache, k)
+		}
+	}
 	rebuildDetail = func() {
+		k := state.Nav()
+		if cached, ok := viewCache[k]; ok {
+			detail.Objects = []fyne.CanvasObject{cached}
+			detail.Refresh()
+			return
+		}
 		for _, it := range NavItems {
-			if it.Kind == state.Nav() {
-				detail.Objects = []fyne.CanvasObject{viewFor(it, state, services, gotoNav, rebuildShell)}
+			if it.Kind == k {
+				v := viewFor(it, state, services, gotoNav, rebuildShell)
+				viewCache[k] = v
+				detail.Objects = []fyne.CanvasObject{v}
 				detail.Refresh()
 				return
 			}
@@ -265,6 +288,7 @@ func BuildShell(aliases []string) fyne.CanvasObject {
 
 	rebuildShell = func() {
 		freshAliases := LoadAliases()
+		invalidateViewCache()
 		sidebar := NewSidebar(SidebarOptions{
 			State:            state,
 			Aliases:          freshAliases,
@@ -279,9 +303,11 @@ func BuildShell(aliases []string) fyne.CanvasObject {
 	}
 
 	// Re-render the active view if the alias changes so views always reflect
-	// the currently selected account.
+	// the currently selected account. Cache is dropped because alias is an
+	// implicit dependency of every viewFor arm.
 	state.Subscribe(func(ev AppStateEvent) {
 		if ev.PrevAlias != ev.Alias {
+			invalidateViewCache()
 			rebuildDetail()
 		}
 	})

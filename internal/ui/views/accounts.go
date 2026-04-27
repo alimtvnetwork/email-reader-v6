@@ -16,6 +16,7 @@ import (
 	"github.com/lovable/email-read/internal/core"
 	"github.com/lovable/email-read/internal/errtrace"
 	"github.com/lovable/email-read/internal/store"
+	"github.com/lovable/email-read/internal/ui/theme"
 )
 
 // AccountsOptions wires the Accounts table to its data + side effects.
@@ -141,10 +142,20 @@ func accountRow(a config.Account, ws store.WatchState, health core.HealthLevel, 
 	// hard-coding a colour (theme-respecting; survives dark/light).
 	healthLabel := widget.NewLabel(formatAccountHealthBadge(health))
 
-	editBtn := widget.NewButton("Edit", func() { openEditAccountDialog(a, opts, status, reload) })
-	delBtn := widget.NewButton("Delete", func() { confirmDeleteAccount(a, opts, status, reload) })
+	// Icon-led action buttons keep the column compact and visually
+	// consistent (Edit = pencil, Delete = trash). Importance hints
+	// recolor the buttons via the active theme so they stay legible
+	// in light + dark modes without hard-coding HSL.
+	editBtn := widget.NewButtonWithIcon("Edit", theme.IconEdit(),
+		func() { openEditAccountDialog(a, opts, status, reload) })
+	editBtn.Importance = widget.MediumImportance
+	delBtn := widget.NewButtonWithIcon("Delete", theme.IconDelete(),
+		func() { confirmDeleteAccount(a, opts, status, reload) })
 	delBtn.Importance = widget.DangerImportance
-	actions := container.NewHBox(editBtn, delBtn)
+	// GridWithColumns(2) gives both buttons identical width so the
+	// Actions column reads as one tidy pair instead of the uneven
+	// HBox the user saw in the screenshot.
+	actions := container.NewGridWithColumns(2, editBtn, delBtn)
 
 	return container.NewGridWithColumns(7,
 		widget.NewLabel(a.Alias),

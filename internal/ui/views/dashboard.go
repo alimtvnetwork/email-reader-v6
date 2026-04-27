@@ -87,7 +87,13 @@ func BuildDashboard(opts DashboardOptions) fyne.CanvasObject {
 	activityErr := widget.NewLabel("")
 	activityErr.Wrapping = fyne.TextWrapWord
 	activityErr.Hide()
-	activityBox := container.NewVBox(activityHeader, activityErr, activityList)
+	// Wrap the virtualised list in a fixed-height slot so the parent
+	// VBox reserves `activityListMaxHeight` pixels for it regardless
+	// of how many rows it currently holds. Without this, `widget.List`
+	// reports a 1-row MinSize and the rows visually overlap whatever
+	// widget VBox places below the list (the live-counters tile row).
+	activityListSlot := container.New(fixedHeightLayout{Height: activityListMaxHeight}, activityList)
+	activityBox := container.NewVBox(activityHeader, activityErr, activityListSlot)
 
 	autoStart := newAutoStartIndicator()
 	refresh := makeDashboardRefresh(opts, cards, status)
@@ -265,10 +271,10 @@ func makeDashboardActivityRefresh(opts DashboardOptions, rows *[]core.ActivityRo
 		}
 		header.SetText("Recent activity:")
 		header.Show()
-		// Cap height so 10 rows don't push the rest of the dashboard
-		// off-screen on a small window. Width is left to the parent
-		// VBox so the list grows horizontally with the window.
-		list.Resize(fyne.NewSize(list.Size().Width, activityListMaxHeight))
+		// Height is reserved by the parent fixedHeightLayout slot
+		// (see BuildDashboard) — no need to Resize the list here;
+		// doing so fought the parent layout and produced the visual
+		// overlap with the live-counters row below.
 		list.Show()
 		list.Refresh()
 	}

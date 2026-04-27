@@ -82,6 +82,16 @@ func (AppTheme) Icon(n fyne.ThemeIconName) fyne.Resource {
 	return fynetheme.DefaultTheme().Icon(n)
 }
 
+// IconEdit returns the canonical "edit / pencil" icon resource.
+// Exposed so non-theme packages can use built-in Fyne icons without
+// importing fyne.io/fyne/v2/theme directly (AST-T2 enforcement —
+// see ast_test.go).
+func IconEdit() fyne.Resource { return fynetheme.DocumentCreateIcon() }
+
+// IconDelete returns the canonical "delete / trash" icon resource.
+// See IconEdit for why this lives here instead of in callers.
+func IconDelete() fyne.Resource { return fynetheme.DeleteIcon() }
+
 // Size routes Fyne's built-in size names to our typography + spacing
 // scale (01-tokens.md §3 / §4) honoring the active density. Names with
 // no spec equivalent (e.g. ScrollBar, Separator) fall through to Fyne
