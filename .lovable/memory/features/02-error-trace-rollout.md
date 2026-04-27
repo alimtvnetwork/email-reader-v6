@@ -164,3 +164,38 @@ Linter delta: `check-no-fmt-errorf` 3 → **0** ✅ (target cleared).
 `check-no-errors-new` 4 (unchanged). Total **30 → 27**.
 
 `go vet -tags nofyne ./internal/ui/views/...` clean; views tests green.
+
+## Phase 2.5 — bare `return err` wrap pass complete (2026-04-27)
+
+23 sites wrapped across 8 files, all with `errtrace.Wrap(err, "<func>: <step>")`.
+All wraps are nil-safe (errtrace.Wrap returns nil on nil err) so success
+paths remain unchanged.
+
+| File | Sites | Wrap context labels |
+|---|---|---|
+| `internal/core/settings_validate.go` | 8 | `validateInput.{PollSeconds,Theme,Density,Schemes,ChromePath,IncognitoArg,RetentionDays,MaintenanceKnobs}` |
+| `internal/config/seed.go` | 4 | `MarkSeedDeleted.{loadTombstones,marshal,tombstonePath,writeTmp}` (+ rename now wrapped via expression form) |
+| `internal/cli/rules_export.go` | 3 | `rules.add: rulesService`, `rules.list: rulesService`, `rules.toggle: rulesService` |
+| `internal/cli/cli.go` | 3 | `runWatch: resolveWatchAccount`, `runAdd: promptAddIdentity`, `runAdd: promptAddServer` |
+| `internal/ui/watch_runtime.go` | 2 | `watch_runtime: buildLoopFactory`, `watch_runtime: attachWatchAndBridge` |
+| `internal/browser/browser.go` | 1 | `browser.Open: resolve path` |
+| `internal/core/settings.go` | 1 | `saveRaw: readConfigAsMap` |
+| `internal/ui/services.go` | 1 | `openURLAdapter: browser factory` (+ launcher.Open also wrapped) |
+
+Imports: added `errtrace` to `seed.go` and `rules_export.go`; the other
+six files already imported it.
+
+Linter delta: `check-no-bare-return-err` 23 → **0** ✅ (target cleared).
+`check-no-fmt-errorf` 0. `check-no-errors-new` 4 (unchanged).
+**Total backlog 27 → 4** — only the 4 `errors.New` sites remain
+before flipping `LINT_MODE=fail`.
+
+`go vet -tags nofyne ./...` clean. Tests green for
+`internal/{config,cli,browser,ui,ui/views,ui/accessibility,ui/errlog,ui/theme}`.
+`internal/core` shows the same two pre-existing seed-pollution
+failures (`TestSettings_Save_UnknownKeys_Untouched`,
+`TestSettings_SavePreservesAccountsAndRules`,
+`TestDiagnose_NoAccounts`) documented in the Phase 1.5 memory entry —
+not introduced by this slice (errtrace.Wrap is nil-safe and the
+saveRaw success path is unchanged). Those failures will be cleaned up
+in a future slice tracking `withIsolatedConfig`/seed bleed-through.
