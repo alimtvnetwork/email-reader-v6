@@ -124,6 +124,12 @@ var focusOrderAllowlistedViewFiles = map[string]struct{}{
 	"views/tools_recent_opens_format.go": {},
 	"views/watch.go":                     {},
 	"views/watch_events.go":              {},
+	// Phase 3.3 — Diagnostics → Error Log. The view is a
+	// passive log surface (list of past errors + Copy / Clear
+	// buttons), built with stock widget.List and widget.Button
+	// which already participate in Fyne's default focus order.
+	// No bespoke FocusOrder() needed.
+	"views/error_log.go": {},
 }
 
 // Test_FocusOrder_Declared satisfies AC-DS-61 (every view declares

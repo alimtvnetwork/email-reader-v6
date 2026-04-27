@@ -43,18 +43,46 @@ func NewSidebar(opts SidebarOptions) fyne.CanvasObject {
 		}
 	}
 
+	// The list renders one row per NavItem, plus an italic group header
+	// row whenever the Group changes. We model this by computing a
+	// flat row slice up front: each row is either a header (groupRow)
+	// or a real nav row pointing at NavItems[i].
+	rows := buildSidebarRows(NavItems)
+
 	list := widget.NewList(
-		func() int { return len(NavItems) },
+		func() int { return len(rows) },
 		func() fyne.CanvasObject { return widget.NewLabel("template") },
 		func(i widget.ListItemID, o fyne.CanvasObject) {
-			o.(*widget.Label).SetText(NavItems[i].Title)
+			lbl := o.(*widget.Label)
+			r := rows[i]
+			if r.header != "" {
+				lbl.SetText(r.header)
+				lbl.TextStyle = fyne.TextStyle{Italic: true, Bold: true}
+			} else {
+				lbl.SetText(NavItems[r.navIdx].Title)
+				lbl.TextStyle = fyne.TextStyle{}
+			}
+			lbl.Refresh()
 		},
 	)
 	list.OnSelected = func(i widget.ListItemID) {
-		if i < 0 || i >= len(NavItems) {
+		if i < 0 || i >= len(rows) {
 			return
 		}
-		item := NavItems[i]
+		r := rows[i]
+		if r.header != "" {
+			// Headers aren't selectable destinations — bounce
+			// back to the first selectable row that comes after
+			// it so the UI never lands on an empty pane.
+			for j := i + 1; j < len(rows); j++ {
+				if rows[j].header == "" {
+					list.Select(j)
+					return
+				}
+			}
+			return
+		}
+		item := NavItems[r.navIdx]
 		if opts.State != nil {
 			opts.State.SetNav(item.Kind)
 		}
@@ -62,11 +90,11 @@ func NewSidebar(opts SidebarOptions) fyne.CanvasObject {
 			opts.OnSelectNav(item)
 		}
 	}
-	// Pre-select the row matching state.Nav() (or the first row).
-	preIdx := 0
+	// Pre-select the row matching state.Nav() (or the first nav row).
+	preIdx := firstNavRow(rows)
 	if opts.State != nil {
-		for i, it := range NavItems {
-			if it.Kind == opts.State.Nav() {
+		for i, r := range rows {
+			if r.header == "" && NavItems[r.navIdx].Kind == opts.State.Nav() {
 				preIdx = i
 				break
 			}
