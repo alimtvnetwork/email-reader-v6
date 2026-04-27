@@ -26,7 +26,7 @@ Root index for the entire specification tree. Each top-level folder contains a d
 | 05 | [Split DB Architecture](./05-split-db-architecture/00-overview.md) | SQLite partitioning and migration patterns |
 | 06 | [Seedable Config (CW Config)](./06-seedable-config-architecture/00-overview.md) | Configuration seeding and feature management |
 | 07 | [Design System](./07-design-system/00-overview.md) | Theme variables, typography, spacing, and component patterns |
-| 08 | [Docs Viewer UI](./08-docs-viewer-ui/00-overview.md) | Specification viewer React application |
+| 08 | Docs Viewer UI _(retired — module removed from this repo; viewer lives in the docs-platform tree)_ | Specification viewer React application |
 | 09 | [Code Block System](./09-code-block-system/00-overview.md) | Rich code block rendering — syntax highlighting, interactions, styling |
 | 10 | [PowerShell Integration](./10-powershell-integration/00-overview.md) | PowerShell scripting conventions, cross-platform automation |
 | 11 | [Research](./11-research/00-overview.md) | Comparative studies, technology evaluations, exploratory notes |

@@ -134,7 +134,7 @@ The canonical ESLint configuration lives at `eslint.config.js` in the project ro
 ## Cross-References
 
 - [ESLint Config](../../../eslint.config.js) — Active rule set
-- [Custom Plugin Source](../../../eslint-plugins/coding-guidelines/index.js) — Rule implementations
+- Custom Plugin Source: `eslint-plugins/coding-guidelines/index.js` — Rule implementations (lives outside this spec tree)
 - [Promise Patterns](./09-promise-await-patterns.md) — Promise.all enforcement rationale
 - [TS Standards Reference](./08-typescript-standards-reference.md) — Full TypeScript rules
 - [Cross-Language Code Style](../01-cross-language/04-code-style/00-overview.md) — Formatting rules

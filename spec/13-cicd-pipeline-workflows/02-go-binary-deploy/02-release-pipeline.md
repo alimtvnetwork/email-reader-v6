@@ -89,7 +89,7 @@ Before compilation, generate Windows resource files with `go-winres make` (not `
     ls -la rsrc_windows_*.syso
 ```
 
-This generates `.syso` resource files that `go build` links automatically when `GOOS=windows`. The `winres.json` in the module root defines the icon and manifest. See [Binary Icon Branding](../13-binary-icon-branding.md) for full `winres.json` schema.
+This generates `.syso` resource files that `go build` links automatically when `GOOS=windows`. The `winres.json` in the module root defines the icon and manifest. See [Binary Icon Branding](../09-binary-icon-branding.md) for full `winres.json` schema.
 
 ### Multiple Binaries (Multi-Module Build)
 
@@ -370,7 +370,7 @@ fi
 - [Install Script Generation](../04-install-script-generation.md) — Placeholder strategy, PS1/Bash installers
 - [Code Signing](../05-code-signing.md) — SignPath integration, pipeline placement
 - [Release Body and Changelog](../07-release-body-and-changelog.md) — Changelog extraction, body template
-- [Binary Icon Branding](../13-binary-icon-branding.md) — `go-winres make` and version injection
+- [Binary Icon Branding](../09-binary-icon-branding.md) — `go-winres make` and version injection
 - [Self-Update Mechanism](../06-self-update-mechanism.md) — How CLI tools consume release assets
 - [Self-Update Full Specs](../../14-self-update-app-update/00-overview.md) — Client-side update implementation
 - [Updater Binary](../../14-self-update-app-update/13-updater-binary.md) — Standalone updater architecture

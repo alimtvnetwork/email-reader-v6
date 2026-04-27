@@ -326,11 +326,13 @@ var coverageGapAllowlist = map[string]struct{}{
 	//     specs reference but `06-error-registry.md` hasn't formalised
 	//     yet (Settings 217xx, Migrations 218xx, UI 219xx blocks).
 	//     Closing requires registry growth = behaviour work.
-	//   - AC-PROJ-33: scanner is wired (`Test_NoBrokenSpecLinks_GreenInCi`)
-	//     and finds ~33 broken cross-tree links, mostly in adjacent
-	//     `02-coding-guidelines/`, `08-generic-update/`, and
-	//     `13-cicd-pipeline-workflows/` trees imported from other repos.
-	//     Closing is documentation cleanup, not test work.
+	//   - AC-PROJ-33 closed by Slice #164 — `Test_NoBrokenSpecLinks_GreenInCi`
+	//     now t.Fatal's on any broken local link. All 33 originally-broken
+	//     cross-tree refs were repathed (`08-generic-update/` → `14-self-update-app-update/`
+	//     + `10-powershell-integration/` + `13-cicd-pipeline-workflows/`),
+	//     renumbered (`13-cicd-pipeline-workflows/00-overview.md` 08-13 → 04-09),
+	//     stripped where the target lives outside this repo, or reformatted
+	//     to dodge the `[T](fn(...))` markdown false-positive.
 	//   - AC-PROJ-35: open `OI-1..OI-6` in 06-tools/99-consistency-report.md
 	//     are listed as "scheduled" not "✅ Closed". Same family as the
 	//     deferred OI work tracked from Phase 2.

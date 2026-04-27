@@ -54,12 +54,12 @@ AI INSTRUCTION:
 | 05 | [05-code-signing.md](./05-code-signing.md) | SignPath integration, feature-flag gating, signature verification | ✅ Active |
 | 06 | [06-self-update-mechanism.md](./06-self-update-mechanism.md) | Generic CLI self-update blueprint: deploy path, rename-first, handoff, cleanup | ✅ Active |
 | 07 | [07-release-body-and-changelog.md](./07-release-body-and-changelog.md) | Changelog extraction, release body template, asset matrix assembly | ✅ Active |
-| 08 | [08-installation-flow.md](./08-installation-flow.md) | End-to-end install: one-liners, terminal output, upgrade, uninstall | ✅ Active |
-| 09 | [09-changelog-integration.md](./09-changelog-integration.md) | Changelog format, CI extraction, release body assembly, terminal display | ✅ Active |
-| 10 | [10-version-and-help.md](./10-version-and-help.md) | Version display, help system, command-level docs, CI verification | ✅ Active |
-| 11 | [11-environment-variable-setup.md](./11-environment-variable-setup.md) | `env` command: persistent variables, PATH registration, auto-home | ✅ Active |
-| 12 | [12-terminal-output-standards.md](./12-terminal-output-standards.md) | Output formatting: icons, tables, progress, errors, CI summaries | ✅ Active |
-| 13 | [13-binary-icon-branding.md](./13-binary-icon-branding.md) | Windows binary icon embedding via `go-winres`: icon, manifest, version info | ✅ Active |
+| 08 | [04-installation-flow.md](./04-installation-flow.md) | End-to-end install: one-liners, terminal output, upgrade, uninstall | ✅ Active |
+| 09 | [05-changelog-integration.md](./05-changelog-integration.md) | Changelog format, CI extraction, release body assembly, terminal display | ✅ Active |
+| 10 | [06-version-and-help.md](./06-version-and-help.md) | Version display, help system, command-level docs, CI verification | ✅ Active |
+| 11 | [07-environment-variable-setup.md](./07-environment-variable-setup.md) | `env` command: persistent variables, PATH registration, auto-home | ✅ Active |
+| 12 | [08-terminal-output-standards.md](./08-terminal-output-standards.md) | Output formatting: icons, tables, progress, errors, CI summaries | ✅ Active |
+| 13 | [09-binary-icon-branding.md](./09-binary-icon-branding.md) | Windows binary icon embedding via `go-winres`: icon, manifest, version info | ✅ Active |
 
 ### Subfolder: Browser Extension Deploy
 

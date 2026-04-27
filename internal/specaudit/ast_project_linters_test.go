@@ -399,22 +399,23 @@ func Test_NoBrokenSpecLinks_GreenInCi(t *testing.T) {
 		seen[key] = true
 		lines = append(lines, h.file+"  →  "+h.target)
 	}
-	// Honest scope (Slice #131): the scanner currently surfaces ~33
-	// pre-existing broken cross-tree links, almost all of them in
-	// `spec/02-coding-guidelines/`, `spec/08-generic-update/`, and
-	// `spec/13-cicd-pipeline-workflows/` — i.e. specs imported from
-	// adjacent docs trees that were never repathed for this repo.
-	// Closing AC-PROJ-33 is documentation cleanup, not test work,
-	// and would balloon this slice's diff. We keep the scanner wired
-	// (so it ratchets the moment links are fixed) but report-only
-	// via t.Log + t.Skip; AC-PROJ-33 stays in the allowlist.
+	// Slice #164: All 33 originally-broken cross-tree links closed
+	// (8 in `08-generic-update/` repathed to `14-self-update-app-update/`
+	// + `10-powershell-integration/` + `13-cicd-pipeline-workflows/`,
+	// 6 in `13-cicd-pipeline-workflows/00-overview.md` renumbered to
+	// match real filenames, 2 `../13-binary-icon-branding.md` repathed
+	// to `../09-binary-icon-branding.md` in `02-go-binary-deploy/`,
+	// 4 stripped to plain text where the target lives outside this
+	// repo, 1 reformatted to dodge the `[T](fn(...))` false-positive,
+	// 4 `01-overview.md` references in `16-generic-cli/` repointed at
+	// the real `00-overview.md`). Test now ratchets — any new broken
+	// link fails CI.
 	total := len(lines)
 	if total > 30 {
 		lines = append(lines[:30], "… ("+strconv.Itoa(total-30)+" more)")
 	}
-	t.Logf("AC-PROJ-33 (deferred): scanner found %d broken local link(s):\n  %s",
+	t.Fatalf("AC-PROJ-33: %d broken local link(s) in spec tree:\n  %s",
 		total, strings.Join(lines, "\n  "))
-	t.Skip("AC-PROJ-33 deferred — see allowlist comment in coverage_audit_test.go")
 }
 
 // isLocalLink reports whether target should be resolved against the
