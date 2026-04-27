@@ -223,43 +223,111 @@ func formatHealthRollup(rows []core.AccountHealthRow) string {
 }
 
 // makeDashboardActivityRefresh returns a closure that loads the most
-// recent N activity rows (`recentActivityRenderLimit`) and renders
-// them as a multi-line readout on `lbl`. When neither `opts.Service`
-// nor `opts.ActivitySource` is wired the label stays hidden
+// recent N activity rows (`recentActivityRenderLimit`) into the
+// virtualised `widget.List` (Slice #113). When neither `opts.Service`
+// nor `opts.ActivitySource` is wired everything stays hidden
 // (degraded boot — Slice #105 wiring may not yet be active if
 // WatchRuntime failed to open the store).
 //
-// Errors surface inline with a "⚠" prefix so a transient store
-// failure doesn't blank the whole dashboard.
-func makeDashboardActivityRefresh(opts DashboardOptions, lbl *widget.Label) func() {
+// Refresh contract:
+//   - Mutates `*rows` in place then calls `list.Refresh()` so Fyne
+//     re-asks the length/update callbacks. We never re-create the
+//     list — that would lose scroll position on every poll tick.
+//   - Empty result → list hidden, header shows "Recent activity: (no
+//     recent activity)" so the absence is explicit, not a gap.
+//   - Error → `errLbl` shown with "⚠ " prefix, list + header hidden.
+func makeDashboardActivityRefresh(opts DashboardOptions, rows *[]core.ActivityRow,
+	header *widget.Label, list *widget.List, errLbl *widget.Label) func() {
 	return func() {
 		if opts.Service == nil || opts.ActivitySource == nil {
-			lbl.Hide()
+			header.Hide()
+			list.Hide()
+			errLbl.Hide()
 			return
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		res := opts.Service.RecentActivity(ctx, recentActivityRenderLimit, opts.ActivitySource)
 		if res.HasError() {
-			lbl.SetText("⚠ Recent activity: " + res.Error().Error())
-			lbl.Show()
+			errLbl.SetText("⚠ Recent activity: " + res.Error().Error())
+			errLbl.Show()
+			header.Hide()
+			list.Hide()
 			return
 		}
-		lbl.SetText(formatRecentActivity(res.Value()))
-		lbl.Show()
+		errLbl.Hide()
+		*rows = res.Value()
+		if len(*rows) == 0 {
+			header.SetText("Recent activity: (no recent activity)")
+			header.Show()
+			list.Hide()
+			return
+		}
+		header.SetText("Recent activity:")
+		header.Show()
+		// Cap height so 10 rows don't push the rest of the dashboard
+		// off-screen on a small window. Width is left to the parent
+		// VBox so the list grows horizontally with the window.
+		list.Resize(fyne.NewSize(list.Size().Width, activityListMaxHeight))
+		list.Show()
+		list.Refresh()
 	}
 }
 
-// formatRecentActivity renders a multi-line "Recent activity" block
-// — one header line plus one "HH:MM:SS  alias  · kind · message"
-// line per row. Empty input yields a single "(no recent activity)"
-// line so the absence is explicit rather than an empty gap.
-//
-// The kind is rendered with a single-glyph prefix so eyes can scan
-// the column at speed: ▶ (started) · ✓ (succeeded) · ✗ (failed) ·
-// ✉ (email stored) · ◆ (rule matched). Unknown future ActivityKind
-// values fall through to a bare "•" so a roll-out of a new kind
-// doesn't blank the row.
+// formatActivityRow renders one ActivityRow as the single-line string
+// shown in the `widget.List` (Slice #113). Layout matches the legacy
+// multi-line block: "HH:MM:SS  alias  <glyph> Kind · Message (err NN)".
+// Empty Alias / Message / ErrorCode are omitted so a heartbeat row
+// reads "10:05:30  ▶ PollStarted" without dangling separators.
+func formatActivityRow(r core.ActivityRow) string {
+	var b strings.Builder
+	b.WriteString(r.OccurredAt.Format("15:04:05"))
+	b.WriteString("  ")
+	if r.Alias != "" {
+		b.WriteString(r.Alias)
+		b.WriteString("  ")
+	}
+	b.WriteString(activityGlyph(r.Kind))
+	b.WriteString(" ")
+	b.WriteString(string(r.Kind))
+	if r.Message != "" {
+		b.WriteString(" · ")
+		b.WriteString(r.Message)
+	}
+	if r.ErrorCode != 0 {
+		b.WriteString(fmt.Sprintf(" (err %d)", r.ErrorCode))
+	}
+	return b.String()
+}
+
+// formatActivityRowDetail renders the full payload of a single row
+// for the click-to-expand handler — pushes the result into the
+// dashboard `status` label so a long error message that the row
+// truncated is recoverable. Includes a UTC date prefix that the
+// per-row label omits to save horizontal space.
+func formatActivityRowDetail(r core.ActivityRow) string {
+	parts := []string{
+		r.OccurredAt.UTC().Format("2006-01-02 15:04:05 UTC"),
+	}
+	if r.Alias != "" {
+		parts = append(parts, "alias="+r.Alias)
+	}
+	parts = append(parts, "kind="+string(r.Kind))
+	if r.Message != "" {
+		parts = append(parts, "msg="+r.Message)
+	}
+	if r.ErrorCode != 0 {
+		parts = append(parts, fmt.Sprintf("err=%d", r.ErrorCode))
+	}
+	return strings.Join(parts, " · ")
+}
+
+// formatRecentActivity is the legacy multi-line formatter retained
+// for the existing test surface (`dashboard_activity_test.go`). The
+// production render path now drives `widget.List` row-by-row via
+// `formatActivityRow`; this helper composes the same per-row output
+// under a "Recent activity:" header so behavioural tests stay valid
+// without dragging Fyne into them.
 func formatRecentActivity(rows []core.ActivityRow) string {
 	if len(rows) == 0 {
 		return "Recent activity:\n  (no recent activity)"
@@ -268,22 +336,7 @@ func formatRecentActivity(rows []core.ActivityRow) string {
 	b.WriteString("Recent activity:")
 	for _, r := range rows {
 		b.WriteString("\n  ")
-		b.WriteString(r.OccurredAt.Format("15:04:05"))
-		b.WriteString("  ")
-		if r.Alias != "" {
-			b.WriteString(r.Alias)
-			b.WriteString("  ")
-		}
-		b.WriteString(activityGlyph(r.Kind))
-		b.WriteString(" ")
-		b.WriteString(string(r.Kind))
-		if r.Message != "" {
-			b.WriteString(" · ")
-			b.WriteString(r.Message)
-		}
-		if r.ErrorCode != 0 {
-			b.WriteString(fmt.Sprintf(" (err %d)", r.ErrorCode))
-		}
+		b.WriteString(formatActivityRow(r))
 	}
 	return b.String()
 }
