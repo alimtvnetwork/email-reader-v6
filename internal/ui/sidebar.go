@@ -24,12 +24,18 @@ import (
 // channel that ticks whenever any badge value may have changed; the
 // sidebar refreshes the list on each tick. Both fields default to
 // the process-wide errlog singleton when nil.
+//
+// OnErrorLogOpened (Phase 3.5) is invoked when the user selects the
+// NavErrorLog row, in addition to OnSelectNav. The shell uses it to
+// reset the toast notifier's quiet-period flag so the next batch of
+// errors after the user catches up fires a fresh toast.
 type SidebarOptions struct {
 	State            *AppState
 	Aliases          []string
 	OnSelectNav      func(NavItem)
 	BadgeFor         func(NavKind) int64
 	BadgeSubscribe   func() <-chan errlog.Entry
+	OnErrorLogOpened func()
 }
 
 // NewSidebar builds the sidebar: header, account picker, nav list.
@@ -114,8 +120,13 @@ func NewSidebar(opts SidebarOptions) fyne.CanvasObject {
 		// returns). MarkRead doesn't fan out on the Subscribe
 		// channel, so refresh the list explicitly here so the
 		// "(N)" suffix vanishes the instant the view opens.
+		// Also reset the toast notifier's quiet-period flag so
+		// the next batch of errors fires a fresh toast.
 		if item.Kind == NavErrorLog {
 			list.Refresh()
+			if opts.OnErrorLogOpened != nil {
+				opts.OnErrorLogOpened()
+			}
 		}
 	}
 	// Pre-select the row matching state.Nav() (or the first nav row).
