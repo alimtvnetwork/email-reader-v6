@@ -298,13 +298,12 @@ func makeDashboardActivityRefresh(opts DashboardOptions, rows *[]core.ActivityRo
 		errLbl.Hide()
 		*rows = res.Value()
 		if len(*rows) == 0 {
-			header.SetText("Recent activity: (no recent activity)")
+			header.SetText("(no recent activity yet)")
 			header.Show()
 			list.Hide()
 			return
 		}
-		header.SetText("Recent activity:")
-		header.Show()
+		header.Hide()
 		// Height is reserved by the parent fixedHeightLayout slot
 		// (see BuildDashboard) — no need to Resize the list here;
 		// doing so fought the parent layout and produced the visual
