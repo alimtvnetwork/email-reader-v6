@@ -89,6 +89,15 @@ func NewPersistence(path string, sizeCap int64) (*Persistence, error) {
 func (p *Persistence) Write(e Entry) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	// Guard against use-after-Close. Without this, a stale persister
+	// callback wired into the package singleton (e.g. by a test that
+	// called EnableDefaultPersistence and then Close()d its handle)
+	// would deref a nil *bufio.Writer on the next ReportError. We
+	// degrade to a typed sentinel error so callers can detect it; the
+	// production fan-out in Store.Append swallows the error already.
+	if p.f == nil || p.w == nil {
+		return errtrace.Wrap(ErrPersistenceClosed, "errlog: write after close")
+	}
 	line, err := json.Marshal(e)
 	if err != nil {
 		return errtrace.Wrap(err, "errlog: marshal entry")
