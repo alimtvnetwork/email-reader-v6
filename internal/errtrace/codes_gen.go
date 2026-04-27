@@ -37,6 +37,8 @@ type CodeMeta struct {
 // order over the map is still randomised by the runtime — callers
 // that need deterministic order should range over a sorted key slice.
 var RegisteredCodes = map[Code]CodeMeta{
+	ErrAccountTestFailed:          {Const: "ErrAccountTestFailed", Block: "Accounts", Prefix: "ER-ACC", Description: "Test Connection failed against the configured IMAP endpoint.\nThe UI must surface the underlying reason and instruct the user\nto verify the password via raw IMAP before assuming the app is\nat fault. See spec/21-app/03-issues/solved/01-imap-auth-failed-wrong-password.md.\n"},
+	ErrAccountPasswordSanitized:   {Const: "ErrAccountPasswordSanitized", Block: "Accounts", Prefix: "ER-ACC", Description: "Non-fatal warning — the configured password contained hidden\nUnicode (zero-width chars, RTL marks, etc.) that was stripped\nduring load. Surface as a one-time toast so the user knows the\nstored password differs from what they pasted. See\nspec/21-app/03-issues/solved/03-imap-auth-failed-hidden-unicode.md.\n"},
 	ErrBrowserLaunch:              {Const: "ErrBrowserLaunch", Block: "Browser", Prefix: "ER-BRW", Description: "exec.Cmd.Start of the browser binary failed."},
 	ErrBrowserNotFound:            {Const: "ErrBrowserNotFound", Block: "Browser", Prefix: "ER-BRW", Description: "Configured browser binary was not on PATH."},
 	ErrBrowserDedupHit:            {Const: "ErrBrowserDedupHit", Block: "Browser", Prefix: "ER-BRW", Description: "URL was suppressed by the dedup window (sentinel, not a true error)."},

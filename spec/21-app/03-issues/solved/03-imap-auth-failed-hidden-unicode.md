@@ -41,7 +41,7 @@ python3 -c "pw='\u2060 ZPb*sz=d!cEE_Wgc \u2060'; [print(f'U+{ord(c):04X} {c!r}')
 
 - `spec/21-app/02-features/04-accounts/01-backend.md` §Password Sanitization — formalises the sanitization invariant.
 - `spec/21-app/02-features/06-tools/02-frontend.md` §Doctor card — UI surface for the rune-dump audit.
-- `spec/21-app/06-error-registry.md` — error code `ER-ACC-21431` (`PasswordSanitized`) is a non-fatal warning emitted at sanitization time.
+- `spec/21-app/06-error-registry.md` — error code `ER-ACC-22202` (`ErrAccountPasswordSanitized`) is a non-fatal warning emitted at sanitization time. *(Slice #158: renumbered from `ER-ACC-21431` — original number fell in the Watcher block `21400–21499`. The Accounts feature now owns its own block `22200–22299` per `spec/21-app/04-coding-standards.md` §5.4.)*
 
 ## What NOT to repeat
 
