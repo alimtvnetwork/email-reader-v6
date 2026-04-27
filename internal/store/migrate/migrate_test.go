@@ -64,6 +64,9 @@ func TestApply_EmptyRegistry_CreatesLedgerAndNoOps(t *testing.T) {
 // 3 migrations out of order; asserts the ledger ends with rows
 // (1,"first"), (2,"second"), (3,"third") and the side-effect
 // tables T1/T2/T3 all exist.
+//
+// Satisfies AC-PROJ-21 — fresh-install bootstrap runs M001..M00N in
+// version order via SchemaMigration ledger.
 func TestApply_RunsEachMigrationOnce_InVersionOrder(t *testing.T) {
 	resetRegistry(t)
 	db := newDB(t)

@@ -75,6 +75,8 @@ var allowedFiles = map[string]string{
 	// "internal/foo/embedded_fixture.go": "JSON fixture asserting the wire-format payload — needs the literal string for round-trip test parity. Tracked: <slice-id>.",
 }
 
+// Satisfies AC-PROJ-12 — AST scan ensures no raw error literals
+// leak to the UI; every error must carry an `ER-XXX-NNNNN` code.
 func TestAST_NoLiteralErrorCodes(t *testing.T) {
 	root := findModuleRoot(t)
 	internalDir := filepath.Join(root, "internal")

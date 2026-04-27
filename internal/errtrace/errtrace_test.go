@@ -6,6 +6,8 @@ import (
 	"testing"
 )
 
+// Satisfies AC-PROJ-13 — every errtrace.Wrap boundary captures a
+// `file:line` frame for structured-log inspection.
 func TestWrapCapturesFrameAndChain(t *testing.T) {
 	cause := errors.New("boom")
 	err := Wrap(cause, "outer")

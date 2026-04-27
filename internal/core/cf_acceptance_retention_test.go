@@ -22,6 +22,8 @@ import (
 	"github.com/lovable/email-read/internal/store"
 )
 
+// Satisfies AC-PROJ-22 — retention sweep deletes OpenedUrl rows older
+// than the configured TTL and is idempotent across reruns.
 func TestCF_S_RET_PruneRespectsSettingsKnob(t *testing.T) {
 	dir := t.TempDir()
 	s, err := store.OpenAt(filepath.Join(dir, "cf-ret.db"))

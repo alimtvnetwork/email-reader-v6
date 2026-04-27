@@ -54,6 +54,8 @@ func looksLikeMaintenanceSQL(literal string) bool {
 	return strings.HasPrefix(lower, "pragma wal_checkpoint")
 }
 
+// Satisfies AC-PROJ-17 — only `internal/store/migrate` executes DDL
+// (CREATE/ALTER/DROP) statements; AST scan rejects literals elsewhere.
 func Test_AST_MaintenanceOnly(t *testing.T) {
 	root := repoRootForMaintenanceGuard(t)
 	violations := scanRepoForMaintenanceSQL(t, root)
