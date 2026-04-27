@@ -274,8 +274,14 @@ var coverageGapAllowlist = map[string]struct{}{
 	"AC-DS-47": {},
 	"AC-DS-49": {},
 	"AC-DS-50": {},
-	"AC-DS-51": {},
-	"AC-DS-69": {},
+	// AC-DS-51 closed by Slice (this) — Test_AST_PulseOnlyInWatchDot in
+	// ast_design_system_test.go pins the "only watch_dot*.go may call
+	// anim.Pulse(...)" rule (vacuously true today; cluster-mate to
+	// AC-DS-19).
+	// AC-DS-69 closed by Slice (this) — TestNoIconOnlyButtons_WithoutLabel
+	// in internal/ui/accessibility/a11y_test.go already implemented
+	// the AST scan; this slice added the AC-DS-69 citation comment so
+	// the audit resolves it as covered.
 	// Slice #124 closed AC-PROJ-12/13/16/17/19/21/22 by tagging the
 	// existing AST/errtrace/migrate/retention tests with their AC-PROJ
 	// IDs (no new test code — those rows were already covered by tests
