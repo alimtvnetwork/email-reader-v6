@@ -108,6 +108,17 @@ type Services struct {
 	// without restart). Stays nil when constructor wiring fails;
 	// view code falls back to the documented degraded-path message.
 	Tools ToolsFactory
+
+	// OpenURL is the shell-injected browser-launch callback consumed
+	// by `views/emails.go`'s link buttons. Slice #117 (Phase 6.5)
+	// hoist: replaces the inline `config.Load() + browser.New(...)`
+	// path that used to live in `views/launch.go::launchInBrowser`.
+	// Builds a fresh `*browser.Launcher` per call (via
+	// `BrowserFactory`) so live Settings edits land without restart.
+	// Stays nil only when `BuildServices` itself failed to install a
+	// factory — view code treats nil as "browser unavailable" and
+	// falls back to a status-line error rather than panicking.
+	OpenURL func(rawurl string) error
 }
 
 // BuildServices constructs all four typed services (Phase 2 +
