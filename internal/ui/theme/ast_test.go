@@ -79,6 +79,9 @@ func collectAndRecurse(
 
 // AST-T1: only files under internal/ui/theme/ may write
 // `color.NRGBA{...}` or `color.RGBA{...}` composite literals.
+//
+// Satisfies AC-DS-17 (AST: only internal/ui/theme/ constructs
+// color.NRGBA{...} / color.RGBA{...} literals).
 func Test_AST_T1_ColorLiteralsConfinedToTheme(t *testing.T) {
 	root := repoRoot(t)
 	allowedPrefix := filepath.Join(root, "internal", "ui", "theme") + string(filepath.Separator)
