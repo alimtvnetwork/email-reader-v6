@@ -1,111 +1,79 @@
 # Write Memory
 
-> **Purpose:** After completing work or at the end of a session, the AI must persist everything it learned, did, and left undone — so the next AI session can pick up seamlessly with zero context loss.
-> **When to run:** At the end of every session, after completing a task batch, or when explicitly asked to "update memory" or "write memory".
+> **Purpose:** After completing work or at the end of a session, persist everything learned, did, and left undone — so the next AI session can pick up seamlessly with zero context loss.
+> **When to run:** End of every session, after a task batch, or when the user says `write memory` / `end memory`.
 > **Trigger phrases:** `write memory`, `end memory`.
 
 ---
 
-## Table of Contents
-1. Core Principle
-2. Phase 1 — Audit Current State
-3. Phase 2 — Update Memory Files
-4. Phase 3 — Update Plans & Suggestions
-5. Phase 4 — Update Issues
-6. Phase 5 — Consistency Validation
-7. File Naming & Structure Rules
-8. Anti-Corruption Rules
-
----
-
 ## Core Principle
-The memory system is the project's brain. If you did something and didn't write it down, it didn't happen. Write memory as if the next AI has amnesia — because it does.
+The memory system is the project's brain. If you did something and didn't write it down, it didn't happen. Write as if the next AI has amnesia — because it does.
 
 ---
 
 ## Phase 1 — Audit Current State
-Before writing anything, take inventory:
 - What was done this session? (files created/modified/deleted, decisions made)
 - What is still pending? (started-but-unfinished, discussed-but-unstarted, blockers)
 - What was learned? (patterns, gotchas, user preferences)
-- What went wrong? (bugs, failed approaches, things never to repeat)
+- What went wrong? (bugs, failed approaches, never-repeat items)
 
----
+## Phase 2 — Update Memory Files (`.lovable/memory/`)
+1. Read `index.md` first; never duplicate.
+2. Update existing files for affected sections; preserve all other content.
+3. Create new files (`XX-name.md`) ONLY if knowledge doesn't fit anywhere; immediately add to `index.md`.
+4. Update `workflow/` with status markers: ✅ Done · 🔄 In Progress · ⏳ Pending · 🚫 Blocked.
 
-## Phase 2 — Update Memory Files
-Target: `.lovable/memory/`
+## Phase 3 — Plans & Suggestions
+- `.lovable/plan.md` — single file. Move fully complete items to `## Completed`; never delete.
+- `.lovable/suggestions.md` — single file with `## Active Suggestions` and `## Implemented Suggestions`.
 
-1. Read `.lovable/memory/index.md` first — never duplicate.
-2. Update existing files in place — never truncate unrelated entries.
-3. Create new topic files as `XX-descriptive-name.md` and immediately add to the index.
-4. Update workflow status with markers: ✅ Done · 🔄 In Progress · ⏳ Pending · 🚫 Blocked — [reason].
+## Phase 4 — Issues
+- `.lovable/pending-issues/XX-name.md` for unresolved bugs.
+- Move to `.lovable/solved-issues/XX-name.md` on resolution; add `## Solution`, `## Iteration Count`, `## Learning`, `## What NOT to Repeat`.
+- `.lovable/strictly-avoid.md` — append never-do-this patterns.
 
----
-
-## Phase 3 — Update Plans & Suggestions
-
-### 3A — Plans (`.lovable/plan.md`)
-- Update task statuses. Move fully complete items to a `## Completed` section in the same file (never delete).
-
-### 3B — Suggestions (`.lovable/suggestions.md`)
-Single file with two sections: `## Active Suggestions` and `## Implemented Suggestions`. Each entry: Title, Status, Priority, Description, Added. When implemented, move and add notes.
-
----
-
-## Phase 4 — Update Issues
-
-- Pending → `.lovable/pending-issues/XX-short-description.md` with: Description, Root Cause, Steps to Reproduce, Attempted Solutions, Priority, Blocked By.
-- Solved → move file to `.lovable/solved-issues/` and append: Solution, Iteration Count, Learning, What NOT to Repeat.
-- Forbidden patterns → add a one-liner to `.lovable/strictly-avoid.md` referencing the solved-issue file.
-
----
+## Phase 4b — CI/CD Issues
+- `.lovable/cicd-issues/XX-name.md` — one file per CI/CD issue (sandbox/toolchain/runner/perf-infra).
+- `.lovable/cicd-index.md` — table summary; update in same operation.
+- Collect all known CI/CD issues; never duplicate.
 
 ## Phase 5 — Consistency Validation
-- Every file in `.lovable/memory/` must appear in `index.md`.
-- Every ✅ Done in `plan.md` needs evidence (memory entry, solved issue, or code change).
-- No file may exist in both `pending-issues/` and `solved-issues/`.
-- Final response template:
+- Every memory file is in `index.md`.
+- Every `✅ Done` plan item has evidence (memory/code/solved-issue).
+- No file in both `pending-issues/` and `solved-issues/`.
+- Solved issues all have `## Solution`.
 
+## Phase 6 — Specs Already Written to FS
+If a substantial spec/doc was authored this session into the project file system, record a pointer in memory (path + 1-line summary) so the next AI can find it.
+
+## Phase 7 — Prompts Folder
+- This prompt itself lives at `.lovable/prompts/01-write-memory.md`.
+- `.lovable/prompt.md` indexes all prompt files.
+
+## File Naming Rules
+- Lowercase, hyphen-separated, numeric prefix: `01-name.md` ✅ / `01_Name.md` ❌.
+- Plans + suggestions = single file each. Pending/solved/cicd issues = one file per issue.
+- NEVER use `.lovable/memories/` (with `s`). Always `.lovable/memory/`.
+
+## Anti-Corruption Rules
+1. Never delete history — mark/move, don't remove.
+2. Never overwrite blindly — read first, preserve unrelated content.
+3. Never leave orphans — every file indexed; every reference resolves.
+4. Never split unified files (plan/suggestions).
+5. Never mix states (an issue is pending OR solved, never both).
+6. Never skip the index update.
+7. Never assume the next AI knows anything.
+
+## Final Confirmation Format
 ```
 ✅ Memory update complete.
 Session Summary:
-- Tasks completed: X
-- Tasks pending: Y
-- New memory files created: Z
-- Issues resolved: N
-- Issues opened: M
-- Suggestions added: S
-- Suggestions implemented: T
-
-Files modified:
-- [list]
-
-The next AI session can pick up from: [describe state and next step]
+- Tasks completed: [X]
+- Tasks pending: [Y]
+- New memory files: [Z]
+- Issues resolved: [N] / opened: [M]
+- Suggestions added: [S] / implemented: [T]
+Files modified: [list]
+Inconsistencies fixed: [list or "None"]
+Next AI picks up from: [state + next step]
 ```
-
----
-
-## File Naming & Structure Rules
-- All files: lowercase, hyphen-separated, numeric prefix (`01-foo.md`).
-- Plans → single `.lovable/plan.md`.
-- Suggestions → single `.lovable/suggestions.md`.
-- Pending/solved issues → one file per issue.
-- Memory grouped by topic under `.lovable/memory/<topic>/`.
-- Completed plans/suggestions → `## Completed` section in same file (no `completed/` folders).
-- ⚠️ NEVER create `.lovable/memories/` (with trailing s). Correct path: `.lovable/memory/`.
-
----
-
-## Anti-Corruption Rules
-1. Never delete history — mark done, move to completed sections.
-2. Never overwrite blindly — read first, preserve existing content.
-3. Never leave orphans — every file must be indexed.
-4. Never split what should be unified — plans and suggestions are one file each.
-5. Never mix states — an issue is pending OR solved, not both.
-6. Never skip the index update when adding a memory file.
-7. Never assume the next AI knows anything — write for a stranger.
-8. Anything the user said to skip or avoid → log in `.lovable/strictly-avoid.md`.
-
----
-
-*Version 1.0.*
