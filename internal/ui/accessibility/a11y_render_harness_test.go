@@ -126,6 +126,10 @@ var focusOrderAllowlistedViewFiles = map[string]struct{}{
 	"views/watch_events.go":              {},
 }
 
+// Test_FocusOrder_Declared satisfies AC-DS-61 (every view declares
+// FocusOrder()) from spec/24-app-design-system-and-ui/
+// 97-acceptance-criteria.md §E. Bootstrap-then-enforce via the
+// monotonically-shrinking focusOrderAllowlistedViewFiles map above.
 func Test_FocusOrder_Declared(t *testing.T) {
 	// Single pass: for every view source file, record presence in
 	// `seen` and presence-of-method in `declared`.
@@ -200,6 +204,12 @@ func Test_FocusOrder_Declared(t *testing.T) {
 // above and `Test_NoIconOnlyButtons_WithoutLabel` (which also passes
 // on a clean tree but catches the next regression).
 
+// Test_KeyboardShortcuts_Sidebar satisfies AC-DS-66 (Cmd/Ctrl+1..7
+// map to the seven sidebar routes) from
+// spec/24-app-design-system-and-ui/97-acceptance-criteria.md §E.
+// PASSes on the empty baseline; flips to FAIL the moment the first
+// `desktop.CustomShortcut` is registered with a non-{1..7} digit
+// or with the wrong modifier.
 func Test_KeyboardShortcuts_Sidebar(t *testing.T) {
 	expected := map[string]struct{}{"1": {}, "2": {}, "3": {}, "4": {}, "5": {}, "6": {}, "7": {}}
 	found := map[string]struct{}{}

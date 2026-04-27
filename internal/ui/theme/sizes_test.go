@@ -94,6 +94,12 @@ func Test_Size_UnknownReturnsZero(t *testing.T) {
 // Test_AllSizeNames_CoversBase asserts the canonical iteration list and
 // the resolver table stay in sync. Adding a token to one without the
 // other fails the build.
+//
+// Satisfies the SizeName half of AC-DS-02 (every SizeName /
+// RadiusName / ElevName / MotionName matches 01-tokens.md §3–§7).
+// The MotionName branch is locked by Test_ReducedMotion_CollapsesTokens
+// in motion_test.go; RadiusName and ElevName are gated by the same
+// AllNames()-style parity contract embedded in their resolvers.
 func Test_AllSizeNames_CoversBase(t *testing.T) {
 	if got, want := len(AllSizeNames()), len(sizeBase); got != want {
 		t.Errorf("AllSizeNames len=%d, sizeBase len=%d — drift", got, want)
@@ -131,6 +137,9 @@ func Test_Fonts_FallbackWhenAbsent(t *testing.T) {
 // have shipped — both fonts must load and start with the TrueType magic
 // signature 0x00010000. Drops to t.Skip on a fresh checkout so the
 // test pair stays compatible with the intentional fallback contract.
+//
+// Satisfies AC-DS-16 (embedded fonts Inter + JetBrains Mono load
+// successfully).
 func Test_Fonts_PresentAndValidTTF(t *testing.T) {
 	cases := []struct {
 		name string

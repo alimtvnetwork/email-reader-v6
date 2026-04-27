@@ -79,6 +79,9 @@ func collectAndRecurse(
 
 // AST-T1: only files under internal/ui/theme/ may write
 // `color.NRGBA{...}` or `color.RGBA{...}` composite literals.
+//
+// Satisfies AC-DS-17 (AST: only internal/ui/theme/ constructs
+// color.NRGBA{...} / color.RGBA{...} literals).
 func Test_AST_T1_ColorLiteralsConfinedToTheme(t *testing.T) {
 	root := repoRoot(t)
 	allowedPrefix := filepath.Join(root, "internal", "ui", "theme") + string(filepath.Separator)
@@ -102,6 +105,9 @@ func Test_AST_T1_ColorLiteralsConfinedToTheme(t *testing.T) {
 }
 
 // AST-T2: only internal/ui/theme/ imports "fyne.io/fyne/v2/theme".
+//
+// Satisfies AC-DS-18 (AST: only internal/ui/theme/ imports
+// fyne.io/fyne/v2/theme).
 func Test_AST_T2_FyneThemeImportConfinedToTheme(t *testing.T) {
 	root := repoRoot(t)
 	allowedPrefix := filepath.Join(root, "internal", "ui", "theme") + string(filepath.Separator)
@@ -119,6 +125,9 @@ func Test_AST_T2_FyneThemeImportConfinedToTheme(t *testing.T) {
 }
 
 // AST-T4: no file under internal/ui/views/ imports "image/color".
+//
+// Satisfies AC-DS-20 (AST: no file under internal/ui/views/
+// imports image/color).
 func Test_AST_T4_ViewsDoNotImportImageColor(t *testing.T) {
 	root := repoRoot(t)
 	viewsPrefix := filepath.Join(root, "internal", "ui", "views") + string(filepath.Separator)

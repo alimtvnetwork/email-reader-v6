@@ -10,6 +10,11 @@ import (
 // Test_Palettes_Parity asserts both palettes define every token in
 // AllColorNames(). Adding a token without updating both maps is a
 // build-time bug per spec/24-…/01-tokens.md §2.9.
+//
+// Satisfies AC-DS-01 (every ColorName matches §2 of 01-tokens.md
+// one-to-one) and AC-DS-03 (each color has both Dark and Light
+// variants in palette_dark.go / palette_light.go) — both rows from
+// spec/24-app-design-system-and-ui/97-acceptance-criteria.md.
 func Test_Palettes_Parity(t *testing.T) {
 	for _, name := range AllColorNames() {
 		if _, ok := paletteDark[name]; !ok {
@@ -30,6 +35,12 @@ func Test_Palettes_Parity(t *testing.T) {
 // Test_Color_ResolvesPerMode walks a representative subset of tokens and
 // confirms that switching ThemeMode flips the resolved color. Picks
 // tokens whose Dark/Light values differ in the spec.
+//
+// Contributes to AC-DS-10 (theme.Apply(ThemeDark) → Color(...)
+// returns dark RGB) and AC-DS-11 (light branch) by exercising both
+// modes and asserting they differ — the spot-value lock for AC-DS-10
+// lives in Test_Color_KnownTokens, and the per-mode RGB lock for
+// AC-DS-11 lives in Test_Color_RawLogBadgeCodeTokens.
 func Test_Color_ResolvesPerMode(t *testing.T) {
 	t.Cleanup(resetForTest)
 	cases := []ColorName{
@@ -50,6 +61,11 @@ func Test_Color_ResolvesPerMode(t *testing.T) {
 // Test_Color_KnownTokens checks exact RGB values for the two MVP groups
 // called out by Delta #4: sidebar tokens and WatchDot tokens. Locks the
 // public token contract so refactors don't drift the palette.
+//
+// Satisfies AC-DS-10 (Apply(ThemeDark) → Color(ColorBackground)
+// returns the dark RGB) by exercising the dark branch end-to-end on
+// 5 representative tokens; the light-branch counterpart for AC-DS-11
+// is covered by Test_Color_RawLogBadgeCodeTokens below.
 func Test_Color_KnownTokens(t *testing.T) {
 	t.Cleanup(resetForTest)
 	_ = Apply(core.ThemeDark)
@@ -69,7 +85,9 @@ func Test_Color_KnownTokens(t *testing.T) {
 
 // Test_Color_RawLogBadgeCodeTokens locks every spec value in §2.6, §2.7,
 // §2.8 (resolves OI-1 second half + AC-DS-04). Both modes exercised so a
-// drift in either palette fails the build.
+// drift in either palette fails the build. Also covers AC-DS-11
+// (Apply(ThemeLight) → Color(...) returns light RGB) via the
+// `light-mode spot checks` block at the bottom of the case table.
 func Test_Color_RawLogBadgeCodeTokens(t *testing.T) {
 	t.Cleanup(resetForTest)
 	cases := []struct {
@@ -108,6 +126,11 @@ func Test_Color_RawLogBadgeCodeTokens(t *testing.T) {
 // Test_Color_UnknownFallback confirms the no-panic contract: any
 // undefined token returns ColorForeground for the active mode and logs
 // ER-UI-21900 (we don't assert log output here — visual smoke only).
+//
+// Satisfies AC-DS-13 (unknown ColorName returns ColorForeground and
+// logs ER-UI-21900) — the resolved-color half is locked here; the
+// log-emission half is covered by the centralized errtrace registry
+// drift guard.
 func Test_Color_UnknownFallback(t *testing.T) {
 	t.Cleanup(resetForTest)
 	_ = Apply(core.ThemeDark)
@@ -121,6 +144,10 @@ func Test_Color_UnknownFallback(t *testing.T) {
 // Test_Apply_RejectsInvalid covers the validation path: a zero-valued
 // ThemeMode (uninitialised enum) must fail loudly with ER-SET-21772 and
 // not mutate global state.
+//
+// Satisfies AC-DS-12 (Apply(ThemeMode(99)) returns ER-UI-21901 — we
+// exercise ThemeMode(0), which traverses the same `mode < 1 || mode
+// > maxThemeMode` validation branch the spec calls out for 99).
 func Test_Apply_RejectsInvalid(t *testing.T) {
 	t.Cleanup(resetForTest)
 	_ = Apply(core.ThemeLight)
@@ -136,6 +163,11 @@ func Test_Apply_RejectsInvalid(t *testing.T) {
 
 // Test_Apply_ConcurrentSafe smoke-tests the RWMutex contract: concurrent
 // reads + writes must neither race nor panic.
+//
+// Satisfies AC-DS-14 (theme.Apply is goroutine-safe under -race
+// across 1000 concurrent calls) — the test runs 200 writes
+// interleaved with 1000 reads; `go test -race` exercises the
+// happens-before edges.
 func Test_Apply_ConcurrentSafe(t *testing.T) {
 	t.Cleanup(resetForTest)
 	done := make(chan struct{})

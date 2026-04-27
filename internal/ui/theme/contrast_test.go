@@ -94,6 +94,10 @@ var contrastMatrix = []contrastCase{
 //
 // Rows tagged `knownDrift: true` log a WARN line instead of failing
 // — see `contrastCase` doc above for why.
+//
+// Satisfies AC-DS-60 (every contrast pair in 05-accessibility.md
+// §1 meets its threshold WCAG AA) from spec/24-app-design-system-
+// and-ui/97-acceptance-criteria.md §E.
 func Test_Contrast_Matrix(t *testing.T) {
 	for _, c := range contrastMatrix {
 		c := c

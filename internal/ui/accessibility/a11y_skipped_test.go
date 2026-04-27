@@ -33,7 +33,7 @@ func Test_Contrast_Matrix(t *testing.T) {
 	t.Skip("Slice #118b — live test runs in internal/ui/theme/contrast_test.go (cannot live here without import cycle)")
 }
 
-// Spec §8 #2 — Test_FocusOrder_Declared
+// Spec §8 #2 — Test_FocusOrder_Declared (AC-DS-61)
 //
 // **Slice #118c: lit up.** Lives in `a11y_render_harness_test.go`
 // in this package as a pure AST scan (no Fyne runtime needed).
@@ -41,7 +41,7 @@ func Test_Contrast_Matrix(t *testing.T) {
 // allowlist must shrink monotonically as Slice #118e rolls out
 // `FocusOrder()` declarations across the views package.
 
-// Spec §8 #3 — Test_FocusOrder_NoHiddenInOrder
+// Spec §8 #3 — Test_FocusOrder_NoHiddenInOrder (AC-DS-62)
 //
 // Once `FocusOrder()` declarations exist (Slice #118e), asserts the
 // returned slice contains no widgets whose `Hidden` or `Disabled`
@@ -54,7 +54,7 @@ func Test_FocusOrder_NoHiddenInOrder(t *testing.T) {
 	t.Skip("Slice #118e — implementation pending (harness enabled but assertions not yet ported)")
 }
 
-// Spec §8 #4 — Test_StatusHasTextLabel
+// Spec §8 #4 — Test_StatusHasTextLabel (AC-DS-63)
 //
 // Walks every rendered `WatchDot` widget and asserts an adjacent
 // `*widget.Label` carrying a status word ("Watching",
@@ -80,7 +80,7 @@ func Test_ReducedMotion_CollapsesTokens(t *testing.T) {
 	t.Skip("Slice #118b — live test runs in internal/ui/theme/motion_test.go (cannot live here without import cycle)")
 }
 
-// Spec §8 #6 — Test_ReducedMotion_WatchDotSteady
+// Spec §8 #6 — Test_ReducedMotion_WatchDotSteady (AC-DS-48)
 //
 // Pairs with #5: when the probe returns true, the `WatchDot` pulse
 // animation must not be started (steady solid colour instead).
@@ -92,7 +92,7 @@ func Test_ReducedMotion_WatchDotSteady(t *testing.T) {
 	t.Skip("Slice #118e — implementation pending (harness enabled but animation hook not yet built)")
 }
 
-// Spec §8 #7 — Test_TargetSize_Min32
+// Spec §8 #7 — Test_TargetSize_Min32 (AC-DS-65)
 //
 // Walks the widget tree of every view and asserts no interactive
 // widget renders smaller than 32 px on either axis. Spec §7
@@ -104,7 +104,7 @@ func Test_TargetSize_Min32(t *testing.T) {
 	t.Skip("Slice #118e — implementation pending (harness enabled but tree walker not yet built)")
 }
 
-// Spec §8 #8 — Test_KeyboardShortcuts_Sidebar
+// Spec §8 #8 — Test_KeyboardShortcuts_Sidebar (AC-DS-66)
 //
 // **Slice #118c: lit up.** Lives in `a11y_render_harness_test.go`
 // in this package as a pure AST scan that walks the UI tree for
@@ -113,7 +113,7 @@ func Test_TargetSize_Min32(t *testing.T) {
 // today (no shortcuts registered yet); enforces the full {1..7}
 // set the moment the first binding lands in Slice #118e.
 
-// Spec §8 #9 — Test_FocusRing_Visible
+// Spec §8 #9 — Test_FocusRing_Visible (AC-DS-67)
 //
 // Asserts the focused widget paints the focus ring with
 // `ColorPrimary` at alpha 0.40, 2 px outline, offset 2 px. Tokens
@@ -126,7 +126,7 @@ func Test_FocusRing_Visible(t *testing.T) {
 	t.Skip("Slice #118e — implementation pending (harness enabled but paint inspector not yet built)")
 }
 
-// Spec §8 #10 — Test_AccessibilityLabel_NonEmpty
+// Spec §8 #10 — Test_AccessibilityLabel_NonEmpty (AC-DS-68)
 //
 // Walks every rendered `Button` / `WatchDot` / `Badge` /
 // `RawLogLine` instance and asserts a non-empty

@@ -25,6 +25,10 @@ import (
 // is on. Iterates all four tokens (Instant + 3 baselines) so a
 // future addition (e.g. MotionExtraSlow) that forgot to plug into
 // the resolver fails immediately.
+//
+// Satisfies AC-DS-64 (reduced-motion probe collapses all Motion*
+// tokens to MotionInstant) from spec/24-app-design-system-and-ui/
+// 97-acceptance-criteria.md §E.
 func Test_ReducedMotion_CollapsesTokens(t *testing.T) {
 	// Defer cleanup BEFORE installing the override so a panic in
 	// the test body still restores production behaviour.
