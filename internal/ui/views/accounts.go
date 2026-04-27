@@ -169,8 +169,17 @@ func accountRow(a config.Account, ws store.WatchState, health core.HealthLevel, 
 }
 
 // openEditAccountDialog shows the Add Account form in edit mode inside a
-// modal dialog. On successful Update the dialog closes and the table
-// reloads via OnAccountsChanged + the local reload.
+// modal dialog. On successful Update the dialog closes, the page-level
+// status label is updated with a success banner (so the user gets
+// visible confirmation that Update did something — the dialog
+// disappearing on its own was being read as "nothing happened"), and
+// the table reloads via OnAccountsChanged + the local reload.
+//
+// Dialog size 640×560 (was 560×480) so the inline status banner inside
+// the form — used for validation errors like "⚠ email is required" —
+// stays visible without scrolling. The form has 9 rows + a separator +
+// the actions row + status, and the previous height was clipping the
+// status into the dialog chrome.
 func openEditAccountDialog(a config.Account, opts AccountsOptions, status *widget.Label, reload func()) {
 	parent := currentParentWindow()
 	if parent == nil {
@@ -184,6 +193,12 @@ func openEditAccountDialog(a config.Account, opts AccountsOptions, status *widge
 			if d != nil {
 				d.Hide()
 			}
+			// Surface the result on the page-level status label so the
+			// user sees confirmation after the modal closes. Without
+			// this the only feedback was the in-dialog "✓ Saved …"
+			// banner, which the user never read because the dialog
+			// auto-hid the same tick.
+			status.SetText("✓ Updated account " + a.Alias)
 			if opts.OnAccountsChanged != nil {
 				opts.OnAccountsChanged()
 			}
@@ -191,7 +206,7 @@ func openEditAccountDialog(a config.Account, opts AccountsOptions, status *widge
 		},
 	})
 	d = dialog.NewCustom("Edit account: "+a.Alias, "Close", form, parent)
-	d.Resize(fyne.NewSize(560, 480))
+	d.Resize(fyne.NewSize(640, 560))
 	d.Show()
 }
 
