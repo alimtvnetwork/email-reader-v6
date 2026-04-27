@@ -61,6 +61,11 @@ func Test_Color_ResolvesPerMode(t *testing.T) {
 // Test_Color_KnownTokens checks exact RGB values for the two MVP groups
 // called out by Delta #4: sidebar tokens and WatchDot tokens. Locks the
 // public token contract so refactors don't drift the palette.
+//
+// Satisfies AC-DS-10 (Apply(ThemeDark) → Color(ColorBackground)
+// returns the dark RGB) by exercising the dark branch end-to-end on
+// 5 representative tokens; the light-branch counterpart for AC-DS-11
+// is covered by Test_Color_RawLogBadgeCodeTokens below.
 func Test_Color_KnownTokens(t *testing.T) {
 	t.Cleanup(resetForTest)
 	_ = Apply(core.ThemeDark)
