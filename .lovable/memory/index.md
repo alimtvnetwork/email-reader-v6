@@ -1,5 +1,5 @@
 # Memory: index.md
-Updated: 2026-04-26
+Updated: 2026-04-27
 
 # Project Memory
 
@@ -9,13 +9,19 @@ IMAP `AUTHENTICATIONFAILED`: always run `email-read doctor <alias>` first to rul
 All errors must use `internal/errtrace` so failures show file:line stack traces.
 App spec lives at `spec/21-app/` (App Project Template). Old paths `spec/21-golang-email-reader/` and `spec/22-fyne-ui/` were merged here on 2026-04-25 — never recreate them.
 Sandbox has no preinstalled Go; verify with `nix run nixpkgs#go -- {vet,test} -tags nofyne ./...`. Files outside `.lovable/` may revert between sessions — verify on disk before assuming.
-Spec-21-app authoring round (35 tasks) is COMPLETE; live work tracked in `mem://workflow/01-status`. Implementation deltas catalogued in `spec/21-app/99-consistency-report.md` §6.
+AC coverage rollout (Phase 3) is the active workstream: shrink `coverageGapAllowlist` monotonically. Current: 51.6% (96/186), allowlist 90. See `mem://workflow/progress-tracker`.
+Honest-scope principle: skipped tests with `t.Logf` + `t.Skip` are tripwires, not coverage; never cite an AC ID in a deferred-skip test (audit treats it as covered).
 
 ## Memories
-- [Workflow status](mem://workflow/01-status) — Current milestone + completed slices + remaining tracked work for spec-21-app implementation.
-- [Email delivery RCA for IMAP watcher](mem://email-delivery-rca) — Stable IMAP stats despite Gmail test means upstream delivery/folder issue; use diagnose command.
-- [IMAP auth failed root causes](mem://decisions/03-imap-auth-debugging) — Two known causes: wrong password OR hidden Unicode in stored password; check doctor command output first.
-- [spec/21-app folder rename](mem://decisions/04-spec-21-app-rename) — 2026-04-25 merge of 21-golang-email-reader + 22-fyne-ui into 21-app; legacy under spec/21-app/legacy/.
-- [Go verification path](mem://go-verification-path) — Sandbox lacks Go toolchain; use `nix run nixpkgs#go -- {vet,test} -tags nofyne ./...`.
-- [Workspace revert on resume](mem://workspace-revert-on-resume) — Files outside `.lovable/` may revert between sessions; verify on disk.
-- [Archived: spec-21-app tasklist](mem://archive/02-spec-21-app-tasklist) — Closed 35-task authoring tasklist kept for audit.
+- [Workflow status](mem://workflow/01-status) — Current milestone, completed slices through #131, remaining work, verification commands.
+- [AC coverage rollout pattern](mem://decisions/06-ac-coverage-rollout-pattern) — Slice template, AST/linter/log-scan patterns, honest-scope principle, anti-patterns.
+- [Desktop run procedure](mem://decisions/05-desktop-run-procedure) — How to run `email-read` CLI + UI on Windows/macOS/Linux + smoke-test checklist.
+- [Architecture decisions](mem://decisions/01-architecture) — Core architectural choices.
+- [Build and deploy](mem://decisions/02-build-and-deploy) — Build pipeline + run.ps1/run.sh.
+- [IMAP auth failed root causes](mem://decisions/03-imap-auth-debugging) — Wrong password OR hidden Unicode; check doctor first.
+- [spec/21-app folder rename](mem://decisions/04-spec-21-app-rename) — 2026-04-25 merge of 21-golang-email-reader + 22-fyne-ui.
+- [Error stack traces preference](mem://preferences/01-error-stack-traces) — Always use `internal/errtrace`.
+- [Testing guide](mem://testing-guide) — Project-wide test conventions.
+- [Session 2026-04-21](mem://sessions/01-2026-04-21) — IMAP auth debugging session.
+- [Session 2026-04-21 debugging](mem://sessions/02-2026-04-21-debugging) — Verbose poll logging round.
+- [Archived: spec-21-app tasklist](mem://archive/02-spec-21-app-tasklist) — Closed 35-task authoring tasklist.
