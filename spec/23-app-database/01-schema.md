@@ -49,12 +49,12 @@ Total: 5 tables. No others. Adding a table requires bumping this spec's MAJOR ve
 
 
 
-## 2. Table `Email`
+## 2. Table `Emails`
 
 Persisted copy of every IMAP message that the watcher has fetched. The on-disk `.eml` file is the source of truth for body bytes; this table indexes metadata for search and filtering.
 
 ```sql
-CREATE TABLE Email (
+CREATE TABLE Emails (
     Id            INTEGER PRIMARY KEY AUTOINCREMENT,
     Alias         TEXT    NOT NULL,
     MessageId     TEXT    NOT NULL,
@@ -71,15 +71,15 @@ CREATE TABLE Email (
     CreatedAt     DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
-CREATE UNIQUE INDEX UX_Email_Alias_MessageId ON Email (Alias, MessageId);
-CREATE        INDEX IX_Email_Alias_Uid       ON Email (Alias, Uid DESC);
-CREATE        INDEX IX_Email_ReceivedAt      ON Email (ReceivedAt DESC);
-CREATE        INDEX IX_Email_Alias_Received  ON Email (Alias, ReceivedAt DESC);
+CREATE UNIQUE INDEX UX_Emails_Alias_MessageId ON Emails (Alias, MessageId);
+CREATE        INDEX IX_Emails_Alias_Uid       ON Emails (Alias, Uid DESC);
+CREATE        INDEX IX_Emails_ReceivedAt      ON Emails (ReceivedAt DESC);
+CREATE        INDEX IX_Emails_Alias_Received  ON Emails (Alias, ReceivedAt DESC);
 ```
 
 | Column | Type | Notes |
 |---|---|---|
-| `Id` | `INTEGER` PK | rowid alias; FK target for `OpenedUrl.EmailId`. |
+| `Id` | `INTEGER` PK | rowid alias; FK target for `OpenedUrls.EmailId`. |
 | `Alias` | `TEXT NOT NULL` | Account alias from `config.json` `Accounts[*].Alias`. |
 | `MessageId` | `TEXT NOT NULL` | RFC 822 `Message-ID`. Empty messages get a synthesized `<sha1>@no-id.local` value (Watch backend §4). |
 | `Uid` | `INTEGER NOT NULL` | IMAP UID. Per-`Alias` monotonic, but **never** assumed globally unique. |
@@ -121,7 +121,7 @@ CREATE TABLE WatchState (
 
 | Column | Type | Notes |
 |---|---|---|
-| `Alias` | `TEXT` PK | Matches `Email.Alias`. No FK (Email rows can be pruned independently). |
+| `Alias` | `TEXT` PK | Matches `Emails.Alias`. No FK (Emails rows can be pruned independently). |
 | `LastUid` | `INTEGER NOT NULL` | Highest `Uid` successfully persisted for this alias. `0` = first run. |
 | `LastMessageId` | `TEXT NOT NULL` | `Message-ID` of the most recent successfully persisted message. |
 | `LastSubject` | `TEXT NOT NULL` | Subject of the most recent message (UI display). |
@@ -137,12 +137,12 @@ CREATE TABLE WatchState (
 
 ---
 
-## 4. Table `OpenedUrl`
+## 4. Table `OpenedUrls`
 
 Forensic ledger for every URL the app considers opening — including blocked decisions. Used both for deduplication (don't double-launch the same URL within `OpenUrlDedupWindow`) and for the Tools "Recent opened URLs" view.
 
 ```sql
-CREATE TABLE OpenedUrl (
+CREATE TABLE OpenedUrls (
     Id             INTEGER PRIMARY KEY AUTOINCREMENT,
     EmailId        INTEGER,
     Alias          TEXT    NOT NULL,
@@ -154,20 +154,20 @@ CREATE TABLE OpenedUrl (
     BlockedReason  TEXT    NOT NULL DEFAULT '',
     LaunchedAt     DATETIME,
     CreatedAt      DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-    FOREIGN KEY (EmailId) REFERENCES Email(Id) ON DELETE SET NULL
+    FOREIGN KEY (EmailId) REFERENCES Emails(Id) ON DELETE SET NULL
 );
 
-CREATE        INDEX IX_OpenedUrl_Alias_Created ON OpenedUrl (Alias, CreatedAt DESC);
-CREATE        INDEX IX_OpenedUrl_EmailId       ON OpenedUrl (EmailId);
-CREATE UNIQUE INDEX UX_OpenedUrl_Dedup
-       ON OpenedUrl (Alias, OriginalUrl, LaunchedAt)
+CREATE        INDEX IX_OpenedUrls_Alias_Created ON OpenedUrls (Alias, CreatedAt DESC);
+CREATE        INDEX IX_OpenedUrls_EmailId       ON OpenedUrls (EmailId);
+CREATE UNIQUE INDEX UX_OpenedUrls_Dedup
+       ON OpenedUrls (Alias, OriginalUrl, LaunchedAt)
        WHERE Decision = 'Launched';
 ```
 
 | Column | Type | Notes |
 |---|---|---|
 | `Id` | `INTEGER` PK | |
-| `EmailId` | `INTEGER NULL` | FK → `Email.Id`. NULL for `Origin='Manual'` (Tools UI launches). `ON DELETE SET NULL` so pruning Email rows preserves the audit trail. |
+| `EmailId` | `INTEGER NULL` | FK → `Emails.Id`. NULL for `Origin='Manual'` (Tools UI launches). `ON DELETE SET NULL` so pruning Emails rows preserves the audit trail. |
 | `Alias` | `TEXT NOT NULL` | Account alias context (always populated, even for Manual). |
 | `RuleName` | `TEXT NOT NULL` | Empty unless `Origin='Rule'`. |
 | `Origin` | `TEXT NOT NULL` | Enum: `Watcher` (auto-open by polling loop), `Manual` (Tools UI), `Rule` (explicit rule action). |
@@ -179,18 +179,18 @@ CREATE UNIQUE INDEX UX_OpenedUrl_Dedup
 | `CreatedAt` | `DATETIME NOT NULL` | UTC. Always set, even for Blocked/Failed. |
 
 **Invariants:**
-- `UX_OpenedUrl_Dedup` is a **partial unique index** — only over `Decision='Launched'` rows. Blocked attempts are never deduped (every block is independently audited).
+- `UX_OpenedUrls_Dedup` is a **partial unique index** — only over `Decision='Launched'` rows. Blocked attempts are never deduped (every block is independently audited).
 - `OriginalUrl` is encrypted at rest? **No** — explicit non-feature; documented in Tools backend §11.
 - The Tools backend MUST insert the `OpenedUrl` row **after** the browser launch returns (forensic completeness — Tools backend §3.4 step 7).
 
 ---
 
-## 5. Table `SchemaMigration`
+## 5. Table `_SchemaVersion`
 
 Owned by `internal/store/migrate`. Feature code MUST NOT read or write this table.
 
 ```sql
-CREATE TABLE SchemaMigration (
+CREATE TABLE _SchemaVersion (
     Version    INTEGER PRIMARY KEY,
     Name       TEXT    NOT NULL,
     AppliedAt  DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
@@ -211,9 +211,9 @@ CREATE TABLE SchemaMigration (
 
 | # | Constraint | Mechanism |
 |---|---|---|
-| X-1 | `OpenedUrl.EmailId` MUST point at an existing `Email.Id` or be NULL. | FK `ON DELETE SET NULL`. |
-| X-2 | `WatchState.Alias` and `Email.Alias` SHOULD agree, but no FK — Email rows survive alias deletion (audit value). | Application-level. |
-| X-3 | `OpenedUrl.Alias` SHOULD match `Email.Alias` when `EmailId` is set. | Application-level (Tools backend §3.4 step 5). |
+| X-1 | `OpenedUrls.EmailId` MUST point at an existing `Emails.Id` or be NULL. | FK `ON DELETE SET NULL`. |
+| X-2 | `WatchState.Alias` and `Emails.Alias` SHOULD agree, but no FK — Emails rows survive alias deletion (audit value). | Application-level. |
+| X-3 | `OpenedUrls.Alias` SHOULD match `Emails.Alias` when `EmailId` is set. | Application-level (Tools backend §3.4 step 5). |
 | X-4 | All `*At` columns are stored as ISO-8601 UTC strings (SQLite `DATETIME` is text). | Insert defaults via `strftime('%Y-%m-%dT%H:%M:%fZ','now')`. |
 | X-5 | All boolean columns are positive (`HasAttachment`, future booleans) per `18-database-conventions.md` §3. | `CHECK (col IN (0,1))`. |
 
