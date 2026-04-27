@@ -10,8 +10,23 @@ import (
 
 // withIsolatedConfig backs up data/config.json (if any), runs fn, and restores it.
 // Uses the real on-disk path because config.Load/Save are not parameterized.
+//
+// Also sets EMAIL_READ_DISABLE_SEED=1 for the duration of fn so that the
+// default seed account (DefaultSeedAccounts) does NOT bleed back into the
+// freshly-deleted config when config.Load() runs. Without this, tests
+// like TestDiagnose_NoAccounts panic because the demo account is
+// re-injected and Diagnose then tries to dial a non-existent IMAP host.
 func withIsolatedConfig(t *testing.T, fn func()) {
 	t.Helper()
+	prevSeed, hadSeed := os.LookupEnv("EMAIL_READ_DISABLE_SEED")
+	_ = os.Setenv("EMAIL_READ_DISABLE_SEED", "1")
+	t.Cleanup(func() {
+		if hadSeed {
+			_ = os.Setenv("EMAIL_READ_DISABLE_SEED", prevSeed)
+		} else {
+			_ = os.Unsetenv("EMAIL_READ_DISABLE_SEED")
+		}
+	})
 	p, err := config.Path()
 	if err != nil {
 		t.Fatalf("config path: %v", err)

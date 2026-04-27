@@ -123,7 +123,16 @@ func isDefaultSeed(alias string) bool {
 // present in c.Accounts AND have not been tombstoned by the user. Returns
 // true if c was mutated (caller should Save). Pure in-memory operation —
 // it never writes config.json itself.
+//
+// Test seam: when the env var EMAIL_READ_DISABLE_SEED is set to a
+// truthy value ("1"/"true"), seeding is fully disabled. Tests that
+// rely on a pristine empty config (e.g. withIsolatedConfig in
+// internal/core) flip this so deleted-and-reloaded config files do
+// not re-acquire the demo account between subtests.
 func applySeedDefaults(c *Config) bool {
+	if v := os.Getenv("EMAIL_READ_DISABLE_SEED"); v == "1" || v == "true" {
+		return false
+	}
 	tomb, err := loadTombstones()
 	if err != nil {
 		// If we cannot read tombstones, do NOT seed — better to show no

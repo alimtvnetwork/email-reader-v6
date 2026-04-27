@@ -434,3 +434,36 @@ all future work.
 ### Files changed
 - edited `.lovable/memory/index.md` (Core)
 - edited `.lovable/memory/features/02-error-trace-rollout.md` (this file)
+
+## Backlog cleared — seed bleed-through fixed (2026-04-27)
+
+The pre-existing failures `TestDiagnose_NoAccounts`,
+`TestSettings_Save_UnknownKeys_Untouched`, and
+`TestSettings_SavePreservesAccountsAndRules` are now green.
+
+**Root cause:** `config.Load()` calls `applySeedDefaults` whenever
+`data/config.json` is missing on disk. `withIsolatedConfig` deletes
+that file at the start of each test, so the next `Load` re-injected
+the `attobond-admin` seed account — which made
+`TestDiagnose_NoAccounts` find an account, dial a non-existent IMAP
+host, and panic on a nil `mailclient.Client`. The Settings tests saw
+the same demo account leak into their assertions.
+
+**Fix (test seam, not a behaviour change):**
+- `internal/config/seed.go::applySeedDefaults` now early-returns
+  `false` when env `EMAIL_READ_DISABLE_SEED` is `"1"` or `"true"`.
+- `internal/core/accounts_test.go::withIsolatedConfig` sets that env
+  for the duration of `fn` (and restores the previous value on
+  `t.Cleanup`).
+- New regression test:
+  `internal/config/seed_disable_test.go::TestApplySeedDefaults_RespectsDisableEnv`.
+
+**Verification:**
+- `go test -count=1 ./internal/config/... ./internal/core/...` — green.
+- All three errtrace lints still report **0 violations**.
+
+### Files changed
+- edited `internal/config/seed.go`
+- created `internal/config/seed_disable_test.go`
+- edited `internal/core/accounts_test.go`
+- edited `.lovable/memory/features/02-error-trace-rollout.md` (this file)
