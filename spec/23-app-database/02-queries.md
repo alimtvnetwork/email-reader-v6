@@ -64,7 +64,7 @@ Total: 12 named queries. Adding one requires updating §3 below AND the consiste
 Idempotent insert of an IMAP message. Conflict on `(Alias, MessageId)` is the **expected** path on re-fetch (e.g., after a crash mid-cycle).
 
 ```sql
-INSERT INTO Email (
+INSERT INTO Emails (
     Alias, MessageId, Uid, FromAddr, ToAddr, CcAddr,
     Subject, BodyText, BodyHtml, ReceivedAt, FilePath, HasAttachment
 ) VALUES (
@@ -107,7 +107,7 @@ List/filter for the Emails view. Pagination via keyset on `(ReceivedAt, Id)`.
 ```sql
 SELECT Id, Alias, MessageId, Uid, FromAddr, ToAddr, CcAddr,
        Subject, ReceivedAt, FilePath, HasAttachment, CreatedAt
-FROM Email
+FROM Emails
 WHERE (:Alias = '' OR Alias = :Alias)
   AND (:Q     = '' OR (Subject LIKE :QLike OR FromAddr LIKE :QLike))
   AND (:Since IS NULL OR ReceivedAt >= :Since)
@@ -136,7 +136,7 @@ LIMIT :Limit;
 ```sql
 SELECT Id, Alias, MessageId, Uid, FromAddr, ToAddr, CcAddr,
        Subject, BodyText, BodyHtml, ReceivedAt, FilePath, HasAttachment, CreatedAt
-FROM Email
+FROM Emails
 WHERE Id = :Id;
 ```
 
@@ -146,7 +146,7 @@ WHERE Id = :Id;
 
 ```sql
 SELECT Alias, COUNT(*) AS Total, MAX(ReceivedAt) AS NewestReceivedAt
-FROM Email
+FROM Emails
 GROUP BY Alias;
 ```
 
@@ -198,7 +198,7 @@ ORDER BY Alias ASC;
 
 ```sql
 SELECT Id, LaunchedAt
-FROM OpenedUrl
+FROM OpenedUrls
 WHERE Alias       = :Alias
   AND OriginalUrl = :OriginalUrl
   AND Decision    = 'Launched'
@@ -219,7 +219,7 @@ LIMIT 1;
 ### 3.9 `Q-OPEN-INS` — write
 
 ```sql
-INSERT INTO OpenedUrl (
+INSERT INTO OpenedUrls (
     EmailId, Alias, RuleName, Origin,
     OriginalUrl, OpenedUrl, Decision, BlockedReason, LaunchedAt
 ) VALUES (
@@ -237,7 +237,7 @@ RETURNING Id;
 SELECT Id, EmailId, Alias, RuleName, Origin,
        OriginalUrl, OpenedUrl, Decision, BlockedReason,
        LaunchedAt, CreatedAt
-FROM OpenedUrl
+FROM OpenedUrls
 WHERE (:Alias = '' OR Alias = :Alias)
 ORDER BY CreatedAt DESC
 LIMIT :Limit;
@@ -251,7 +251,7 @@ Pre-flight count for the CSV export progress bar.
 
 ```sql
 SELECT COUNT(*) AS Total
-FROM Email
+FROM Emails
 WHERE (:Alias = '' OR Alias = :Alias)
   AND (:Since IS NULL OR ReceivedAt >= :Since)
   AND (:Until IS NULL OR ReceivedAt <  :Until);
@@ -264,7 +264,7 @@ Streaming cursor for `ExportCsv`. Driver uses `*sql.Rows` directly; no buffering
 ```sql
 SELECT Id, Alias, MessageId, Uid, FromAddr, ToAddr, CcAddr,
        Subject, ReceivedAt, FilePath, HasAttachment, CreatedAt
-FROM Email
+FROM Emails
 WHERE (:Alias = '' OR Alias = :Alias)
   AND (:Since IS NULL OR ReceivedAt >= :Since)
   AND (:Until IS NULL OR ReceivedAt <  :Until)
