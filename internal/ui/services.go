@@ -49,11 +49,20 @@ import (
 // returned by `core.NewStoreActivitySource(rt.Store)`. Same lazy-
 // attach pattern as `HealthSource` (Slice #105). When nil the
 // dashboard hides its recent-activity list rather than panicking.
+//
+// `Watch` is the long-lived `*core.Watch` singleton owned by
+// `WatchRuntimeOrNil()`. Stays nil until `AttachWatch` is called
+// from the NavWatch arm — mirrors `HealthSource` / `ActivitySource`
+// so every typed service is reachable through the same `*Services`
+// pointer (Slice #116b, Phase 6.2). Views that fall back to
+// reaching into `WatchRuntimeOrNil()` directly still work; the
+// field is the spec-aligned access path.
 type Services struct {
 	Dashboard      *core.DashboardService
 	Emails         *core.EmailsService
 	Rules          *core.RulesService
 	Accounts       *core.AccountsService // Slice #115 (Phase 6.1) typed shell over the Accounts free funcs
+	Watch          *core.Watch           // Slice #116b (Phase 6.2) singleton lazily attached from WatchRuntime
 	HealthSource   core.AccountHealthSource
 	ActivitySource core.ActivitySource
 }
@@ -142,6 +151,55 @@ func (s *Services) AttachRefresher(refresher core.Refresher) {
 		return
 	}
 	s.Emails.WithRefresher(refresher)
+}
+
+// AttachWatch stores the long-lived `*core.Watch` singleton on the
+// bundle so views can pick it up via `services.Watch` instead of
+// reaching back into `WatchRuntimeOrNil()` each time. **Slice #116b
+// (Phase 6.2)** wire-up: completes the spec-aligned shape where every
+// typed service is reachable through a single `*Services` pointer.
+//
+// Lazy-attach from `NavWatch` (and any other view that needs it)
+// mirrors `AttachHealthSource` / `AttachActivitySource` — the watch
+// runtime is built on first nav, so calling here guarantees the field
+// is populated the first time the view is rendered with a healthy
+// runtime, without forcing a second `WatchRuntime` build at boot.
+//
+// Safe to call with a nil receiver, nil watch, or after a previous
+// successful attach (idempotent — a second call simply re-stores the
+// same singleton pointer).
+func (s *Services) AttachWatch(w *core.Watch) {
+	if s == nil || w == nil {
+		return
+	}
+	s.Watch = w
+}
+
+// AttachActivitySource builds a production `core.ActivitySource` from
+// the supplied `*store.Store` and stores it on the bundle so the
+// Dashboard view can pass it into `(*core.DashboardService).RecentActivity`.
+//
+// Slice #105 wire-up: same lazy-attach precedent as
+// `AttachHealthSource` (the store is opened lazily by
+// `WatchRuntimeOrNil()`); calling here from the NavDashboard arm
+// guarantees the source is attached the first time the user lands on
+// the dashboard with a healthy runtime, without forcing a second
+// `store.Open()` at boot (which would risk SQLite lock contention).
+//
+// Safe to call with a nil receiver, nil store, or after a previous
+// successful attach (idempotent — a second call simply replaces the
+// adapter with one bound to the same underlying *store.Store, which
+// is harmless because the underlying store is shared).
+func (s *Services) AttachActivitySource(st *store.Store) {
+	if s == nil || st == nil {
+		return
+	}
+	src := core.NewStoreActivitySource(st)
+	if src == nil {
+		log.Printf("services: AttachActivitySource: NewStoreActivitySource returned nil")
+		return
+	}
+	s.ActivitySource = src
 }
 
 // AttachHealthSource builds a production `core.AccountHealthSource`
