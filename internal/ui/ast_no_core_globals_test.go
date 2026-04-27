@@ -89,9 +89,12 @@ var deletedCoreSymbols = map[string]struct{}{
 // then delete the entry. The test will start enforcing purity for
 // that file from then on.
 var viewLayerGlobalsAllowlist = map[string]struct{}{
-	"views/launch.go":        {}, // browser launcher — needs cfg.Browser
-	"views/tools_openurl.go": {}, // tools tab open-url helper
-	"views/tools_read.go":    {}, // tools tab read helper
+	"views/launch.go": {}, // browser launcher — needs cfg.Browser; planned migration via shell-injected BrowserFactory
+	// Slice #116c (Phase 6.3) removed `views/tools_openurl.go` and
+	// `views/tools_read.go` from this allowlist. Both files now consume
+	// the `*core.Tools` factory through the injected `ToolsFactory`
+	// parameter sourced from `*Services.Tools`. Re-adding inline
+	// `config.Load()` to either file would fail Contract B.
 }
 
 // TestAST_NoDeletedCoreSymbolsFromUI enforces Contract A.
