@@ -301,3 +301,57 @@ violations** (LINT_MODE=fail). All `internal/ui/...` packages green.
 - created `internal/ui/errlog/persist_test.go`
 - edited `internal/ui/errlog/errlog.go` (persister field + Append hook)
 - edited `internal/ui/app.go` (enableErrorLogPersistence + Run wiring)
+
+## Phase 4.2 — "Open log file" button wired (2026-04-27)
+
+Added an "Open log file" affordance to the Error Log view's footer.
+Hands the persisted `error-log.jsonl` path off to the OS default
+handler via `fyne.CurrentApp().OpenURL(file://…)` so the user can
+forward the raw log to a bug report without copy-pasting trace by
+trace.
+
+### Wiring
+- `views.ErrorLogOptions` gained `LogPath string` and
+  `OpenPath func(path string) error`. Both optional; empty `LogPath`
+  disables the button (boot-time persistence failure → in-memory
+  only). nil `OpenPath` shows "Open handler not wired." instead of
+  panicking.
+- `internal/ui/app.go::Run()` records the resolved path in a new
+  package-level `errLogPath` after `enableErrorLogPersistence`
+  succeeds (empty when degraded). The `viewFor(NavErrorLog, …)` arm
+  threads `errLogPath` + `openLogFileWithFyne` into the view.
+- `openLogFileWithFyne` resolves to absolute path, builds a
+  `&url.URL{Scheme:"file", Path: abs}`, and calls
+  `fyne.CurrentApp().OpenURL`. nil `CurrentApp()` returns a typed
+  errtrace error so the headless test path stays sane.
+
+### View status feedback
+Rather than a popup, a low-importance `widget.Label` next to the
+buttons flips to one of:
+- `"Disk log unavailable."` — `LogPath == ""` (button also disabled)
+- `"Open handler not wired."` — `OpenPath == nil`
+- `"Open failed: <err>"` — opener returned an error
+- `"Opened <path>"` — success
+
+Pulled the routing logic into a pure helper `openLogFile(path,
+opener)` so headless tests assert behavior without a Fyne app.
+
+### Tests (4 new in `error_log_test.go`)
+- `TestOpenLogFile_EmptyPath`: empty `LogPath` → "Disk log unavailable.".
+- `TestOpenLogFile_NilOpener`: nil opener → "Open handler not wired.".
+- `TestOpenLogFile_Success`: opener receives configured path; status
+  is "Opened <path>".
+- `TestOpenLogFile_Failure`: opener error → status carries
+  "Open failed:" + the error message.
+
+`go vet -tags nofyne ./...` clean. All three errtrace lints still
+**0 violations** (LINT_MODE=fail). All `internal/ui/...` packages
+green.
+
+### Files changed
+- edited `internal/ui/views/error_log.go` (added LogPath/OpenPath +
+  button + status label + openLogFile helper)
+- edited `internal/ui/views/error_log_test.go` (4 new tests +
+  sentinelErr helper)
+- edited `internal/ui/app.go` (errLogPath var + openLogFileWithFyne
+  + NavErrorLog wiring + net/url + errtrace imports)
