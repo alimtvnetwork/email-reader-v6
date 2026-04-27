@@ -1,7 +1,7 @@
 # 97 — Dashboard — Acceptance Criteria
 
-**Version:** 1.0.0
-**Updated:** 2026-04-25
+**Version:** 1.0.1
+**Updated:** 2026-04-27
 **Status:** Approved
 **AI Confidence:** Production-Ready
 **Ambiguity:** None
@@ -20,7 +20,26 @@ Cross-references:
 
 ---
 
+---
+
+## Sandbox feasibility legend (added Slice #184 — see `mem://workflow/progress-tracker.md`)
+
+A fresh AI picking up an unchecked row should consult the `**Sandbox:**` tag immediately under
+each section header to decide whether the row is implementable in the Lovable sandbox or must
+be deferred to a workstation/CI runner.
+
+| Tag | Meaning | Implementable in sandbox? |
+|---|---|---|
+| 🟢 **headless** | Go unit/integration tests, AST scanners, log greps, spec-doc edits. Verified via `nix run nixpkgs#go -- test -tags nofyne ./...`. | **Yes** — preferred sandbox work. |
+| 🟡 **cgo-required** | Fyne canvas widget tests, real driver behaviour. Needs cgo + GL/X11. See `mem://workflow/canvas-harness-starter.md` (Slice #180). | **No** — defer to workstation; planned. |
+| 🔴 **needs bench / E2E infra** | p95 perf gates (bench infra) or multi-process IMAP+browser E2E. See `mem://workflow/{bench,e2e}-harness-starter.md` (Slices #178/#179). | **No** — defer to CI runner; planned. |
+| ⚪ **N/A** | Manual sign-off checklist; no automated test possible. | **No** — human reviewer. |
+
+A section may carry **two** tags when its rows split (e.g. `🟢 + 🔴`); pick the right tag per row by reading the row itself.
+
 ## 1. Functional (must-pass)
+
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
 
 - [ ] **F-01** Mounting the Dashboard tab calls `core.Dashboard.Summary` exactly once.
 - [ ] **F-02** All four `StatCard`s render with non-empty `Primary` text.
@@ -35,6 +54,8 @@ Cross-references:
 
 ## 2. Live-Update
 
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
+
 - [ ] **L-01** A `WatchEvent` arriving while the tab is visible prepends to `RecentActivityList` within 16 ms.
 - [ ] **L-02** A matching `WatchEvent` patches the corresponding `AccountHealthRow` (e.g., `LastPollAt` updates) without a full refetch.
 - [ ] **L-03** Switching away from the tab calls `vm.DetachLive()` and the channel is closed within 50 ms.
@@ -42,6 +63,8 @@ Cross-references:
 - [ ] **L-05** Closing the app cleanly closes all event subscriptions (no `WatchSubscriberLeak` WARN log).
 
 ## 3. Error Handling
+
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
 
 - [ ] **E-01** `core.Dashboard.Summary` returning code `21101` shows `ErrorPanel{ErrorCode=21101, RetryButton}` — never a blank panel.
 - [ ] **E-02** Retry button re-invokes `Summary` and clears the `ErrorPanel` on success.
@@ -51,6 +74,8 @@ Cross-references:
 
 ## 4. Performance (CI-gated benchmarks)
 
+**Sandbox:** 🔴 **needs bench infra** — see `mem://workflow/bench-infra-starter.md` (Slice #178).
+
 - [ ] **P-01** `Summary` p95 ≤ 40 ms with 100 000 emails / 10 accounts.
 - [ ] **P-02** Cold mount → first paint ≤ 100 ms.
 - [ ] **P-03** Warm `Refresh` round-trip ≤ 50 ms.
@@ -59,6 +84,8 @@ Cross-references:
 - [ ] **P-06** Slow-call WARN log emitted when any method exceeds 100 ms.
 
 ## 5. Code Quality
+
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
 
 - [ ] **Q-01** No method body in `internal/core/dashboard.go` exceeds 15 lines.
 - [ ] **Q-02** No `interface{}` / `any` in `internal/core/dashboard.go` or `internal/ui/views/dashboard.go`.
@@ -70,6 +97,8 @@ Cross-references:
 
 ## 6. Testing
 
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
+
 - [ ] **T-01** `internal/core/dashboard_test.go` coverage ≥ 90 %.
 - [ ] **T-02** All 8 required core test cases (per `01-backend.md` §6) present and passing.
 - [ ] **T-03** All 6 required smoke tests (per `02-frontend.md` §9) present and passing.
@@ -78,12 +107,16 @@ Cross-references:
 
 ## 7. Logging
 
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
+
 - [ ] **G-01** `DEBUG DashboardSummary` emitted on every `Summary` call with `TraceId`, `DurationMs`, `EmailsTotal`, `Accounts`.
 - [ ] **G-02** `WARN DashboardSlow` emitted when `DurationMs > 100`.
 - [ ] **G-03** `ERROR DashboardFailed` emitted on any wrapped error with `TraceId`, `ErrorCode`, `Method`.
 - [ ] **G-04** No PII (email body, password, token) appears in any Dashboard log line.
 
 ## 8. Database
+
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
 
 - [ ] **D-01** Migrations `M0007_AddEmailIsRead`, `M0008_CreateWatchEvent`, `M0009_AddWatchStateHealth` applied idempotently on app start.
 - [ ] **D-02** `WatchEvent` table trimmed to ≤ 10 000 rows after every successful poll.
@@ -92,12 +125,16 @@ Cross-references:
 
 ## 9. Accessibility
 
+**Sandbox:** 🟡 **cgo-required** — needs Fyne canvas harness; see `mem://workflow/canvas-harness-starter.md` (Slice #180).
+
 - [ ] **A-01** All `StatCard` instances expose role `"region"` with `aria-label`.
 - [ ] **A-02** All clickable rows expose role `"button"`.
 - [ ] **A-03** Focus order matches §8 of `02-frontend.md`.
 - [ ] **A-04** Screen-reader announcement on `Loaded` matches the template in §8.
 
 ## 10. Sign-off
+
+**Sandbox:** ⚪ **N/A** — manual sign-off checklist; no automated gate.
 
 | Reviewer        | Date       | Signature |
 |-----------------|------------|-----------|

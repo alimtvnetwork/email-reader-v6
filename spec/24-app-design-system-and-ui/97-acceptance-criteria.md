@@ -1,7 +1,7 @@
 # 24 — App Design System & UI — Acceptance Criteria
 
-**Version:** 1.0.0
-**Updated:** 2026-04-25
+**Version:** 1.0.1
+**Updated:** 2026-04-27
 **Status:** Approved
 **AI Confidence:** Production-Ready
 **Ambiguity:** None
@@ -14,7 +14,26 @@ Binary, machine-checkable acceptance criteria for `spec/24-app-design-system-and
 
 ---
 
+---
+
+## Sandbox feasibility legend (added Slice #184 — see `mem://workflow/progress-tracker.md`)
+
+A fresh AI picking up an unchecked row should consult the `**Sandbox:**` tag immediately under
+each section header to decide whether the row is implementable in the Lovable sandbox or must
+be deferred to a workstation/CI runner.
+
+| Tag | Meaning | Implementable in sandbox? |
+|---|---|---|
+| 🟢 **headless** | Go unit/integration tests, AST scanners, log greps, spec-doc edits. Verified via `nix run nixpkgs#go -- test -tags nofyne ./...`. | **Yes** — preferred sandbox work. |
+| 🟡 **cgo-required** | Fyne canvas widget tests, real driver behaviour. Needs cgo + GL/X11. See `mem://workflow/canvas-harness-starter.md` (Slice #180). | **No** — defer to workstation; planned. |
+| 🔴 **needs bench / E2E infra** | p95 perf gates (bench infra) or multi-process IMAP+browser E2E. See `mem://workflow/{bench,e2e}-harness-starter.md` (Slices #178/#179). | **No** — defer to CI runner; planned. |
+| ⚪ **N/A** | Manual sign-off checklist; no automated test possible. | **No** — human reviewer. |
+
+A section may carry **two** tags when its rows split (e.g. `🟢 + 🔴`); pick the right tag per row by reading the row itself.
+
 ## A. Tokens
+
+**Sandbox:** 🟡 **cgo-required** — needs Fyne canvas harness; see `mem://workflow/canvas-harness-starter.md` (Slice #180).
 
 | # | Criterion | Test ID |
 |---|---|---|
@@ -25,6 +44,8 @@ Binary, machine-checkable acceptance criteria for `spec/24-app-design-system-and
 | AC-DS-05 | No two distinct tokens share the same RGB triple in the same variant. | `Test_Tokens_NoDuplicateValues` |
 
 ## B. Theme implementation
+
+**Sandbox:** 🟡 **cgo-required** — needs Fyne canvas harness; see `mem://workflow/canvas-harness-starter.md` (Slice #180).
 
 | # | Criterion | Test ID |
 |---|---|---|
@@ -42,6 +63,8 @@ Binary, machine-checkable acceptance criteria for `spec/24-app-design-system-and
 
 ## C. Layout & shell
 
+**Sandbox:** 🟡 **cgo-required** — needs Fyne canvas harness; see `mem://workflow/canvas-harness-starter.md` (Slice #180).
+
 | # | Criterion | Test ID |
 |---|---|---|
 | AC-DS-30 | Sidebar renders 7 items in the order from `03-layout-and-shell.md` §3.1. | `Test_Shell_SidebarOrder` |
@@ -54,6 +77,8 @@ Binary, machine-checkable acceptance criteria for `spec/24-app-design-system-and
 | AC-DS-37 | AST: only `internal/ui/shell/` constructs the top-level `container.NewBorder` for the window. | `Test_AST_ShellOnlyConstructsRoot` |
 
 ## D. Components
+
+**Sandbox:** 🟡 **cgo-required** — needs Fyne canvas harness; see `mem://workflow/canvas-harness-starter.md` (Slice #180).
 
 | # | Criterion | Test ID |
 |---|---|---|
@@ -72,6 +97,8 @@ Binary, machine-checkable acceptance criteria for `spec/24-app-design-system-and
 
 ## E. Accessibility
 
+**Sandbox:** 🟡 **cgo-required** — needs Fyne canvas harness; see `mem://workflow/canvas-harness-starter.md` (Slice #180).
+
 | # | Criterion | Test ID |
 |---|---|---|
 | AC-DS-60 | Every contrast pair in `05-accessibility.md` §1 meets its threshold (WCAG AA). | `Test_Contrast_Matrix` |
@@ -86,5 +113,7 @@ Binary, machine-checkable acceptance criteria for `spec/24-app-design-system-and
 | AC-DS-69 | AST: no `widget.NewButtonWithIcon("", ...)` calls. | `Test_NoIconOnlyButtons_WithoutLabel` |
 
 ## F. Definition of Done
+
+**Sandbox:** ⚪ **N/A** — manual sign-off checklist; no automated gate.
 
 All AC-DS-* automated tests pass on `linux/amd64`, `darwin/arm64`, `windows/amd64`. `make spec-check` reports zero TODOs in `spec/24-app-design-system-and-ui/`. Watch OI-1 is closed (the consistency report in §5 of `21-app/02-features/05-watch/99-consistency-report.md` updates to ✅).

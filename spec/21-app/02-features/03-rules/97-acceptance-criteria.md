@@ -1,7 +1,7 @@
 # 97 — Rules — Acceptance Criteria
 
-**Version:** 1.0.0
-**Updated:** 2026-04-25
+**Version:** 1.0.1
+**Updated:** 2026-04-27
 **Status:** Approved
 **AI Confidence:** Production-Ready
 **Ambiguity:** None
@@ -20,7 +20,26 @@ Cross-references:
 
 ---
 
+---
+
+## Sandbox feasibility legend (added Slice #184 — see `mem://workflow/progress-tracker.md`)
+
+A fresh AI picking up an unchecked row should consult the `**Sandbox:**` tag immediately under
+each section header to decide whether the row is implementable in the Lovable sandbox or must
+be deferred to a workstation/CI runner.
+
+| Tag | Meaning | Implementable in sandbox? |
+|---|---|---|
+| 🟢 **headless** | Go unit/integration tests, AST scanners, log greps, spec-doc edits. Verified via `nix run nixpkgs#go -- test -tags nofyne ./...`. | **Yes** — preferred sandbox work. |
+| 🟡 **cgo-required** | Fyne canvas widget tests, real driver behaviour. Needs cgo + GL/X11. See `mem://workflow/canvas-harness-starter.md` (Slice #180). | **No** — defer to workstation; planned. |
+| 🔴 **needs bench / E2E infra** | p95 perf gates (bench infra) or multi-process IMAP+browser E2E. See `mem://workflow/{bench,e2e}-harness-starter.md` (Slices #178/#179). | **No** — defer to CI runner; planned. |
+| ⚪ **N/A** | Manual sign-off checklist; no automated test possible. | **No** — human reviewer. |
+
+A section may carry **two** tags when its rows split (e.g. `🟢 + 🔴`); pick the right tag per row by reading the row itself.
+
 ## 1. Functional (must-pass)
+
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
 
 - [ ] **F-01** Mounting the Rules tab calls `core.Rules.List` exactly once and renders rules sorted by `Order ASC, Name ASC`.
 - [ ] **F-02** With 0 rules → Empty state with "New rule" CTA renders.
@@ -48,6 +67,8 @@ Cross-references:
 
 ## 2. Live-Update
 
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
+
 - [ ] **L-01** A `WatchEvent.Kind == RuleMatched` for a visible rule increments that row's `MatchCount` and bumps `LastMatchedAt` within 16 ms.
 - [ ] **L-02** No full re-list is triggered by a single `RuleMatched` event.
 - [ ] **L-03** Switching tabs calls `vm.DetachLive()` and the channel closes within 50 ms.
@@ -55,6 +76,8 @@ Cross-references:
 - [ ] **L-05** App close emits no `WatchSubscriberLeak` WARN.
 
 ## 3. Error Handling
+
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
 
 - [ ] **E-01** `List` returning 21301/21302 shows `ErrorPanel` with Retry; previous rows preserved.
 - [ ] **E-02** Field-level errors (21310/21311/21312/21315/21316/21317/21318) set `fieldErrs` and focus the offending field.
@@ -66,6 +89,8 @@ Cross-references:
 - [ ] **E-08** No `panic()` reachable from Rules view — fuzzed for 60 s in CI.
 
 ## 4. Performance (CI-gated benchmarks)
+
+**Sandbox:** 🔴 **needs bench infra** — see `mem://workflow/bench-infra-starter.md` (Slice #178).
 
 - [ ] **P-01** `List` p95 ≤ 20 ms with 200 rules.
 - [ ] **P-02** Cold mount → first paint ≤ 100 ms.
@@ -79,6 +104,8 @@ Cross-references:
 
 ## 5. Code Quality
 
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
+
 - [ ] **Q-01** No method body in `internal/core/rules.go` exceeds 15 lines.
 - [ ] **Q-02** No `interface{}` / `any` in `internal/core/rules.go` or `internal/ui/views/rules.go`.
 - [ ] **Q-03** No hex color literals in `internal/ui/views/rules.go` (lint rule `no-hex-in-views`).
@@ -90,6 +117,8 @@ Cross-references:
 
 ## 6. Testing
 
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
+
 - [ ] **T-01** `internal/core/rules_test.go` coverage ≥ 90 %.
 - [ ] **T-02** All 17 required core test cases (per `01-backend.md` §9) present and passing.
 - [ ] **T-03** All 14 required smoke tests (per `02-frontend.md` §10) present and passing.
@@ -100,6 +129,8 @@ Cross-references:
 
 ## 7. Logging
 
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
+
 - [ ] **G-01** `DEBUG RulesList` emitted on every `List` with documented fields.
 - [ ] **G-02** `INFO RuleCreated/Updated/Deleted/EnabledToggled/Reordered/Renamed` emitted on the corresponding mutation.
 - [ ] **G-03** `WARN RulesListSlow` emitted when `DurationMs > 20`.
@@ -108,6 +139,8 @@ Cross-references:
 - [ ] **G-06** No PII (sample `BodyText`, `FromAddr`) appears in any log line. `RuleDryRun` logs structural counters only.
 
 ## 8. Database
+
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
 
 - [ ] **D-01** Migrations `M0011_CreateRuleStat` and `M0012_CreateEmailTag` applied idempotently on app start.
 - [ ] **D-02** Index `IxRuleStatLastMatchedAt` and unique index `IxEmailTagUnique` exist after migration.
@@ -119,6 +152,8 @@ Cross-references:
 
 ## 9. Atomicity & Safety
 
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
+
 - [ ] **X-01** `Rename` is atomic across `config.json` + SQLite (revert verified by T-06).
 - [ ] **X-02** `Delete` removes `Rule` and `RuleStat` in one SQLite tx; `OpenedUrl.RuleName` preserved.
 - [ ] **X-03** `Reorder` uses atomic temp-file write + `os.Rename` for `config.json`.
@@ -126,6 +161,8 @@ Cross-references:
 - [ ] **X-05** `DryRun` is read-only; zero SQL `EXEC` and zero `config.Save` invocations (F-16).
 
 ## 10. Accessibility
+
+**Sandbox:** 🟡 **cgo-required** — needs Fyne canvas harness; see `mem://workflow/canvas-harness-starter.md` (Slice #180).
 
 - [ ] **A-01** `RuleRow` exposes role `"button"` with the documented `aria-label` template.
 - [ ] **A-02** Drag handle exposes role `"button"` with reorder `aria-label`; `Ctrl+ArrowUp/Down` reorders when focused.
@@ -135,6 +172,8 @@ Cross-references:
 - [ ] **A-06** Screen-reader announcements fire on Loaded, Save, and field error.
 
 ## 11. Sign-off
+
+**Sandbox:** ⚪ **N/A** — manual sign-off checklist; no automated gate.
 
 | Reviewer        | Date       | Signature |
 |-----------------|------------|-----------|

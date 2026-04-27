@@ -1,7 +1,7 @@
 # 06 — Tools — Acceptance Criteria
 
-**Version:** 1.0.0
-**Updated:** 2026-04-25
+**Version:** 1.0.1
+**Updated:** 2026-04-27
 **Status:** Approved
 **AI Confidence:** Production-Ready
 **Ambiguity:** None
@@ -21,7 +21,26 @@ Cross-references:
 
 ---
 
+---
+
+## Sandbox feasibility legend (added Slice #184 — see `mem://workflow/progress-tracker.md`)
+
+A fresh AI picking up an unchecked row should consult the `**Sandbox:**` tag immediately under
+each section header to decide whether the row is implementable in the Lovable sandbox or must
+be deferred to a workstation/CI runner.
+
+| Tag | Meaning | Implementable in sandbox? |
+|---|---|---|
+| 🟢 **headless** | Go unit/integration tests, AST scanners, log greps, spec-doc edits. Verified via `nix run nixpkgs#go -- test -tags nofyne ./...`. | **Yes** — preferred sandbox work. |
+| 🟡 **cgo-required** | Fyne canvas widget tests, real driver behaviour. Needs cgo + GL/X11. See `mem://workflow/canvas-harness-starter.md` (Slice #180). | **No** — defer to workstation; planned. |
+| 🔴 **needs bench / E2E infra** | p95 perf gates (bench infra) or multi-process IMAP+browser E2E. See `mem://workflow/{bench,e2e}-harness-starter.md` (Slices #178/#179). | **No** — defer to CI runner; planned. |
+| ⚪ **N/A** | Manual sign-off checklist; no automated test possible. | **No** — human reviewer. |
+
+A section may carry **two** tags when its rows split (e.g. `🟢 + 🔴`); pick the right tag per row by reading the row itself.
+
 ## 1. Functional — Read
+
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
 
 | #    | Criterion                                                                                  | Test                                                  |
 |------|--------------------------------------------------------------------------------------------|-------------------------------------------------------|
@@ -34,6 +53,8 @@ Cross-references:
 | F-07 | Cancellation propagates within **500 ms**.                                                 | `Tools_ReadOnce_CtxCancel_StopsUnder500ms`            |
 
 ## 2. Functional — Export CSV
+
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
 
 | #    | Criterion                                                                                  | Test                                                  |
 |------|--------------------------------------------------------------------------------------------|-------------------------------------------------------|
@@ -49,6 +70,8 @@ Cross-references:
 
 ## 3. Functional — Diagnose
 
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
+
 | #    | Criterion                                                                                  | Test                                                  |
 |------|--------------------------------------------------------------------------------------------|-------------------------------------------------------|
 | F-20 | Five steps run in order: `DnsLookup` → `TcpConnect` → `TlsHandshake` → `ImapLogin` → `InboxSelect`. | `Tools_Diagnose_Happy_5Steps_AllPass`        |
@@ -61,6 +84,8 @@ Cross-references:
 | F-27 | UI pre-seeds 5 `Pending` rows so checklist renders immediately on Run.                     | `ToolsVM_Diag_PreSeeds5PendingRows`                   |
 
 ## 4. Functional — OpenUrl (security-critical 🔴)
+
+**Sandbox:** 🟢 **headless** (validation/redaction) + 🔴 **E2E** (browser launch) — split per-row.
 
 | #    | Criterion                                                                                  | Test                                                  |
 |------|--------------------------------------------------------------------------------------------|-------------------------------------------------------|
@@ -88,6 +113,8 @@ Cross-references:
 
 ## 5. Audit Trail Invariants 🔴 (single-handedly blocks merge)
 
+**Sandbox:** 🟢 **headless** (DB-row invariants) + 🔴 **E2E** (browser-launch chain) — split per-row.
+
 | #    | Criterion                                                                                  | Test                                                  |
 |------|--------------------------------------------------------------------------------------------|-------------------------------------------------------|
 | A-01 | **Every** browser launch in the codebase goes through `core.Tools.OpenUrl`. AST scan over `internal/**/*.go` excluding `internal/browser/` and `internal/core/tools.go` finds **zero** `os/exec` invocations whose first arg matches `(xdg-open\|open\|start\|firefox\|chrome\|chromium\|safari\|brave)`. | `Tools_NoOtherFile_ShellsOutToBrowser` |
@@ -100,6 +127,8 @@ Cross-references:
 | A-08 | CLI `email-read open-url` calls `core.Tools.OpenUrl` with `Origin=Cli`.                    | `Cli_OpenUrl_OriginCli` (CLI test; cross-referenced)  |
 
 ## 6. Performance (CI-gated benchmarks)
+
+**Sandbox:** 🔴 **needs bench infra** — see `mem://workflow/bench-infra-starter.md` (Slice #178).
 
 | #    | Op                                                       | Budget        | Bench                              |
 |------|----------------------------------------------------------|---------------|------------------------------------|
@@ -117,6 +146,8 @@ Cross-references:
 
 ## 7. Code Quality
 
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
+
 | #    | Criterion                                                                                  | How verified                       |
 |------|--------------------------------------------------------------------------------------------|------------------------------------|
 | Q-01 | Zero `interface{}` / `any` in `internal/core/tools*.go` and `internal/ui/views/tools.go`.  | `linters/no-empty-interface.sh`    |
@@ -133,6 +164,8 @@ Cross-references:
 
 ## 8. Security & PII
 
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
+
 | #    | Criterion                                                                                  | Test                                              |
 |------|--------------------------------------------------------------------------------------------|---------------------------------------------------|
 | S-01 | `OriginalUrl` is **never** logged at any level (only persisted to DB column).              | `Logging_NeverContainsOriginalUrl`                |
@@ -146,6 +179,8 @@ Cross-references:
 
 ## 9. Logging
 
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
+
 | #    | Criterion                                                                                  | Test                                              |
 |------|--------------------------------------------------------------------------------------------|---------------------------------------------------|
 | L-01 | One INFO `OpenUrlLaunched` per successful launch with all fields per `01-backend.md` §9.   | `Logging_OpenUrlLaunched_FullFields`              |
@@ -157,6 +192,8 @@ Cross-references:
 
 ## 10. Database
 
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
+
 | #    | Criterion                                                                                  | Test                                              |
 |------|--------------------------------------------------------------------------------------------|---------------------------------------------------|
 | D-01 | `OpenedUrl` schema matches `01-backend.md` §5 verbatim (column names, types, defaults).    | `Schema_OpenedUrl_MatchesSpec`                    |
@@ -166,6 +203,8 @@ Cross-references:
 | D-05 | No FK from `OpenedUrl.Alias` to `Account.Alias` (intentional; audit survives delete).      | A-04                                              |
 
 ## 11. Atomicity & Safety
+
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
 
 | #    | Criterion                                                                                  | Test                                              |
 |------|--------------------------------------------------------------------------------------------|---------------------------------------------------|
@@ -178,6 +217,8 @@ Cross-references:
 
 ## 12. Accessibility
 
+**Sandbox:** 🟡 **cgo-required** — needs Fyne canvas harness; see `mem://workflow/canvas-harness-starter.md` (Slice #180).
+
 | #    | Criterion                                                                                  | How verified                       |
 |------|--------------------------------------------------------------------------------------------|------------------------------------|
 | Y-01 | Step status icons accompanied by step name + status text; no colour-only semantics.        | Manual a11y audit + snapshot        |
@@ -186,6 +227,8 @@ Cross-references:
 | Y-04 | Reduced motion disables Diagnose Running spinner (static frame).                           | `ToolsVM_ReducedMotion_NoSpinner`  |
 
 ## 13. Sign-off
+
+**Sandbox:** ⚪ **N/A** — manual sign-off checklist; no automated gate.
 
 A merge into `main` requires:
 

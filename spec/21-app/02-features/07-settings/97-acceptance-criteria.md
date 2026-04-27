@@ -1,7 +1,7 @@
 # 07 — Settings — Acceptance Criteria
 
-**Version:** 1.0.0
-**Updated:** 2026-04-25
+**Version:** 1.0.1
+**Updated:** 2026-04-27
 **Status:** Approved
 **AI Confidence:** Production-Ready
 **Ambiguity:** None
@@ -26,7 +26,26 @@ Test locations:
 
 ---
 
+---
+
+## Sandbox feasibility legend (added Slice #184 — see `mem://workflow/progress-tracker.md`)
+
+A fresh AI picking up an unchecked row should consult the `**Sandbox:**` tag immediately under
+each section header to decide whether the row is implementable in the Lovable sandbox or must
+be deferred to a workstation/CI runner.
+
+| Tag | Meaning | Implementable in sandbox? |
+|---|---|---|
+| 🟢 **headless** | Go unit/integration tests, AST scanners, log greps, spec-doc edits. Verified via `nix run nixpkgs#go -- test -tags nofyne ./...`. | **Yes** — preferred sandbox work. |
+| 🟡 **cgo-required** | Fyne canvas widget tests, real driver behaviour. Needs cgo + GL/X11. See `mem://workflow/canvas-harness-starter.md` (Slice #180). | **No** — defer to workstation; planned. |
+| 🔴 **needs bench / E2E infra** | p95 perf gates (bench infra) or multi-process IMAP+browser E2E. See `mem://workflow/{bench,e2e}-harness-starter.md` (Slices #178/#179). | **No** — defer to CI runner; planned. |
+| ⚪ **N/A** | Manual sign-off checklist; no automated test possible. | **No** — human reviewer. |
+
+A section may carry **two** tags when its rows split (e.g. `🟢 + 🔴`); pick the right tag per row by reading the row itself.
+
 ## A. Functional — Backend
+
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
 
 | # | Criterion | Test ID |
 |---|---|---|
@@ -57,6 +76,8 @@ Test locations:
 
 ## B. Functional — Frontend
 
+**Sandbox:** 🟡 **cgo-required** — needs Fyne canvas harness; see `mem://workflow/canvas-harness-starter.md` (Slice #180).
+
 | # | Criterion | Test ID |
 |---|---|---|
 | AC-SF-01 | Initial render shows the four cards in order: Paths, Watcher, Browser, Appearance. | `Test_Render_CardOrder` |
@@ -83,6 +104,8 @@ Test locations:
 
 ## C. Cross-Feature Acceptance (the original AC-S1..AC-S5 from `00-overview.md`)
 
+**Sandbox:** 🟢 **headless** — settings backend cross-tests.
+
 | # | Original | Maps to |
 |---|---|---|
 | AC-S1 | Saving poll outside 1–60 shows inline error and does not write. | AC-SB-03, AC-SB-04, AC-SF-04 |
@@ -92,6 +115,8 @@ Test locations:
 | AC-S5 | After Save, open Watch tabs respect new poll interval on next cycle. | `Test_Watch_PollReload_OnSettingsEvent` in `02-features/05-watch/01-backend_test.go` (cross-feature) |
 
 ## D. Security / Anti-Feature Invariants
+
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
 
 | # | Criterion | Test ID |
 |---|---|---|
@@ -104,6 +129,8 @@ Test locations:
 
 ## E. Performance
 
+**Sandbox:** 🔴 **needs bench infra** — see `mem://workflow/bench-infra-starter.md` (Slice #178).
+
 | # | Criterion | Threshold |
 |---|---|---|
 | AC-SP-01 | `Get` cold (first call after process start) | ≤ 25 ms p95 on a 50 KB `config.json` |
@@ -113,5 +140,7 @@ Test locations:
 | AC-SP-05 | UI Save click → button re-enabled | ≤ 80 ms p95 (excludes IO) |
 
 ## F. Definition of Done
+
+**Sandbox:** ⚪ **N/A** — manual sign-off checklist; no automated gate.
 
 All AC-SB-*, AC-SF-* (except `[manual]`), AC-SX-*, AC-SP-* automated tests pass on `linux/amd64`, `darwin/arm64`, `windows/amd64`. `[manual]` items signed off by QA on at least one OS. `make spec-check` (defined in root Makefile) reports zero TODOs in `02-features/07-settings/`.

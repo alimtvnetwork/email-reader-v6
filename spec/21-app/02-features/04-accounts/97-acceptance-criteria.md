@@ -1,7 +1,7 @@
 # 97 — Accounts — Acceptance Criteria
 
-**Version:** 1.0.0
-**Updated:** 2026-04-25
+**Version:** 1.0.1
+**Updated:** 2026-04-27
 **Status:** Approved
 **AI Confidence:** Production-Ready
 **Ambiguity:** None
@@ -20,7 +20,26 @@ Cross-references:
 
 ---
 
+---
+
+## Sandbox feasibility legend (added Slice #184 — see `mem://workflow/progress-tracker.md`)
+
+A fresh AI picking up an unchecked row should consult the `**Sandbox:**` tag immediately under
+each section header to decide whether the row is implementable in the Lovable sandbox or must
+be deferred to a workstation/CI runner.
+
+| Tag | Meaning | Implementable in sandbox? |
+|---|---|---|
+| 🟢 **headless** | Go unit/integration tests, AST scanners, log greps, spec-doc edits. Verified via `nix run nixpkgs#go -- test -tags nofyne ./...`. | **Yes** — preferred sandbox work. |
+| 🟡 **cgo-required** | Fyne canvas widget tests, real driver behaviour. Needs cgo + GL/X11. See `mem://workflow/canvas-harness-starter.md` (Slice #180). | **No** — defer to workstation; planned. |
+| 🔴 **needs bench / E2E infra** | p95 perf gates (bench infra) or multi-process IMAP+browser E2E. See `mem://workflow/{bench,e2e}-harness-starter.md` (Slices #178/#179). | **No** — defer to CI runner; planned. |
+| ⚪ **N/A** | Manual sign-off checklist; no automated test possible. | **No** — human reviewer. |
+
+A section may carry **two** tags when its rows split (e.g. `🟢 + 🔴`); pick the right tag per row by reading the row itself.
+
 ## 1. Functional (must-pass)
+
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
 
 - [ ] **F-01** Mounting the Accounts tab calls `core.Accounts.List` exactly once and renders accounts sorted by `Order ASC, Alias ASC`.
 - [ ] **F-02** With 0 accounts → Empty state with "+ Add account" CTA renders.
@@ -50,6 +69,8 @@ Cross-references:
 
 ## 2. Live-Update
 
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
+
 - [ ] **L-01** `AccountEvent{Added}` appends a row and shows toast within 1 s of `bus.Publish`.
 - [ ] **L-02** `AccountEvent{Removed}` removes the row; if it was selected, `selected = nil` and `DetailPane → EmptyState`.
 - [ ] **L-03** `AccountEvent{Renamed}` performs in-place rename; **scroll position preserved**.
@@ -61,6 +82,8 @@ Cross-references:
 - [ ] **L-09** App close emits no subscriber-leak WARN.
 
 ## 3. Error Handling
+
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
 
 - [ ] **E-01** `List` returning 21701/21702 shows `ErrorPanel` with Retry; previous rows preserved.
 - [ ] **E-02** Field-level errors (21710/21711/21712/21713/21714/21716/21718/21719) set `fieldErrs` and focus the offending field.
@@ -74,6 +97,8 @@ Cross-references:
 - [ ] **E-10** No `panic()` reachable from Accounts view — fuzzed for 60 s in CI.
 
 ## 4. Performance (CI-gated benchmarks)
+
+**Sandbox:** 🔴 **needs bench infra** — see `mem://workflow/bench-infra-starter.md` (Slice #178).
 
 - [ ] **P-01** `List` p95 ≤ 15 ms with 50 accounts.
 - [ ] **P-02** Cold mount → first paint ≤ 100 ms.
@@ -89,6 +114,8 @@ Cross-references:
 
 ## 5. Code Quality
 
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
+
 - [ ] **Q-01** No method body in `internal/core/accounts.go` exceeds 15 lines.
 - [ ] **Q-02** No `interface{}` / `any` in `internal/core/accounts.go` or `internal/ui/views/accounts.go`.
 - [ ] **Q-03** No hex color literals in `internal/ui/views/accounts.go` (lint rule `no-hex-in-views`).
@@ -102,6 +129,8 @@ Cross-references:
 
 ## 6. Security & PII
 
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
+
 - [ ] **S-01** Plaintext password is never bound to a `binding.String` (verified by code search for `binding.NewString` in proximity to `Password`).
 - [ ] **S-02** `PasswordEntry.Text` is `SetText("")`-zeroed after every Save attempt, success or failure.
 - [ ] **S-03** Password byte-slice is zeroed on `OnAppQuit` (verified via `unsafe.Slice` memory inspection in test).
@@ -111,6 +140,8 @@ Cross-references:
 - [ ] **S-07** `EmailAddr` IS logged (operationally necessary; not PII per app threat model — documented).
 
 ## 7. Testing
+
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
 
 - [ ] **T-01** `internal/core/accounts_test.go` coverage ≥ 90 %.
 - [ ] **T-02** All 31 required core test cases (per `01-backend.md` §9) present and passing.
@@ -124,6 +155,8 @@ Cross-references:
 
 ## 8. Logging
 
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
+
 - [ ] **G-01** `DEBUG AccountsList` emitted on every `List` with documented fields.
 - [ ] **G-02** `INFO AccountAdded/Updated/Removed/Renamed/Reordered` emitted on the corresponding mutation.
 - [ ] **G-03** `DEBUG AccountSuggestImap` emitted on every `SuggestImap` call.
@@ -135,6 +168,8 @@ Cross-references:
 
 ## 9. Database
 
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
+
 - [ ] **D-01** Accounts feature adds NO new tables (`WatchState` is owned by Watch feature; this is documented in §3 of `01-backend.md`).
 - [ ] **D-02** All Accounts SQL uses singular PascalCase table names (`WatchState`, `Email`).
 - [ ] **D-03** `Email.Alias` FK uses `ON DELETE SET NULL` (not CASCADE) — historical archive preserved.
@@ -143,6 +178,8 @@ Cross-references:
 - [ ] **D-06** No `SELECT *`.
 
 ## 10. Atomicity & Safety
+
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
 
 - [ ] **X-01** `Add` is atomic across `config.json` + SQLite (revert verified by T-06).
 - [ ] **X-02** `Remove` is atomic across `config.json` + SQLite; deleted `WatchState` row reinserted on rollback (T-06).
@@ -154,6 +191,8 @@ Cross-references:
 
 ## 11. Accessibility
 
+**Sandbox:** 🟡 **cgo-required** — needs Fyne canvas harness; see `mem://workflow/canvas-harness-starter.md` (Slice #180).
+
 - [ ] **A-01** Every interactive widget has a Fyne `Hint` tooltip (Alias, EmailAddr, Password, eye-toggle, Host, Port, Use TLS, Test, Save, Cancel, drag handle, dots).
 - [ ] **A-02** Tab order: Alias → EmailAddr → Password → eye-toggle → ImapDefaults change-link → Host → Port → UseTls → Test → Cancel → Save.
 - [ ] **A-03** Connected dot has off-screen `widget.Label` for screen-reader semantics ("Connected" / "Disconnected — {Error}" / "Not yet polled").
@@ -162,6 +201,8 @@ Cross-references:
 - [ ] **A-06** Form fields with `fieldErrs` entry expose `aria-invalid="true"` and `aria-describedby` pointing to `FieldErrLabel`.
 
 ## 12. Sign-off
+
+**Sandbox:** ⚪ **N/A** — manual sign-off checklist; no automated gate.
 
 | Reviewer        | Date       | Signature |
 |-----------------|------------|-----------|
