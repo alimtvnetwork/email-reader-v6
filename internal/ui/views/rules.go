@@ -178,22 +178,18 @@ func ruleRow(r config.Rule, index int, orderedNames []string, opts RulesOptions,
 	checkCell := container.NewHBox(widget.NewLabel(""), check)
 
 	actionWidgets := []fyne.CanvasObject{}
-	// Reorder buttons (↑ / ↓) — only rendered when Reorder is wired
-	// AND the move is valid (top-row has no ↑, bottom-row has no ↓).
-	// Disabling-vs-omitting decision: see func doc-comment.
-	if opts.Reorder != nil {
-		if index > 0 {
-			upBtn := widget.NewButton("↑", func() {
-				moveRule(orderedNames, index, index-1, opts, status, reload)
-			})
-			actionWidgets = append(actionWidgets, upBtn)
-		}
-		if index < len(orderedNames)-1 {
-			downBtn := widget.NewButton("↓", func() {
-				moveRule(orderedNames, index, index+1, opts, status, reload)
-			})
-			actionWidgets = append(actionWidgets, downBtn)
-		}
+	// Slice #114: drag-handle reorder. Replaces the previous ↑/↓
+	// button pair with a single "⋮⋮" handle that implements
+	// `fyne.Draggable`. The handle owns no table state — it just
+	// reports the target index back into `moveRule`, which then
+	// builds the permutation and calls `opts.Reorder`. Single-row
+	// tables omit the handle entirely (no-op gesture wastes screen
+	// real estate).
+	if opts.Reorder != nil && len(orderedNames) > 1 {
+		handle := newDragHandle(index, len(orderedNames), 0, func(target int) {
+			moveRule(orderedNames, index, target, opts, status, reload)
+		})
+		actionWidgets = append(actionWidgets, handle)
 	}
 	// Rename button — only rendered when Rename is wired.
 	if opts.Rename != nil {
