@@ -28,14 +28,17 @@ import (
 
 // BuildReadTab returns the Read sub-tool body: alias + limit inputs,
 // Run button, and a streaming output panel for progress + headers.
-func BuildReadTab() fyne.CanvasObject {
+//
+// `factory` is the injected per-call `*core.Tools` builder; see
+// `BuildOpenUrlTab` for the contract.
+func BuildReadTab(factory ToolsFactory) fyne.CanvasObject {
 	heading := widget.NewLabelWithStyle("Read — one-shot fetch",
 		fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	subtitle := newReadSubtitle()
 	aliasEntry, limitEntry := newReadInputs()
 	output, status := newReadOutputs()
 	runBtn := widget.NewButton("Run", func() {
-		runReadIntoUI(aliasEntry.Text, limitEntry.Text, output, status)
+		runReadIntoUI(factory, aliasEntry.Text, limitEntry.Text, output, status)
 	})
 	runBtn.Importance = widget.HighImportance
 	form := container.NewGridWithColumns(2,
