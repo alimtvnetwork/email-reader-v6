@@ -26,6 +26,7 @@ package ui
 
 import (
 	"context"
+	"errors"
 	"log"
 
 	"github.com/lovable/email-read/internal/browser"
