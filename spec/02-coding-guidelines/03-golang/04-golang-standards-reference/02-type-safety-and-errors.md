@@ -348,13 +348,7 @@ func (h *Handler) GetPlugin(w http.ResponseWriter, r *http.Request) {
 | Different T (cross-type) | `Fail[NewT](src.AppError())` | `apperror.Fail[BuildResult](pluginResult.AppError())` |
 | Same wrapper, same T | Direct return | `return existingResult` |
 
-> **Anti-pattern:** Never unwrap an error just to re-wrap it into the same type parameter:
->
->     // ❌ FORBIDDEN: redundant unwrap+rewrap (same T)
->     return apperror.FailSlice[Plugin](set.AppError())
->
->     // ✅ REQUIRED: use bridge method
->     return set.ToAppResultSlice()
+> **Anti-pattern:** Never unwrap an error just to re-wrap it into the same type parameter — calling `apperror.FailSlice[T](src.AppError())` when the source is already a `Result[T]` is a redundant unwrap+rewrap. **Use the bridge method instead** (`return src.ToAppResultSlice()`).
 
 ---
 
