@@ -118,6 +118,7 @@ Run from **any folder** once `PATH` is set.
 | `email-read rules enable <name>` | Enable a rule by name. |
 | `email-read rules disable <name>` | Disable a rule by name. |
 | `email-read export-csv` | Writes `.\data\export-<timestamp>.csv` in the **current** directory. |
+| `email-read errors tail [-f] [-n N]` | Print the persisted error log (`data\error-log.jsonl`). `-f` follows live; `-n` keeps only the last N entries. See §9. |
 | `email-read --version` | Print CLI version. |
 
 ### Typical first-time flow
@@ -229,3 +230,71 @@ That's it. No terminal reopen needed for updates.
 | IMAP `LOGIN failed` on Gmail/Outlook | You need an **app password**, not your real password. See §1. |
 | URLs aren't opening | Check `email-read rules list`, confirm the rule is enabled and `urlRegex` matches. Check Chrome is installed or set `EMAIL_READ_CHROME`. |
 | Watcher seems stuck | Increase verbosity by tailing `data\emails.db` (`OpenedUrls` table) — every fetched batch logs to stdout. |
+
+---
+
+## 9. Reporting a bug
+
+Every error surfaced in the desktop UI is automatically captured with a
+full `file:line` stack trace and persisted to disk, so you can include
+real evidence in a bug report instead of paraphrasing what went wrong.
+
+### What gets captured
+
+- **Stack trace at the wrap site.** Every error path in the UI is
+  wrapped through `internal/errtrace`, which records the originating
+  `file:line` plus every wrapper between there and the surface.
+- **Component, summary, and timestamp** for each entry — the same
+  fields shown in the in-app **Diagnostics → Error Log** view.
+- **Bounded ring + on-disk persistence.** The most recent ~500 entries
+  live in memory; everything is also appended to
+  `data\error-log.jsonl` (rotated to `error-log.jsonl.1` at 5 MiB so
+  the directory never grows without bound).
+
+### Three ways to grab the log
+
+**1. From the desktop UI** (easiest)
+
+Open **Diagnostics → Error Log**, pick the offending entry, and click
+**Copy** for a single trace, or **Open log file** to launch the full
+`error-log.jsonl` in your OS default handler. Attach that file to your
+bug report.
+
+**2. From the CLI, one-shot**
+
+```powershell
+email-read errors tail            # dump the entire persisted log
+email-read errors tail -n 20      # just the last 20 entries
+```
+
+Each entry prints as a header line followed by the indented trace:
+
+```
+[42] 2026-04-27T10:15:03Z  emails  failed to load thread: connection reset
+    failed to load thread: connection reset
+        at internal/ui/views/emails.go:117 (loadThread)
+        at internal/store/emails.go:88 (FetchOne)
+        ...
+```
+
+**3. From the CLI, live** (best for reproducing a bug)
+
+```powershell
+email-read errors tail -f
+```
+
+Leave it running in a second terminal, reproduce the issue in the UI,
+then Ctrl+C to stop. Copy the printed entries into your bug report —
+they include the full chain from the originating `errtrace.Wrap` call
+up to the surface that displayed the error.
+
+### What to include in a bug report
+
+1. The exact `email-read --version` output.
+2. Steps to reproduce.
+3. The relevant entries from `data\error-log.jsonl` (or the `errors
+   tail -f` output captured during repro). The stack trace is the
+   single most useful thing you can share.
+4. If the bug is watcher-related, the contents of `data\config.json`
+   with passwords redacted.
+
