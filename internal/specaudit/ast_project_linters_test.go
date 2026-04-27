@@ -284,10 +284,26 @@ func Test_AllQueryRefsResolveInDbQueries(t *testing.T) {
 // isPlaceholderToken returns true for spec format placeholders like
 // `Q-XXX-XXX` or `ER-XXX-NNNNN` that document the *shape* of an ID
 // rather than naming a real one. We refuse to flag these as missing.
+// Slice #159: also recognises the documented `ER-FOO-NNNNX` glob
+// notation used in `spec/23-app-database/01-schema.md` to describe
+// column-value shapes (e.g. `ER-MAIL-2120X`, `ER-TLS-2176X`). The
+// `X` suffix is a wildcard digit, never a real registry code.
 func isPlaceholderToken(s string) bool {
 	upper := strings.ToUpper(s)
-	return strings.Contains(upper, "XXX") || strings.Contains(upper, "NNNNN")
+	if strings.Contains(upper, "XXX") || strings.Contains(upper, "NNNNN") {
+		return true
+	}
+	// Trailing single-X-after-digits glob (e.g. ER-MAIL-2120X). The
+	// errCodeRe regex stops at the first non-digit, so a real match
+	// will never end in X — but the prose token in the source spec
+	// does. We belt-and-brace this in case stripCodeFences is ever
+	// bypassed.
+	return globNotationRe.MatchString(upper)
 }
+
+// globNotationRe matches "<digits>X" sentinels that document the
+// shape of an ID rather than a concrete value.
+var globNotationRe = regexp.MustCompile(`[0-9]+X$`)
 
 // uniqueMatches returns a set of every distinct match of re in s.
 func uniqueMatches(re *regexp.Regexp, s string) map[string]bool {
