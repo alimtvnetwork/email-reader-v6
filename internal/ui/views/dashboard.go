@@ -116,13 +116,24 @@ func BuildDashboard(opts DashboardOptions) fyne.CanvasObject {
 
 	actions := newDashboardActions(opts, combined)
 	live := newDashboardLiveRow(opts, combined)
+	// Vertical rhythm: separators between every major band so the
+	// activity list, live-counters row, and action buttons read as
+	// distinct sections instead of running together. Padded wraps
+	// give every block consistent inset breathing room.
 	return container.NewVBox(
-		heading, subtitle, widget.NewSeparator(),
-		cards.Row, widget.NewSeparator(),
-		health,
-		activityBox,
-		live, widget.NewSeparator(),
-		actions, autoStart, status,
+		container.NewPadded(heading),
+		container.NewPadded(subtitle),
+		widget.NewSeparator(),
+		container.NewPadded(cards.Row),
+		widget.NewSeparator(),
+		container.NewPadded(health),
+		container.NewPadded(activityBox),
+		widget.NewSeparator(),
+		container.NewPadded(live),
+		widget.NewSeparator(),
+		container.NewPadded(actions),
+		container.NewPadded(autoStart),
+		container.NewPadded(status),
 	)
 }
 
