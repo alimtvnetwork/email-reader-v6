@@ -18,6 +18,15 @@ do **not** contribute a `file:line` frame to the chain rendered by
 | `linter-scripts/check-no-errors-new.sh`     | **4**  | `internal/ui/services.go`, `internal/store/{shims,migrate/migrate}.go`, `internal/ui/views/tools_openurl.go`. |
 | **Total**                                   | **46** | |
 
+### Coded-wrap rollout (sites still on bare `errtrace.Wrap`/`errtrace.New`)
+
+Tracked by `rg -n 'errtrace\.(Wrap|New)\b' --glob '!*_test.go' --glob '!internal/errtrace/**' internal/ | wc -l`.
+
+| Date | Bare sites | Slice |
+|---|---|---|
+| 2026-04-27 baseline                                  | 168 | — |
+| 2026-04-27 watcher.go (9 sites → coded)              | 159 | Added `ErrMailSelectMailbox` (ER-MAIL-21210); reused `ErrMailDial`, `ErrMailFetchUid`, `ErrDbWatchState`, `ErrCoreContextCancelled`. |
+
 Already-traced sites: ~912 (`rg -g '*.go' 'errtrace\.' | wc -l`).
 
 ## Rules
