@@ -126,7 +126,7 @@ func Test_FocusRing_Visible(t *testing.T) {
 	t.Skip("Slice #118e — implementation pending (harness enabled but paint inspector not yet built)")
 }
 
-// Spec §8 #10 — Test_AccessibilityLabel_NonEmpty
+// Spec §8 #10 — Test_AccessibilityLabel_NonEmpty (AC-DS-68)
 //
 // Walks every rendered `Button` / `WatchDot` / `Badge` /
 // `RawLogLine` instance and asserts a non-empty
