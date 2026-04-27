@@ -267,6 +267,12 @@ var coverageGapAllowlist = map[string]struct{}{
 	"AC-DS-50": {},
 	"AC-DS-51": {},
 	"AC-DS-69": {},
+	// Slice #124 closed AC-PROJ-12/13/16/17/19/21/22 by tagging the
+	// existing AST/errtrace/migrate/retention tests with their AC-PROJ
+	// IDs (no new test code — those rows were already covered by tests
+	// under different names). Remaining AC-PROJ gaps are end-to-end
+	// integration scenarios (01-11, 14-15) and spec-linter rows
+	// (31-36) deferred until those harnesses land.
 	"AC-PROJ-01": {},
 	"AC-PROJ-02": {},
 	"AC-PROJ-03": {},
@@ -278,16 +284,9 @@ var coverageGapAllowlist = map[string]struct{}{
 	"AC-PROJ-09": {},
 	"AC-PROJ-10": {},
 	"AC-PROJ-11": {},
-	"AC-PROJ-12": {},
-	"AC-PROJ-13": {},
 	"AC-PROJ-14": {},
 	"AC-PROJ-15": {},
-	"AC-PROJ-16": {},
-	"AC-PROJ-17": {},
 	"AC-PROJ-18": {},
-	"AC-PROJ-19": {},
-	"AC-PROJ-21": {},
-	"AC-PROJ-22": {},
 	"AC-PROJ-31": {},
 	"AC-PROJ-32": {},
 	"AC-PROJ-33": {},
