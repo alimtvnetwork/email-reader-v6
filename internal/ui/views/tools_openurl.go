@@ -28,6 +28,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/lovable/email-read/internal/core"
+	"github.com/lovable/email-read/internal/ui/errlog"
 )
 
 // BuildOpenUrlTab returns the manual URL launcher body: an URL input,
