@@ -351,7 +351,7 @@ func (h *Handler) GetPlugin(w http.ResponseWriter, r *http.Request) {
 > **Anti-pattern:** Never unwrap an error just to re-wrap it into the same type parameter:
 > ```go
 > // ❌ FORBIDDEN: redundant unwrap+rewrap (same T)
-> return apperror.FailSlice[Plugin](set.AppError())
+> return apperror.FailSlice&#91;Plugin&#93;(set.AppError())
 >
 > // ✅ REQUIRED: use bridge method
 > return set.ToAppResultSlice()

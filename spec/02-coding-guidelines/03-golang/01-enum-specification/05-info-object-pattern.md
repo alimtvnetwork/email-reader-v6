@@ -10,7 +10,7 @@
 
 This document defines the **info-object pattern** — the Go-idiomatic way to attach rich metadata (labels, icons, CSS classes, descriptions, sort order) to enum variants. This is the Go equivalent of PHP's `match`-based metadata methods.
 
-> **PHP equivalent:** Each metadata field is a `match` method on the enum. See [WP Plugin Spec — Enum Metadata Pattern](../../../15-wp-plugin-how-to/02-enums-and-coding-style/02-enum-metadata-pattern.md).
+> **PHP equivalent:** Each metadata field is a `match` method on the enum. See the WP Plugin Spec "Enum Metadata Pattern" doc (`15-wp-plugin-how-to/02-enums-and-coding-style/02-enum-metadata-pattern.md`, lives outside this spec tree).
 
 ---
 
