@@ -19,7 +19,7 @@
 
 set -euo pipefail
 
-LINT_MODE="${LINT_MODE:-warn}"
+LINT_MODE="${LINT_MODE:-fail}"
 
 if ! command -v rg >/dev/null 2>&1; then
     echo "check-no-bare-return-err: ripgrep (rg) not found; skipping." >&2
