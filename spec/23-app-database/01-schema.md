@@ -180,7 +180,7 @@ CREATE UNIQUE INDEX UX_OpenedUrls_Dedup
 | `OriginalUrl` | `TEXT NOT NULL` | URL **as found** in the email body — including tracking params. **Never logged** above DEBUG (per Tools backend §11). |
 | `OpenedUrl` | `TEXT NOT NULL` | URL after redaction stage 1 (tracking-param strip). Empty when blocked before stage 1. |
 | `Decision` | `TEXT NOT NULL` | Enum: `Launched`, `Blocked`, `Skipped`, `Failed`. See Tools backend §3.4 for the decision matrix. |
-| `BlockedReason` | `TEXT NOT NULL` | Error code (`ER-TOOL-2176X`) when `Decision != 'Launched'`. |
+| `BlockedReason` | `TEXT NOT NULL` | Error code (`ER-TLS-2176X`) when `Decision != 'Launched'`. |
 | `LaunchedAt` | `DATETIME NULL` | UTC. Populated only when `Decision = 'Launched'`. |
 | `CreatedAt` | `DATETIME NOT NULL` | UTC. Always set, even for Blocked/Failed. |
 

@@ -43,7 +43,7 @@ Cross-checks the Settings feature against every other spec it touches. Each row 
 |---|---|---|---|
 | CF-T1 | `BrowserOverride.ChromePath` is consumed by `core.Tools.OpenUrl` on the next call after `SettingsSaved`; never mid-launch. | `01-backend.md` §8 ↔ `02-features/06-tools/01-backend.md` §3.4 | `Test_Tools_OpenUrl_RespectsNewChromePath` |
 | CF-T2 | `OpenUrlAllowedSchemes` is the single source of truth — `core.Tools.OpenUrl` rejects with the same code regardless of caller (Tools UI, Rules UI, Watch UI). | `01-backend.md` §6 (rule SET-21773) ↔ `02-features/06-tools/01-backend.md` §3.4 (validation step 2) | `Test_OpenUrl_SchemeRejection_AllCallers` (parametrized over caller) |
-| CF-T3 | `AllowLocalhostUrls = false` causes `core.Tools.OpenUrl` to reject `http://localhost`/`http://127.0.0.1`/`http://[::1]` with code `ER-TOOL-21762`. | `01-backend.md` §3 ↔ `02-features/06-tools/01-backend.md` §3.4 | `Test_OpenUrl_LocalhostBlocked_Default` |
+| CF-T3 | `AllowLocalhostUrls = false` causes `core.Tools.OpenUrl` to reject `http://localhost`/`http://127.0.0.1`/`http://[::1]` with code `ER-TLS-21764` (`ErrToolsOpenUrlLocalhost`). | `01-backend.md` §3 ↔ `02-features/06-tools/01-backend.md` §3.4 | `Test_OpenUrl_LocalhostBlocked_Default` |
 | CF-T4 | `IncognitoArg` override, when valid, is passed verbatim by `browser.Launcher`; when empty, the per-browser auto-pick from Tools §3.4 applies. | `01-backend.md` §6 (SET-21775) ↔ `02-features/06-tools/01-backend.md` §3.4 | `Test_Browser_IncognitoArg_OverrideVsAuto` |
 
 ### 2.3 Settings ↔ Rules (Feature 03)

@@ -6,7 +6,7 @@
 //	        rejection code regardless of Origin.
 //	CF-T3 — `AllowLocalhostUrls = false` causes OpenUrl to reject
 //	        `http://localhost`, `http://127.0.0.1`, `http://[::1]` with
-//	        ER-TOOL-21762 (`ErrToolsOpenUrlLocalhost`).
+//	        ER-TLS-21764 (`ErrToolsOpenUrlLocalhost`).
 //	CF-R1 — Rule "Open URL" actions go through `core.Tools.OpenUrl`,
 //	        which honours the scheme allowlist (single chokepoint).
 //
@@ -50,7 +50,7 @@ func TestCF_T2_OpenUrl_SchemeRejection_AllCallers(t *testing.T) {
 
 // TestCF_T3_OpenUrl_LocalhostBlocked_Default proves the spec default
 // `AllowLocalhostUrls = false` blocks loopback hosts with
-// ER-TOOL-21762 across every loopback shape.
+// ER-TLS-21764 across every loopback shape.
 func TestCF_T3_OpenUrl_LocalhostBlocked_Default(t *testing.T) {
 	cases := []struct {
 		name string
