@@ -113,7 +113,7 @@ func Test_TargetSize_Min32(t *testing.T) {
 // today (no shortcuts registered yet); enforces the full {1..7}
 // set the moment the first binding lands in Slice #118e.
 
-// Spec §8 #9 — Test_FocusRing_Visible
+// Spec §8 #9 — Test_FocusRing_Visible (AC-DS-67)
 //
 // Asserts the focused widget paints the focus ring with
 // `ColorPrimary` at alpha 0.40, 2 px outline, offset 2 px. Tokens
