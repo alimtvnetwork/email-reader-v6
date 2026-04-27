@@ -152,9 +152,3 @@ func Test_Store_WalPersists(t *testing.T) {
 		t.Errorf("reopened journal_mode = %q, want wal (silent fallback to delete is forbidden)", mode)
 	}
 }
-
-// txProbe holds a *sql.Tx used purely to pin a single physical
-// connection from the pool while we PRAGMA-probe it.
-type txProbe struct {
-	tx *sql.Tx
-}
