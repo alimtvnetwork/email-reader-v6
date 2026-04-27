@@ -104,7 +104,7 @@ func Test_TargetSize_Min32(t *testing.T) {
 	t.Skip("Slice #118e — implementation pending (harness enabled but tree walker not yet built)")
 }
 
-// Spec §8 #8 — Test_KeyboardShortcuts_Sidebar
+// Spec §8 #8 — Test_KeyboardShortcuts_Sidebar (AC-DS-66)
 //
 // **Slice #118c: lit up.** Lives in `a11y_render_harness_test.go`
 // in this package as a pure AST scan that walks the UI tree for
