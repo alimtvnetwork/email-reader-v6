@@ -59,6 +59,12 @@ var sizeBase = map[SizeName]float32{
 	SizeSpacing5: 24,
 	SizeSpacing6: 32,
 	SizeSpacing7: 48,
+	// §05-accessibility.md §2 — focus ring (Slice #118b).
+	// Token IDs declared in `focusring.go`; values live here so the
+	// existing Density resolver (Compact rounds 2 → 2 since 2*0.875
+	// = 1.75 → 2) handles them like every other spacing token.
+	SizeFocusRingWidth:  2,
+	SizeFocusRingOffset: 2,
 }
 
 // allSizeNames is the canonical iteration order for parity tests.
@@ -68,6 +74,7 @@ var allSizeNames = []SizeName{
 	SizeTextBody, SizeTextCaption, SizeTextCode, SizeTextButton,
 	SizeSpacing0, SizeSpacing1, SizeSpacing2, SizeSpacing3,
 	SizeSpacing4, SizeSpacing5, SizeSpacing6, SizeSpacing7,
+	SizeFocusRingWidth, SizeFocusRingOffset, // Slice #118b
 }
 
 // AllSizeNames returns a defensive copy of the canonical list.

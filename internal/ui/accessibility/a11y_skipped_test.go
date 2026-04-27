@@ -23,13 +23,14 @@ import "testing"
 
 // Spec §8 #1 — Test_Contrast_Matrix
 //
-// Walks every (foreground, background) pair in §1's matrix,
-// computes the WCAG `(L1+0.05)/(L2+0.05)` ratio, and fails if any
-// drops below the listed threshold (4.5 for body, 3.0 for large).
-// Needs the live `internal/ui/theme` palette (already exists) plus
-// a small color-math helper that lives outside this slice's diff.
+// **Slice #118b: lit up.** Lives in the `theme` package
+// (`internal/ui/theme/contrast_test.go`) because `accessibility`
+// cannot import `theme` (the dependency edge runs the other way).
+// This stub stays as a discoverable redirect so `go test -v
+// ./internal/ui/accessibility/` still surfaces the test ID — the
+// real assertions run in the theme package's own test binary.
 func Test_Contrast_Matrix(t *testing.T) {
-	t.Skip("Slice #118b — needs WCAG luminance helper + theme palette walk")
+	t.Skip("Slice #118b — live test runs in internal/ui/theme/contrast_test.go (cannot live here without import cycle)")
 }
 
 // Spec §8 #2 — Test_FocusOrder_Declared
@@ -64,15 +65,13 @@ func Test_StatusHasTextLabel(t *testing.T) {
 
 // Spec §8 #5 — Test_ReducedMotion_CollapsesTokens
 //
-// With `SetReducedMotionProbe(func() bool { return true })`,
-// asserts `theme.Motion(theme.MotionFast)` returns `MotionInstant`.
-// The `internal/ui/theme/motion` tokens that this hangs on do not
-// exist yet — they land in Slice #118b alongside the reduced-motion
-// wiring. The probe seam is in place today (see
-// `accessibility.go::SetReducedMotionProbe`) so the runtime side is
-// the only blocker.
+// **Slice #118b: lit up.** Lives in the `theme` package
+// (`internal/ui/theme/motion_test.go`) — same import-cycle reason
+// as Test_Contrast_Matrix above. The probe seam exported from
+// this package (`SetReducedMotionProbe`) is what the theme test
+// drives to flip the resolver between collapsed and baseline modes.
 func Test_ReducedMotion_CollapsesTokens(t *testing.T) {
-	t.Skip("Slice #118b — needs theme/motion tokens + reduced-motion wiring")
+	t.Skip("Slice #118b — live test runs in internal/ui/theme/motion_test.go (cannot live here without import cycle)")
 }
 
 // Spec §8 #6 — Test_ReducedMotion_WatchDotSteady
