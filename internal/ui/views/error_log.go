@@ -47,6 +47,17 @@ type ErrorLogOptions struct {
 	// a seam for tests so we don't need a Fyne app to verify the
 	// "copy" button calls through with the right payload.
 	Clipboard fyne.Clipboard
+	// LogPath is the on-disk path of the persisted error log
+	// (`<dataDir>/error-log.jsonl`). When empty, the "Open log file"
+	// button is hidden — keeps the headless test path tidy and the
+	// view degraded-but-functional when persistence failed at boot.
+	LogPath string
+	// OpenPath, when non-nil, is invoked with LogPath when the user
+	// clicks "Open log file". Production wiring builds a closure
+	// around `fyne.CurrentApp().OpenURL(file://…)` so the OS default
+	// handler picks up the .jsonl file. Tests substitute a recorder
+	// so we can assert the button calls through with the right path.
+	OpenPath func(path string) error
 }
 
 // BuildErrorLog returns the Error Log detail pane: a header, a split
@@ -121,7 +132,24 @@ func BuildErrorLog(opts ErrorLogOptions) fyne.CanvasObject {
 		selectedTrace = ""
 	})
 
-	footer := container.NewHBox(copyBtn, clearBtn)
+	// Status line for the "Open log file" action — empty by default,
+	// flips to "Opened {path}" or the error string after a click.
+	// Lives in the footer (next to the buttons) so the user gets
+	// inline feedback without a popup dialog.
+	openStatus := widget.NewLabel("")
+	openStatus.Importance = widget.LowImportance
+
+	openBtn := widget.NewButton("Open log file", func() {
+		msg := openLogFile(opts.LogPath, opts.OpenPath)
+		openStatus.SetText(msg)
+	})
+	if opts.LogPath == "" {
+		// Persistence is disabled (boot fallback) → no file to open.
+		openBtn.Disable()
+		openStatus.SetText("Disk log unavailable.")
+	}
+
+	footer := container.NewHBox(copyBtn, clearBtn, openBtn, openStatus)
 
 	// Mark unread → read on open so the sidebar badge clears.
 	opts.MarkRead()
