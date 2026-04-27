@@ -392,3 +392,31 @@ a documented baseline to lint against.
 ### Files changed
 - created `spec/03-error-manage/04-app-error-log-view/00-overview.md`
 - edited `spec/03-error-manage/00-overview.md` (added category row 04)
+
+## Phase 5.2 — Preference memory refreshed (2026-04-27)
+
+Rewrote `mem://preferences/01-error-stack-traces.md` to reflect the
+post-rollout reality. The previous version captured Phase 1 baseline
+intent only; this version is the canonical convention reference for
+all future work.
+
+### Key changes vs. prior version
+- **Status header**: notes `LINT_MODE=fail` is live in `run.sh` /
+  `run.ps1` / CI; cross-references the new spec page and rollout log.
+- **Rule 1/2/3 each cite their enforcing linter** by filename so a
+  contributor who hits a violation can find the script that flagged
+  it without grepping.
+- **New Rule 5** lists the three legitimate `errtrace.Format` call
+  sites (main, watcher loggers, `errlog.ReportError`) — clarifies
+  that `Format` is an edge-only operation, not a per-wrap-site one.
+- **New "UI surface rule" section**: codifies
+  `errlog.ReportError(component, err)` as the single entry point for
+  every UI handler that observes an error. Notes nil-safety and the
+  `component` tagging convention.
+- **Three canonical examples** instead of one: classic wrap, sentinel
+  via `errtrace.New`, and the UI handler "wrap + report" pattern.
+- **Related** footer cross-links: Core memory line (Phase 5.3),
+  rollout log, AC spec page (AC-ELV-01…12), README §9.
+
+### Files changed
+- edited `.lovable/memory/preferences/01-error-stack-traces.md`
