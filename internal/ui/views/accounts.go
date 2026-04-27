@@ -21,10 +21,17 @@ import (
 // AccountsOptions wires the Accounts table to its data + side effects.
 // All fields are optional with sensible defaults so existing callers
 // (app.go's viewFor) keep working.
+//
+// `LoadHealth` is the per-row health badge feed (Slice #112). Returns
+// a per-alias map so the row builder can do an O(1) lookup. When nil,
+// the Accounts table renders the column with "— Unknown" placeholders
+// rather than skipping it — keeps column alignment stable across the
+// "no runtime / store unavailable" degraded path.
 type AccountsOptions struct {
 	List              func() errtrace.Result[[]config.Account]
 	WatchState        func(ctx context.Context, alias string) (store.WatchState, error)
 	Remove            func(alias string) errtrace.Result[struct{}]
+	LoadHealth        func(ctx context.Context) map[string]core.HealthLevel
 	OnAccountsChanged func() // fired after a successful Edit / Delete
 }
 
@@ -66,12 +73,13 @@ func BuildAccounts(opts AccountsOptions) fyne.CanvasObject {
 			return
 		}
 
-		header := container.NewGridWithColumns(6,
+		header := container.NewGridWithColumns(7,
 			widget.NewLabelWithStyle("Alias", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 			widget.NewLabelWithStyle("Email", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 			widget.NewLabelWithStyle("Server", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 			widget.NewLabelWithStyle("Mailbox", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 			widget.NewLabelWithStyle("Last UID", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+			widget.NewLabelWithStyle("Health", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 			widget.NewLabelWithStyle("Actions", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		)
 		rows := []fyne.CanvasObject{header, widget.NewSeparator()}
@@ -79,9 +87,17 @@ func BuildAccounts(opts AccountsOptions) fyne.CanvasObject {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
+		// Per-row health is loaded once per reload (not per row) so a
+		// 50-account user pays one query, not 50. Nil-safe: empty map
+		// means every row gets "— Unknown".
+		var health map[string]core.HealthLevel
+		if opts.LoadHealth != nil {
+			health = opts.LoadHealth(ctx)
+		}
+
 		for _, a := range accts {
 			ws, _ := opts.WatchState(ctx, a.Alias)
-			rows = append(rows, accountRow(a, ws, opts, status, reload))
+			rows = append(rows, accountRow(a, ws, health[a.Alias], opts, status, reload))
 		}
 		body.Objects = rows
 		body.Refresh()
@@ -99,7 +115,7 @@ func BuildAccounts(opts AccountsOptions) fyne.CanvasObject {
 	)
 }
 
-func accountRow(a config.Account, ws store.WatchState, opts AccountsOptions, status *widget.Label, reload func()) fyne.CanvasObject {
+func accountRow(a config.Account, ws store.WatchState, health core.HealthLevel, opts AccountsOptions, status *widget.Label, reload func()) fyne.CanvasObject {
 	mailbox := a.Mailbox
 	if mailbox == "" {
 		mailbox = "INBOX"
@@ -114,17 +130,24 @@ func accountRow(a config.Account, ws store.WatchState, opts AccountsOptions, sta
 	email := widget.NewLabel(a.Email)
 	email.Wrapping = fyne.TextWrapBreak
 
+	// Per-row health badge — uses pure-Go formatter so the glyph set
+	// stays in sync with the dashboard rollup. Importance hint nudges
+	// the Fyne theme into rendering Error rows in red without
+	// hard-coding a colour (theme-respecting; survives dark/light).
+	healthLabel := widget.NewLabel(formatAccountHealthBadge(health))
+
 	editBtn := widget.NewButton("Edit", func() { openEditAccountDialog(a, opts, status, reload) })
 	delBtn := widget.NewButton("Delete", func() { confirmDeleteAccount(a, opts, status, reload) })
 	delBtn.Importance = widget.DangerImportance
 	actions := container.NewHBox(editBtn, delBtn)
 
-	return container.NewGridWithColumns(6,
+	return container.NewGridWithColumns(7,
 		widget.NewLabel(a.Alias),
 		email,
 		server,
 		widget.NewLabel(mailbox),
 		widget.NewLabel(lastUid),
+		healthLabel,
 		actions,
 	)
 }

@@ -5,7 +5,36 @@ import (
 	"fmt"
 
 	"github.com/lovable/email-read/internal/config"
+	"github.com/lovable/email-read/internal/core"
 )
+
+// formatAccountHealthBadge renders a one-glyph + label badge for the
+// per-row health column on the Accounts table. Glyphs match the
+// dashboard rollup (`dashboard_health_test.go`) so the two surfaces
+// stay visually consistent:
+//
+//   - Healthy → "● Healthy"
+//   - Warning → "◐ Warning"
+//   - Error   → "✗ Error"
+//   - empty   → "— Unknown"  (alias configured but health not loaded yet)
+//   - other   → "? <raw>"    (defensive: future HealthLevel values)
+//
+// Pure function — no I/O, no fyne import — so it stays unit-testable
+// without spinning up the Fyne driver.
+func formatAccountHealthBadge(level core.HealthLevel) string {
+	switch level {
+	case core.HealthHealthy:
+		return "● Healthy"
+	case core.HealthWarning:
+		return "◐ Warning"
+	case core.HealthError:
+		return "✗ Error"
+	case "":
+		return "— Unknown"
+	default:
+		return "? " + string(level)
+	}
+}
 
 func AccountServer(a config.Account) string {
 	tag := "TLS"
