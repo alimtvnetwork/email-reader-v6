@@ -130,6 +130,19 @@ var fyneColorRoute = map[fyne.ThemeColorName]ColorName{
 	fynetheme.ColorNameSuccess:         ColorSuccess,
 	fynetheme.ColorNameWarning:         ColorWarning,
 	fynetheme.ColorNameSeparator:       ColorBorder,
+	// Slice #175 — popup/menu/overlay surfaces. Without these the
+	// dropdown popup, right-click menu, and dialog overlay all fall
+	// through to fynetheme.DefaultTheme().Color(name, variant), which
+	// keys off the OS variant (NOT our explicit Active() mode). Result
+	// in Light mode on a dark-OS machine: the panel is white but the
+	// Theme dropdown popup paints dark — the bug visible in the user's
+	// screenshot. Routing these to our own surface tokens makes the
+	// chrome follow the chosen palette regardless of the OS hint.
+	fynetheme.ColorNameMenuBackground:    ColorSurface,
+	fynetheme.ColorNameOverlayBackground: ColorSurface,
+	fynetheme.ColorNameHeaderBackground:  ColorSurfaceMuted,
+	fynetheme.ColorNameHover:             ColorSurfaceMuted,
+	fynetheme.ColorNamePressed:           ColorSurfaceMuted,
 	// Selection is intentionally absent: it's special-cased in Color()
 	// to apply the §2 alpha-0.30 blend on ColorPrimary via scaleAlpha.
 }
