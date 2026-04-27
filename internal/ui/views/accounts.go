@@ -10,13 +10,13 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/lovable/email-read/internal/config"
 	"github.com/lovable/email-read/internal/core"
 	"github.com/lovable/email-read/internal/errtrace"
 	"github.com/lovable/email-read/internal/store"
+	"github.com/lovable/email-read/internal/ui/theme"
 )
 
 // AccountsOptions wires the Accounts table to its data + side effects.
