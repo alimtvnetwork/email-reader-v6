@@ -193,54 +193,82 @@ Adding a real implementation requires bumping the inventory in §2 and registeri
 
 ### 3.8 `Q-OPEN-DEDUP` — read
 
+Existence check for `(EmailId, Url)` against the production `IxOpenedUrlsUnique` index. Returns a count (0 or 1) — the caller (`internal/store/store.go::HasOpenedUrl`) treats `> 0` as "already recorded" and short-circuits the launch. Production query is `queries.HasOpenedUrl`.
+
 ```sql
-SELECT Id, LaunchedAt
+SELECT COUNT(1)
 FROM OpenedUrls
-WHERE Alias       = :Alias
-  AND OriginalUrl = :OriginalUrl
-  AND Decision    = 'Launched'
-  AND LaunchedAt  >= :Since
-ORDER BY LaunchedAt DESC
-LIMIT 1;
+WHERE EmailId = :EmailId
+  AND Url     = :Url;
 ```
 
 | Param | Type | Notes |
 |---|---|---|
-| `:Alias` | string | dedup is per-alias, not global |
-| `:OriginalUrl` | string | exact match (no normalization) |
-| `:Since` | RFC 3339 | `now - OpenUrlDedupWindow` (Tools backend §3.4) |
+| `:EmailId` | int64 | the parent email's `Emails.Id` |
+| `:Url` | string | exact match on the canonicalized URL (the `Url` column already holds the post-redaction value the caller will pass to the browser) |
 
-**Returns:** zero or one row. Caller uses presence to short-circuit launch.
-**Index used:** `IxOpenedUrlsAliasOpenedAt` (m0006) when `:Alias != ''` — the leading `Alias` column plus the `OpenedAt` range bounds the row scan within the dedup window. For typical `OpenUrlDedupWindow ≤ 10 min` this is well under 1 ms. The exact-Url predicate is filtered in-memory after the index seek; the per-row column-shape mismatch between this spec body (`OriginalUrl`/`Decision`/`LaunchedAt`) and the production `OpenedUrls` schema (`Url`/`OpenedAt`/`IsDeduped`) is tracked under the deferred OpenedUrls column-shape reconcile in §1.
+**Returns:** `int` (0 or 1). Manual launches (no parent email) bypass this query — they go straight to `Q-OPEN-INS` because `EmailId` would be NULL and the `(EmailId, Url)` unique constraint cannot match a NULL.
+
+**Tx:** none (read).
+**Index used:** `IxOpenedUrlsUnique` (m0004, `OpenedUrls(EmailId, Url)`) — both columns are equality-bound so SQLite seeks directly to the matching row. Cost is independent of `OpenUrlDedupWindow`. Sub-millisecond at any realistic table size.
+
+> **Per-alias / time-windowed dedup variant.** The Tools-backend dedup-window concept (`OpenUrlDedupWindow`, "no double-launch within N minutes") is not a separate query — it is enforced at write time by `Q-OPEN-INS`'s `ON CONFLICT(EmailId, Url) DO NOTHING`. A future per-alias-anywhere variant (i.e. dedup across emails) would need a new index on `(Alias, OpenedAt)` and a new query slot; tracked under the deferred Tools-backend Delta-#2 work, not this file.
 
 ### 3.9 `Q-OPEN-INS` — write
 
+Append the audit row for one URL launch (or blocked decision). On `(EmailId, Url)` conflict the row is left untouched and `RowsAffected = 0` — the caller treats that as a dedup hit (the prior row is the winner). Production query is `queries.OpenedUrlInsert`.
+
 ```sql
 INSERT INTO OpenedUrls (
-    EmailId, Alias, RuleName, Origin,
-    OriginalUrl, OpenedUrl, Decision, BlockedReason, LaunchedAt
+    EmailId, RuleName, Url, Alias, Origin,
+    OriginalUrl, IsDeduped, IsIncognito, TraceId
 ) VALUES (
-    :EmailId, :Alias, :RuleName, :Origin,
-    :OriginalUrl, :OpenedUrl, :Decision, :BlockedReason, :LaunchedAt
+    :EmailId, :RuleName, :Url, :Alias, :Origin,
+    :OriginalUrl, :IsDeduped, :IsIncognito, :TraceId
 )
-RETURNING Id;
+ON CONFLICT (EmailId, Url) DO NOTHING;
 ```
 
-`:EmailId` is `NULL` when `Origin = 'Manual'`. The unique index `IxOpenedUrlsUnique` (m0004, `OpenedUrls(EmailId, Url)`) fires on duplicate launches that share the same `(EmailId, Url)` pair — production uses `INSERT … ON CONFLICT(EmailId, Url) DO NOTHING` so the second insert reports `RowsAffected = 0` and the caller treats that as a dedup hit (the prior row is the winner). The per-row column-shape mismatch between this spec body (`LaunchedAt`/`Decision`/`BlockedReason`/`OpenedUrl`) and the production `OpenedUrls` schema (`OpenedAt`/`IsDeduped`/`IsIncognito`/`TraceId`/`Url`) is tracked under the deferred OpenedUrls column-shape reconcile in §1.
+| Param | Type | Notes |
+|---|---|---|
+| `:EmailId` | int64 | parent email; NULL is **not** supported by m0004's NOT NULL — Manual launches use a sentinel email row (Tools backend §3.4) |
+| `:RuleName` | string | empty unless `Origin = 'Rule'` |
+| `:Url` | string | post-redaction (stage 1) URL — what was actually launched |
+| `:Alias` | string | account context (always populated, even for Manual) |
+| `:Origin` | string | `Watcher` / `Manual` / `Rule` (Tools backend §3.4 enum) |
+| `:OriginalUrl` | string | URL **as found** in the email body, including tracking params. Never logged above DEBUG (Tools backend §11). |
+| `:IsDeduped` | int (0/1) | `1` when the caller short-circuited via `Q-OPEN-DEDUP` and is recording the audit-only ghost row |
+| `:IsIncognito` | int (0/1) | `1` when the launch used the browser's incognito profile (Settings → Tools) |
+| `:TraceId` | string | request-scoped trace ID for correlation with logs |
+
+**Returns:** `RowsAffected` (1 = inserted, 0 = dedup hit).
+**Tx:** none (single statement). Insert MUST run **after** the browser launch returns (forensic completeness — Tools backend §3.4 step 7).
+**Note on `Decision` / `BlockedReason` / `LaunchedAt` / `OpenedUrl`:** these aspirational columns from earlier drafts are **not** in the production schema. Block/skip/fail outcomes are encoded by **omitting** the row entirely — the audit ledger records launches only. The Tools backend logs blocked decisions to the structured-log stream (`ER-TLS-2176X`) instead of the DB.
 
 ### 3.10 `Q-OPEN-LIST` — read
 
+Reverse-chronological page of audit rows for the Tools "Recent opened URLs" view. Production query is `queries.OpenedUrlsList` and uses keyset pagination on `OpenedAt` (the `:Before` cursor).
+
 ```sql
-SELECT Id, EmailId, Alias, RuleName, Origin,
-       OriginalUrl, OpenedUrl, Decision, BlockedReason,
-       LaunchedAt, CreatedAt
+SELECT Id, EmailId, Alias, RuleName, Origin, Url,
+       OriginalUrl, IsDeduped, IsIncognito, TraceId, OpenedAt
 FROM OpenedUrls
-WHERE (:Alias = '' OR Alias = :Alias)
-ORDER BY CreatedAt DESC
+WHERE OpenedAt < :Before
+  AND (:Alias  = '' OR Alias  = :Alias)
+  AND (:Origin = '' OR Origin = :Origin)
+ORDER BY OpenedAt DESC, Id DESC
 LIMIT :Limit;
 ```
 
-Default `:Limit = 100` per Tools backend.
+| Param | Type | Notes |
+|---|---|---|
+| `:Before` | RFC 3339 | required keyset cursor; first page passes `time.Now()` |
+| `:Alias` | string | empty = all aliases |
+| `:Origin` | string | empty = all origins; otherwise `Watcher` / `Manual` / `Rule` |
+| `:Limit` | int | required, > 0 (default 100 per Tools backend) |
+
+**Tx:** none (read).
+**Index used:** `IxOpenedUrlsAliasOpenedAt` (m0006) when `:Alias != ''` — leading `Alias` equality + secondary `OpenedAt DESC` matches `ORDER BY OpenedAt DESC` directly. When `:Alias = ''`, falls back to `IxOpenedUrlsOpenedAt` (m0009) for the `OpenedAt < :Before` range. The `:Origin` predicate is filtered in-memory after the index seek.
 
 ### 3.11 `Q-EXPORT-COUNT` — read
 
