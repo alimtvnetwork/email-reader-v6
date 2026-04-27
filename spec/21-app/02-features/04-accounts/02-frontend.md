@@ -159,8 +159,8 @@ Renders the last `testResult`:
 |-------------------------------------------|----------------------------------------------------------|
 | `nil` (never tested)                      | hidden                                                   |
 | `Ok == true`                              | `✓ Connected · {LatencyMs} ms` in `--Status-Healthy`     |
-| `Ok == false, ErrorCode == ER-MAIL-21201` | `✗ Wrong email or password` in `--Status-Danger`         |
-| `Ok == false, ErrorCode == ER-MAIL-21200` | `✗ Cannot reach {Host}:{Port}` in `--Status-Danger`     |
+| `Ok == false, ErrorCode == ER-MAIL-21202` | `✗ Wrong email or password` in `--Status-Danger`         |
+| `Ok == false, ErrorCode == ER-MAIL-21201` | `✗ Cannot reach {Host}:{Port}` in `--Status-Danger`     |
 | `Ok == false, ErrorCode == ER-MAIL-21207` | `✗ TLS handshake failed` in `--Status-Danger`           |
 | `Ok == false, ErrorCode == ER-MAIL-21208` | `✗ Timeout after 5 s` in `--Status-Danger`              |
 | `Ok == false, other`                      | `✗ {ErrorMsg}` truncated to 80 chars in `--Status-Danger` |

@@ -484,9 +484,9 @@ Wrapped underlying errors (surfaced inside the envelope, not as the top-level co
 
 | Wrapped code | Source             | When                                              |
 |--------------|--------------------|---------------------------------------------------|
-| `ER-MAIL-21200 ErrMailDial`         | mailclient | TCP dial fails on connect/reconnect              |
-| `ER-MAIL-21201 ErrMailLoginFailed`  | mailclient | LOGIN rejected → `21419` (terminal)              |
-| `ER-MAIL-21202 ErrMailSelectMailbox` | mailclient | SELECT INBOX fails                              |
+| `ER-MAIL-21201 ErrMailDial`         | mailclient | TCP dial fails on connect/reconnect              |
+| `ER-MAIL-21202 ErrMailLogin`        | mailclient | LOGIN rejected → `21419` (terminal)              |
+| `ER-MAIL-21210 ErrMailSelectMailbox` | mailclient | SELECT INBOX fails                              |
 | `ER-MAIL-21203 ErrMailFetchUid`     | mailclient | FETCH UID fails → `21403` per-email or `21406` cycle |
 | `ER-MAIL-21206 ErrMailLogout`       | mailclient | LOGOUT during Stop fails → `21405`              |
 | `ER-MAIL-21208 ErrMailTimeout`      | mailclient | Any IMAP op exceeds deadline                     |

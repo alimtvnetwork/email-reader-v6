@@ -87,8 +87,8 @@ All identifiers PascalCase. No drift.
 | 21741 | ✅                    | (covered by E-09)                 | 21700–21799 ✅       |
 | 21742 | ✅                    | (covered by E-09)                 | 21700–21799 ✅       |
 | 21743 | ✅                    | E-04                              | 21700–21799 ✅       |
-| ER-MAIL-21200 | ✅ (wrapped)  | E-08 (envelope only)              | 21200–21299 ✅       |
-| ER-MAIL-21201 | ✅ (wrapped)  | E-08 / F-17 path                  | 21200–21299 ✅       |
+| ER-MAIL-21201 | ✅ (wrapped)  | E-08 (envelope only)              | 21200–21299 ✅       |
+| ER-MAIL-21202 | ✅ (wrapped)  | E-08 / F-17 path                  | 21200–21299 ✅       |
 | ER-MAIL-21207 | ✅ (wrapped)  | E-08                              | 21200–21299 ✅       |
 | ER-MAIL-21208 | ✅ (wrapped)  | E-08 / P-05                       | 21200–21299 ✅       |
 | ER-CFG-21002  | ✅ (wrapped)  | (covered by E-09)                 | 21000–21099 ✅       |

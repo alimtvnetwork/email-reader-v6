@@ -107,8 +107,8 @@ func (a *Accounts) TestConnection(ctx context.Context, spec AccountSpec) errtrac
 **Behavior:** Validates `spec` (§5), opens an IMAP connection per `(Host, Port, UseTls)`, runs `LOGIN(EmailAddr, Password)`, captures the server greeting + latency, **logs out cleanly**, returns `TestConnectionResult`. **Writes nothing.** Bound by `ctx` deadline; if caller did not set one, an internal **5 s** deadline is applied.
 
 **Errors (returned inside `TestConnectionResult.ErrorCode`, NOT as `Result.Err`):**
-- `ER-MAIL-21200 ErrMailDial`
-- `ER-MAIL-21201 ErrMailLoginFailed`
+- `ER-MAIL-21201 ErrMailDial`
+- `ER-MAIL-21202 ErrMailLogin`
 - `ER-MAIL-21207 ErrMailTLSHandshake`
 - `ER-MAIL-21208 ErrMailTimeout`
 
@@ -355,8 +355,8 @@ Wrapped underlying errors (surfaced inside the envelope, not as the top-level co
 
 | Wrapped code | Source             | When                                         |
 |--------------|--------------------|----------------------------------------------|
-| `ER-MAIL-21200 ErrMailDial`         | mailclient | TCP dial fails (DNS, refused, unreachable)   |
-| `ER-MAIL-21201 ErrMailLoginFailed`  | mailclient | IMAP `LOGIN` rejected by server              |
+| `ER-MAIL-21201 ErrMailDial`         | mailclient | TCP dial fails (DNS, refused, unreachable)   |
+| `ER-MAIL-21202 ErrMailLogin`        | mailclient | IMAP `LOGIN` rejected by server              |
 | `ER-MAIL-21207 ErrMailTLSHandshake` | mailclient | TLS negotiation fails                        |
 | `ER-MAIL-21208 ErrMailTimeout`      | mailclient | 5 s deadline elapsed                         |
 | `ER-CFG-21002 ErrConfigSaveFailed`  | config     | `cfg.Save` fails (disk full, permissions)    |

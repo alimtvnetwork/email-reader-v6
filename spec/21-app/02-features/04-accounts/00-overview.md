@@ -170,7 +170,7 @@ const (
 | `Host`       | RFC 1123 hostname; non-empty after `SuggestImap`                                      | `ER-COR-21703`                 |
 | `Port`       | 1..65535; non-zero after `SuggestImap`                                                | `ER-COR-21704`                 |
 | `Password`   | Non-empty; ≤ 1024 bytes; rejected if any C0 control char (security: hidden Unicode)   | `ER-CFG-21003`                 |
-| Pair `(EmailAddr, Host)` | Must succeed `LOGIN` before persistence                                  | `ER-MAIL-21201` (login) / `ER-MAIL-21200` (dial) / `ER-MAIL-21207` (TLS) |
+| Pair `(EmailAddr, Host)` | Must succeed `LOGIN` before persistence                                  | `ER-MAIL-21202` (login) / `ER-MAIL-21201` (dial) / `ER-MAIL-21207` (TLS) |
 
 Validation runs **synchronously** in the `core.Accounts.Add`/`Update` call before any disk write. The test-connection step is wrapped in a context with a **5 s** deadline.
 

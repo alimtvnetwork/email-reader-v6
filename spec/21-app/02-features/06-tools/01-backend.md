@@ -17,7 +17,7 @@ Cross-references:
 - Architecture: [`../../07-architecture.md`](../../07-architecture.md) §4.6
 - Coding standards: [`../../04-coding-standards.md`](../../04-coding-standards.md)
 - Logging: [`../../05-logging-strategy.md`](../../05-logging-strategy.md) §6.6
-- Errors: [`../../06-error-registry.md`](../../06-error-registry.md) — codes `21750–21769` (Tools) + wrapped `21600–21604` (exporter), `ER-STO-21103` (OpenedUrl insert), `ER-MAIL-21200..21209` (diagnose probes), `ER-COR-21704` (path escape)
+- Errors: [`../../06-error-registry.md`](../../06-error-registry.md) — codes `21750–21769` (Tools) + wrapped `21600–21604` (exporter), `ER-STO-21103` (OpenedUrl insert), `ER-MAIL-21201..21210` (diagnose probes; aligned to impl in Slice #161), `ER-COR-21704` (path escape)
 - Database: `spec/12-consolidated-guidelines/18-database-conventions.md`; canonical `OpenedUrl` schema in `00-overview.md` §4.2
 
 ---
@@ -109,7 +109,7 @@ Contract:
 - Closes `progress` exactly once before returning (deferred close).
 - Honours `ctx.Done()` within 500 ms.
 
-Errors: `21750`, `21751 ToolsReadFetchFailed`, wrapped `ER-MAIL-21200..21209`.
+Errors: `21750`, `21751 ToolsReadFetchFailed`, wrapped `ER-MAIL-21201..21210`.
 
 ### 2.2 `ExportCsv`
 
@@ -157,7 +157,7 @@ Contract:
 - Cache the final `DiagnosticsReport` on completion (regardless of `OverallOk`).
 - Closes `progress` exactly once before returning.
 
-Errors: `21750`, `21752 ToolsDiagnoseAborted` (only on ctx cancel mid-step), wrapped `ER-MAIL-21200..21209`.
+Errors: `21750`, `21752 ToolsDiagnoseAborted` (only on ctx cancel mid-step), wrapped `ER-MAIL-21201..21210`.
 
 ### 2.4 `OpenUrl`
 
@@ -491,7 +491,7 @@ ORDER BY ReceivedAt ASC, Id ASC;
 
 Wrapped (referenced, not owned by Tools):
 - `ER-EXP-21601..21604` — exporter file I/O
-- `ER-MAIL-21200..21209` — mail probes for ReadOnce + Diagnose
+- `ER-MAIL-21201..21210` — mail probes for ReadOnce + Diagnose
 - `ER-STO-21103 ErrStoreInsertOpenedUrl` — audit-insert failure
 - `ER-COR-21704 ErrCorePathOutsideData` — export path escape
 - `ER-COR-21703 ErrCoreContextCancelled` — ctx cancellation surface

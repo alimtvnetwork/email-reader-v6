@@ -93,10 +93,11 @@ const (
     ErrStoreReadOnly          Code = "ER-STO-21109"
     ErrStoreCorrupt           Code = "ER-STO-21110"
 
-    // ER-MAIL (IMAP)
-    ErrMailDial               Code = "ER-MAIL-21200"
-    ErrMailLoginFailed        Code = "ER-MAIL-21201"
-    ErrMailSelectMailbox      Code = "ER-MAIL-21202"
+    // ER-MAIL (IMAP) — aligned to internal/errtrace/codes.yaml (Slice #161).
+    // The impl registry is the operational source of truth for error codes;
+    // log lines and wrap sites use these exact strings.
+    ErrMailDial               Code = "ER-MAIL-21201"
+    ErrMailLogin              Code = "ER-MAIL-21202"
     ErrMailFetchUid           Code = "ER-MAIL-21203"
     ErrMailParseEnvelope      Code = "ER-MAIL-21204"
     ErrMailWriteEml           Code = "ER-MAIL-21205"
@@ -104,6 +105,7 @@ const (
     ErrMailTLSHandshake       Code = "ER-MAIL-21207"
     ErrMailTimeout            Code = "ER-MAIL-21208"
     ErrMailIdleUnsupported    Code = "ER-MAIL-21209"
+    ErrMailSelectMailbox      Code = "ER-MAIL-21210"
 
     // ER-RUL (Rules)
     ErrRulePatternInvalid     Code = "ER-RUL-21301"
@@ -398,42 +400,38 @@ const (
 
 ## 5. ER-MAIL — IMAP / Mailclient
 
-### ER-MAIL-21200 — `ErrMailDial`
+> **Block ownership note (Slice #161):** This section's code numbers and
+> const names are aligned with `internal/errtrace/codes.yaml` (the
+> operational source of truth). Earlier revisions of this spec used an
+> off-by-one numbering (`21200..21209`) and the names `ErrMailLoginFailed`
+> + `ErrMailSelectMailbox` at slot 21202. Both have been corrected:
+> the impl never emitted those strings, so log archives, wrap sites,
+> and tests are unaffected.
+
+### ER-MAIL-21201 — `ErrMailDial`
 
 | Field | Value |
 |---|---|
 | Severity | `ERROR` |
 | Trigger | `tls.Dial(host:port)` fails (network, DNS, refused) |
 | Wrap site | `internal/mailclient/mailclient.go:Dial()` |
-| Log line | `ERROR mailclient.Dial Alias=<a> Host=<h> Port=<p> ErrCode=ER-MAIL-21200 ErrFrames=[…] imap dial failed` |
+| Log line | `ERROR mailclient.Dial Alias=<a> Host=<h> Port=<p> ErrCode=ER-MAIL-21201 ErrFrames=[…] imap dial failed` |
 | User msg | `Cannot reach <host>:<port>. Check network or IMAP host.` |
 | Recovery | Run `email-read doctor <alias>` to diagnose |
 | Test ref | `TestMailclient_Dial_RefusedReturnsErr` |
 
-### ER-MAIL-21201 — `ErrMailLoginFailed`
+### ER-MAIL-21202 — `ErrMailLogin`
 
 | Field | Value |
 |---|---|
 | Severity | `ERROR` |
 | Trigger | IMAP server returns `AUTHENTICATIONFAILED` (or `BAD`) on `LOGIN`/`AUTHENTICATE` |
-| Wrap site | `internal/mailclient/mailclient.go:Login()` |
-| Log line | `ERROR mailclient.Login Alias=<a> User=<u> ErrCode=ER-MAIL-21201 ErrFrames=[…] imap login failed` |
+| Wrap site | `internal/mailclient/mailclient.go:Login()` (impl: `internal/mailclient/dial_plain.go`) |
+| Log line | `ERROR mailclient.Login Alias=<a> User=<u> ErrCode=ER-MAIL-21202 ErrFrames=[…] imap login failed` |
 | User msg | `Login failed for '<alias>'. Run 'email-read doctor <alias>' to check for hidden unicode in password.` |
 | Recovery | Doctor command; verify app password; see `solved-issues/01` + `03` |
 | Test ref | `TestMailclient_Login_AuthFailedReturnsErr` |
 | Origin | `.lovable/solved-issues/01-imap-auth-failed-wrong-password.md`, `03-imap-auth-failed-hidden-unicode.md` |
-
-### ER-MAIL-21202 — `ErrMailSelectMailbox`
-
-| Field | Value |
-|---|---|
-| Severity | `ERROR` |
-| Trigger | `SELECT INBOX` (or other mailbox) returns IMAP `NO`/`BAD` |
-| Wrap site | `mailclient.go:SelectMailbox()` |
-| Log line | `ERROR mailclient.SelectMailbox Alias=<a> Mailbox=<m> ErrCode=ER-MAIL-21202 select mailbox failed` |
-| User msg | `Cannot open mailbox '<m>' for '<alias>'.` |
-| Recovery | Verify mailbox name (case-sensitive on some servers) |
-| Test ref | `TestMailclient_SelectMailbox_BadResponseErrors` |
 
 ### ER-MAIL-21203 — `ErrMailFetchUid`
 
@@ -518,6 +516,19 @@ const (
 | User msg | (info-level toast in UI) |
 | Recovery | Polling continues |
 | Test ref | `TestMailclient_StartIdle_NoCapabilityWarns` |
+
+### ER-MAIL-21210 — `ErrMailSelectMailbox`
+
+| Field | Value |
+|---|---|
+| Severity | `ERROR` |
+| Trigger | `SELECT INBOX` (or other mailbox) returns IMAP `NO`/`BAD` after a successful login |
+| Wrap site | `internal/watcher/watcher.go:connectAndSelect` (current) / `mailclient.SelectMailbox()` |
+| Log line | `ERROR mailclient.SelectMailbox Alias=<a> Mailbox=<m> ErrCode=ER-MAIL-21210 select mailbox failed` |
+| User msg | `Cannot open mailbox '<m>' for '<alias>'.` |
+| Recovery | Verify mailbox name (case-sensitive on some servers) |
+| Test ref | `TestMailclient_SelectMailbox_BadResponseErrors` |
+| Note | Slot moved from 21202 to 21210 in Slice #161 to match impl. |
 
 ---
 

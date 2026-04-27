@@ -170,7 +170,7 @@ type PollStat struct {                  // mirrors §6.4 of 05-logging-strategy
 }
 
 type EventError struct {
-    Code    string                      // e.g. "ER-MAIL-21200"
+    Code    string                      // e.g. "ER-MAIL-21201"
     Message string                      // user-facing, redacted
 }
 
