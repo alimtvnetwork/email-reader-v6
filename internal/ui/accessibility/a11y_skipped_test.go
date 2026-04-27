@@ -54,7 +54,7 @@ func Test_FocusOrder_NoHiddenInOrder(t *testing.T) {
 	t.Skip("Slice #118e — implementation pending (harness enabled but assertions not yet ported)")
 }
 
-// Spec §8 #4 — Test_StatusHasTextLabel
+// Spec §8 #4 — Test_StatusHasTextLabel (AC-DS-63)
 //
 // Walks every rendered `WatchDot` widget and asserts an adjacent
 // `*widget.Label` carrying a status word ("Watching",
