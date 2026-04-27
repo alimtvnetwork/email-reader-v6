@@ -19,7 +19,7 @@ Cross-references:
 - Emails backend: [`../21-app/02-features/02-emails/01-backend.md`](../21-app/02-features/02-emails/01-backend.md)
 - Dashboard backend: [`../21-app/02-features/01-dashboard/01-backend.md`](../21-app/02-features/01-dashboard/01-backend.md)
 
-> **Drift notice (Slice #137 → narrowed by Slice #163).** The table-name singular→plural drift was closed in Slice #163: every query body and projection in §3 + every plan-snapshot row in §4 now uses the locked plural names (`Emails`, `OpenedUrls`, `WatchEvents`) per `01-schema.md` §1, with `WatchState` (singleton-per-key) and `_SchemaVersion` (bookkeeping) staying singular. **What still drifts:** the spec's `IX_Email_*` / `IX_OpenedUrl_*` / `UX_OpenedUrl_Dedup` index references describe a Pascal-Case-with-underscores naming scheme that doesn't match production (`IxEmailsAliasUid`, `IxOpenedUrlsAliasOpenedAt`, `IxOpenedUrlsUnique`, etc. — see `internal/store/migrate/m0002..m0013`), AND some of the spec's expected indexes don't exist at all (e.g. no `(Alias, ReceivedAt)` index for `Q-EMAIL-LIST`). Both are tracked under the deferred "schema-evolution work, ~12 AC-DB rows" backlog item — the index-name fix needs a coordinated decision between (a) renaming impl indexes to match spec, or (b) editing every index reference here AND every plan-snapshot expectation in lockstep. The convention rule and canonical table names live in `01-schema.md` §1; treat that as the source of truth when this file disagrees.
+> **Drift notice (Slice #137 → narrowed by Slice #163 → narrowed by Slice #165).** The table-name singular→plural drift was closed in Slice #163; the index-name drift (`IX_*`/`UX_*` → real production `Ix*` names) was closed in Slice #165: every "Index used" annotation in §3 and every plan-snippet row in §4 now references the real migration-defined names (`IxEmailsAliasUid` m0002, `IxOpenedUrlsAliasOpenedAt` m0006, `IxOpenedUrlsUnique` m0004, `IxOpenedUrlsOpenedAt` m0009, `IxEmailsAliasDeletedAt` m0013, `IxWatchEventsAliasOccurredAt` m0008). The `Q-EMAIL-LIST` (alias-empty) plan-row was rewritten as a `SCAN Emails` because no `(ReceivedAt)` index exists in production; the spec's prior `IX_Email_ReceivedAt` was a phantom. The `Q-WATCH-GET` plan-row was rewritten to `sqlite_autoindex_WatchState_1` because the table's `Alias TEXT PRIMARY KEY` produces a TEXT autoindex, not an INTEGER PK. **What still drifts:** (a) the `OpenedUrls` column-shape — §3.8 / §3.9 still document the aspirational columns (`OriginalUrl`/`Decision`/`LaunchedAt`/`BlockedReason`/`OpenedUrl`) instead of the production columns (`Url`/`OpenedAt`/`IsDeduped`/`IsIncognito`/`TraceId`); (b) the `Q-EMAIL-LIST` / `Q-EXPORT-STREAM` ORDER-BY column — spec uses `ReceivedAt`, production uses `Uid` for the list view and the integer rowid `Id` for the export stream; (c) the `WatchState` column inventory — §3.5 / §3.6 reference `LastMessageId` / `LastPolledAt` / `LastErrorCode` columns that don't exist in m0003 (production has only `Alias`, `LastUid`, `LastSubject`, `LastReceivedAt`, `UpdatedAt`, plus m0014's `ConsecutiveFailures`). (a)–(c) are tracked under the deferred "schema-evolution work, ~12 AC-DB rows" backlog item — closing them is a body-of-query rewrite, not a one-line repath. The convention rule and canonical table names live in `01-schema.md` §1; treat that as the source of truth when this file disagrees.
 
 ---
 
@@ -129,7 +129,7 @@ LIMIT :Limit;
 | `:Limit` | int | 1..200 (per `02-emails/01-backend.md`) |
 
 **Tx:** none (read).
-**Index used:** `IX_Email_Alias_Received` when `:Alias != ''`, else `IX_Email_ReceivedAt`. Verified by `EXPLAIN QUERY PLAN` test.
+**Index used:** `IxEmailsAliasUid` (m0002) when `:Alias != ''` — the leading-column match plus the implicit `Id` rowid covers the keyset cursor's secondary ordering. When `:Alias = ''`, the planner falls back to a full `SCAN Emails` filtered in-memory; that's accepted today because the Emails row count is bounded by the retention policy (§3 of `01-schema.md`). The `IsRead` predicate has no dedicated index — see `internal/store/queries/queries.go` notes on `EmailsCountUnreadAll`. Verified by the perf-budget test in `internal/store/perf_test.go`.
 
 ### 3.3 `Q-EMAIL-GET-BY-ID` — read
 
@@ -214,7 +214,7 @@ LIMIT 1;
 | `:Since` | RFC 3339 | `now - OpenUrlDedupWindow` (Tools backend §3.4) |
 
 **Returns:** zero or one row. Caller uses presence to short-circuit launch.
-**Index used:** falls back to `IX_OpenedUrl_Alias_Created` then row scan within window. For typical `OpenUrlDedupWindow ≤ 10 min` this is well under 1 ms.
+**Index used:** `IxOpenedUrlsAliasOpenedAt` (m0006) when `:Alias != ''` — the leading `Alias` column plus the `OpenedAt` range bounds the row scan within the dedup window. For typical `OpenUrlDedupWindow ≤ 10 min` this is well under 1 ms. The exact-Url predicate is filtered in-memory after the index seek; the per-row column-shape mismatch between this spec body (`OriginalUrl`/`Decision`/`LaunchedAt`) and the production `OpenedUrls` schema (`Url`/`OpenedAt`/`IsDeduped`) is tracked under the deferred OpenedUrls column-shape reconcile in §1.
 
 ### 3.9 `Q-OPEN-INS` — write
 
@@ -229,7 +229,7 @@ INSERT INTO OpenedUrls (
 RETURNING Id;
 ```
 
-`:EmailId` is `NULL` when `Origin = 'Manual'`. The partial unique index `UX_OpenedUrl_Dedup` may fire on duplicate launches within the same millisecond — caller catches `SQLITE_CONSTRAINT_UNIQUE` and treats as success (the prior row is the winner).
+`:EmailId` is `NULL` when `Origin = 'Manual'`. The unique index `IxOpenedUrlsUnique` (m0004, `OpenedUrls(EmailId, Url)`) fires on duplicate launches that share the same `(EmailId, Url)` pair — production uses `INSERT … ON CONFLICT(EmailId, Url) DO NOTHING` so the second insert reports `RowsAffected = 0` and the caller treats that as a dedup hit (the prior row is the winner). The per-row column-shape mismatch between this spec body (`LaunchedAt`/`Decision`/`BlockedReason`/`OpenedUrl`) and the production `OpenedUrls` schema (`OpenedAt`/`IsDeduped`/`IsIncognito`/`TraceId`/`Url`) is tracked under the deferred OpenedUrls column-shape reconcile in §1.
 
 ### 3.10 `Q-OPEN-LIST` — read
 
@@ -277,18 +277,18 @@ ORDER BY ReceivedAt ASC, Id ASC;
 
 ## 4. EXPLAIN QUERY PLAN Expectations
 
-Each query has a golden `EXPLAIN QUERY PLAN` snapshot in `internal/store/queries/testdata/<query>.plan`. CI fails if the planner stops using the indexed path (e.g., a future schema change that defeats `IX_Email_Alias_Received`). Snapshots are regenerated only via `make refresh-query-plans`.
+Each query has a golden `EXPLAIN QUERY PLAN` snapshot in `internal/store/queries/testdata/<query>.plan`. CI fails if the planner stops using the indexed path (e.g., a future schema change that defeats `IxEmailsAliasUid`). Snapshots are regenerated only via `make refresh-query-plans`.
 
 | Query | Expected plan snippet |
 |---|---|
-| `Q-EMAIL-LIST` (alias set) | `SEARCH Emails USING INDEX IX_Email_Alias_Received` |
-| `Q-EMAIL-LIST` (alias empty) | `SEARCH Emails USING INDEX IX_Email_ReceivedAt` |
+| `Q-EMAIL-LIST` (alias set) | `SEARCH Emails USING INDEX IxEmailsAliasUid (Alias=?)` |
+| `Q-EMAIL-LIST` (alias empty) | `SCAN Emails` (no index covers an unfiltered list) |
 | `Q-EMAIL-GET-BY-ID` | `SEARCH Emails USING INTEGER PRIMARY KEY (rowid=?)` |
 | `Q-EMAIL-COUNT-BY-ALIAS` | `SCAN Emails` + `USE TEMP B-TREE FOR GROUP BY` (acceptable for small N) |
-| `Q-WATCH-GET` | `SEARCH WatchState USING INTEGER PRIMARY KEY` |
-| `Q-OPEN-DEDUP` | `SEARCH OpenedUrls USING INDEX IX_OpenedUrl_Alias_Created` |
-| `Q-OPEN-LIST` | `SEARCH OpenedUrls USING INDEX IX_OpenedUrl_Alias_Created` |
-| `Q-EXPORT-STREAM` (alias set) | `SEARCH Emails USING INDEX IX_Email_Alias_Received` |
+| `Q-WATCH-GET` | `SEARCH WatchState USING INDEX sqlite_autoindex_WatchState_1 (Alias=?)` (TEXT PK → autoindex, not INTEGER PK) |
+| `Q-OPEN-DEDUP` | `SEARCH OpenedUrls USING INDEX IxOpenedUrlsAliasOpenedAt (Alias=? AND OpenedAt>?)` |
+| `Q-OPEN-LIST` | `SEARCH OpenedUrls USING INDEX IxOpenedUrlsAliasOpenedAt (Alias=?)` (alias filter) or `SCAN OpenedUrls` (no alias) |
+| `Q-EXPORT-STREAM` (alias set) | `SEARCH Emails USING INDEX IxEmailsAliasUid (Alias=?)` |
 
 ---
 
