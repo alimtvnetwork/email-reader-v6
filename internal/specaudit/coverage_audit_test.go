@@ -343,11 +343,9 @@ var coverageGapAllowlist = map[string]struct{}{
 	// frontend §5 half (cross-layer fixture) needs the canvas-bound
 	// Settings widget harness deferred to Slice #118e — kept honest
 	// by not citing AC-SX-06 from any frontend test.
-	"AC-SX-01": {},
-	"AC-SX-02": {},
-	"AC-SX-03": {},
-	"AC-SX-04": {},
-	"AC-SX-05": {},
+	//
+	// Slice #130 closed AC-SX-01..05 via the headless AST/log scanners
+	// in `internal/specaudit/ast_settings_security_test.go`.
 }
 
 // staleCodeRefAllowlist names every code-side AC ID that does NOT

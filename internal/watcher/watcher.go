@@ -100,7 +100,8 @@ func logBannerBrowser(logger *log.Logger, opts Options) {
 		logger.Printf("%s", errtrace.Format(err))
 		return
 	}
-	logger.Printf("│  browser : %s  (incognito %s)", shortPath(path), opts.Launcher.IncognitoArg())
+	// AC-SX-05: never log the IncognitoArg value at any level.
+	logger.Printf("│  browser : %s  (incognito %s)", shortPath(path), redactIncog(opts.Launcher.IncognitoArg()))
 }
 
 // pollState carries cross-poll diagnostic state for a watcher loop.
@@ -259,6 +260,16 @@ func shortPath(p string) string {
 		return p[i+1:]
 	}
 	return p
+}
+
+// redactIncog returns a constant marker indicating whether an incognito
+// argument is configured, without revealing the value. Spec AC-SX-05:
+// IncognitoArg never appears in any log line, at any level.
+func redactIncog(arg string) string {
+	if arg == "" {
+		return "<none>"
+	}
+	return "<set>"
 }
 
 // pollOnce performs a single connect → fetch → persist → match → open cycle.
