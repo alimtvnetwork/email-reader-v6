@@ -54,6 +54,7 @@ type Services struct {
 	Emails         *core.EmailsService
 	Rules          *core.RulesService
 	Accounts       *core.AccountsService // Slice #115 (Phase 6.1) typed shell over the Accounts free funcs
+	Watch          *core.Watch           // Slice #116b (Phase 6.2) singleton lazily attached from WatchRuntime
 	HealthSource   core.AccountHealthSource
 	ActivitySource core.ActivitySource
 }
