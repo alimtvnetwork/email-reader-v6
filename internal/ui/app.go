@@ -217,9 +217,10 @@ func BuildShell(aliases []string) fyne.CanvasObject {
 	rebuildShell = func() {
 		freshAliases := LoadAliases()
 		sidebar := NewSidebar(SidebarOptions{
-			State:       state,
-			Aliases:     freshAliases,
-			OnSelectNav: func(item NavItem) { rebuildDetail() },
+			State:            state,
+			Aliases:          freshAliases,
+			OnSelectNav:      func(item NavItem) { rebuildDetail() },
+			OnErrorLogOpened: sidebarErrorLogReset,
 		})
 		rebuildDetail()
 		split := container.NewHSplit(sidebar, container.NewPadded(detail))
@@ -238,9 +239,10 @@ func BuildShell(aliases []string) fyne.CanvasObject {
 
 	// Initial build using the aliases passed in (avoids double-loading).
 	sidebar := NewSidebar(SidebarOptions{
-		State:       state,
-		Aliases:     aliases,
-		OnSelectNav: func(item NavItem) { rebuildDetail() },
+		State:            state,
+		Aliases:          aliases,
+		OnSelectNav:      func(item NavItem) { rebuildDetail() },
+		OnErrorLogOpened: sidebarErrorLogReset,
 	})
 	rebuildDetail()
 	split := container.NewHSplit(sidebar, container.NewPadded(detail))
