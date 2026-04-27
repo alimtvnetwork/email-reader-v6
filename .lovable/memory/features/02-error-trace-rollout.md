@@ -199,3 +199,38 @@ failures (`TestSettings_Save_UnknownKeys_Untouched`,
 not introduced by this slice (errtrace.Wrap is nil-safe and the
 saveRaw success path is unchanged). Those failures will be cleaned up
 in a future slice tracking `withIsolatedConfig`/seed bleed-through.
+
+## Phase 2.6 — `errors.New` migration complete (2026-04-27)
+
+4 sites converted to `errtrace.New` for frame capture:
+
+| File | Site | Notes |
+|---|---|---|
+| `internal/ui/views/tools_openurl.go:105` | `errToolsFactoryUnavailable` sentinel | added `errtrace` import; dropped `errors`. |
+| `internal/ui/services.go:240` | `errBrowserUnavailable` sentinel | dropped `errors` import (only one use). |
+| `internal/store/shims.go:372` | `parseSqliteRFC3339` cause inside `errtrace.Wrap` | dropped `errors` import. |
+| `internal/store/migrate/migrate.go:163` | `migrate.Apply` nil-db guard | dropped `errors` import. |
+
+Linter delta: `check-no-errors-new` 4 → **0** ✅. All three errtrace
+lints (`fmt.Errorf`, bare `return err`, `errors.New`) now report **0
+violations**. **Backlog 4 → 0.**
+
+`go vet -tags nofyne ./...` clean. Tests green for
+`internal/store/{,migrate,queries}` and `internal/ui/{,accessibility,errlog,theme,views}`.
+
+## Phase 2.7 — lints flipped to `LINT_MODE=fail` (2026-04-27)
+
+All three errtrace guardrail scripts now default to `LINT_MODE=fail`:
+- `linter-scripts/check-no-fmt-errorf.sh`
+- `linter-scripts/check-no-bare-return-err.sh`
+- `linter-scripts/check-no-errors-new.sh`
+
+Header comments updated from "Phase 1 (warn-only)" to
+"Phase 2 (enforcing) error-trace guardrail. Default LINT_MODE=fail."
+Any future regression — a lone `fmt.Errorf`, bare `return err`, or
+`errors.New` in non-test, non-errtrace code — now exits non-zero
+and breaks any caller (CI, pre-commit, manual run). Local override
+still available via `LINT_MODE=warn ./linter-scripts/check-…sh` for
+in-flight refactors.
+
+End of Phase 2 — error trace migration is complete and locked.
