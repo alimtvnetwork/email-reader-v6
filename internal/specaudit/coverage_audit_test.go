@@ -321,7 +321,10 @@ var coverageGapAllowlist = map[string]struct{}{
 	"AC-PROJ-11": {},
 	"AC-PROJ-14": {},
 	"AC-PROJ-15": {},
-	"AC-PROJ-35": {},
+	// AC-PROJ-35 closed by Slice #144 — Test_Project_NoOpenOiReferencesAtMergeTime
+	// in project_no_open_oi_test.go scans every feature 99-consistency-report.md
+	// and asserts every OI-N table row carries ✅ and no in-flight marker.
+	// All 8 OI rows across Tools (OI-1..OI-6) and Watch (OI-1, OI-2) are ✅ Closed.
 	"AC-PROJ-36": {},
 	// Slice #126 closed AC-SB-01/02/11/15/16/17/19/22 by tagging the
 	// existing settings backend tests with their AC-SB IDs (no new
