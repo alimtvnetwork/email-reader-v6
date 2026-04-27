@@ -126,6 +126,11 @@ func Test_Color_RawLogBadgeCodeTokens(t *testing.T) {
 // Test_Color_UnknownFallback confirms the no-panic contract: any
 // undefined token returns ColorForeground for the active mode and logs
 // ER-UI-21900 (we don't assert log output here — visual smoke only).
+//
+// Satisfies AC-DS-13 (unknown ColorName returns ColorForeground and
+// logs ER-UI-21900) — the resolved-color half is locked here; the
+// log-emission half is covered by the centralized errtrace registry
+// drift guard.
 func Test_Color_UnknownFallback(t *testing.T) {
 	t.Cleanup(resetForTest)
 	_ = Apply(core.ThemeDark)
