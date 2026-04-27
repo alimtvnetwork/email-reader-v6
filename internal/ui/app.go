@@ -11,6 +11,7 @@ package ui
 import (
 	"context"
 	"log"
+	"path/filepath"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -18,7 +19,9 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/lovable/email-read/internal/config"
 	"github.com/lovable/email-read/internal/core"
+	"github.com/lovable/email-read/internal/ui/errlog"
 	"github.com/lovable/email-read/internal/ui/theme"
 	"github.com/lovable/email-read/internal/ui/views"
 )
@@ -44,6 +47,18 @@ func Run() {
 	ctx, cancelLive := context.WithCancel(context.Background())
 	defer cancelLive()
 	startThemeLiveConsumer(ctx)
+	// Phase 4.1 — disk persistence for the error-log ring buffer.
+	// Wired before the first ReportError call (theme/density loaders
+	// don't ReportError today, but future ones might) so prior history
+	// is restored and live appends start writing through immediately.
+	// Best-effort: a failure here only loses cross-restart history,
+	// not in-process error capture, so we log and continue.
+	persistCloser := enableErrorLogPersistence()
+	defer func() {
+		if persistCloser != nil {
+			_ = persistCloser.Close()
+		}
+	}()
 	// Phase 3.5 — first-error toast notifier. Wires the
 	// Fyne app's SendNotification to the errlog 0→1 transition
 	// rule (badge-only after the first error in a storm). Held
@@ -62,6 +77,28 @@ func Run() {
 		}
 	}()
 	w.ShowAndRun()
+}
+
+// enableErrorLogPersistence wires the process-wide errlog singleton to
+// `<dataDir>/error-log.jsonl`, restoring prior history into the ring
+// and routing future appends to disk. Returns the *Persistence so the
+// caller can Close() it on shutdown. Returns nil (and logs) if the
+// data dir cannot be resolved or persistence cannot be opened — in
+// that degraded mode the in-memory ring still works, the user only
+// loses cross-restart history.
+func enableErrorLogPersistence() *errlog.Persistence {
+	dir, err := config.DataDir()
+	if err != nil {
+		log.Printf("ui: errlog persistence: data dir: %v (continuing in-memory only)", err)
+		return nil
+	}
+	path := filepath.Join(dir, "error-log.jsonl")
+	p, err := errlog.EnableDefaultPersistence(path, errlog.DefaultSizeCap)
+	if err != nil {
+		log.Printf("ui: errlog persistence: enable: %v (continuing in-memory only)", err)
+		return nil
+	}
+	return p
 }
 
 // errLogNotifier is the process-wide first-error toast dispatcher,

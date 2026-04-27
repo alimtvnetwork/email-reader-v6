@@ -234,3 +234,70 @@ still available via `LINT_MODE=warn ./linter-scripts/check-…sh` for
 in-flight refactors.
 
 End of Phase 2 — error trace migration is complete and locked.
+
+## Phase 4.1 — disk persistence for the error-log ring (2026-04-27)
+
+Added `internal/ui/errlog/persist.go` (+ `persist_test.go`, 6 tests).
+The in-memory ring now optionally writes through to a JSONL file at
+`<dataDir>/error-log.jsonl` and restores prior history on boot.
+
+### Design
+
+- **Format**: newline-delimited JSON. One `Entry` per line (stdlib
+  `encoding/json`). Append is O(1); a half-written tail can't corrupt
+  the rest; `tail -f`/`jq -c`/`grep` work unchanged.
+- **Rotation**: when active file ≥ `sizeCap` (default 5 MiB) after a
+  write, rename to `<path>.1` (overwriting any prior rotation), open
+  fresh active file. Exactly one rotation kept — in-memory ring (500)
+  + one rotation is enough context without growing data/ unbounded.
+- **Concurrency**: `Persistence` owns its own mutex; the persister
+  callback runs after `Store.mu.Unlock()` so a slow disk never blocks
+  in-process subscribers.
+- **Restore semantics**: `EnablePersistence(p, prior)` seeds the ring
+  with `prior` (trimming to cap if needed), preserves Seq numbers,
+  and bumps `nextSeq` to `max(prior.Seq) + 1` so the monotonic
+  invariant survives restart. Live appends after restore start at the
+  next Seq and write through to disk; the seeded prior entries are
+  NOT re-written (they're already on disk).
+- **Loader tolerance**: `LoadFromFile` skips unparseable lines
+  silently — a half-flushed final line on hard kill doesn't prevent
+  restoring everything before it. Missing file → `(nil, nil)` (fresh
+  install is not an error).
+
+### Wiring
+
+- `Store` gained a `persister func(Entry)` field, called from
+  `Append` after `Unlock`. Default nil → existing tests + headless
+  callers see zero behavior change.
+- `internal/ui/app.go::Run()` calls `enableErrorLogPersistence()`
+  before `errLogNotifier` setup. Resolves `config.DataDir()`, opens
+  `error-log.jsonl`, restores prior entries, defers `Close()` on
+  shutdown. Failure is logged but non-fatal (degraded mode = in-memory
+  only — the user only loses cross-restart history).
+
+### Tests (all green under `-tags nofyne`)
+
+- `TestPersistence_WriteRoundTrip`: marshal → file → load returns
+  identical entries.
+- `TestLoadFromFile_MissingIsEmpty`: missing path → (nil, nil).
+- `TestLoadFromFile_SkipsCorruptLines`: junk + valid mix → only valid
+  entries restored.
+- `TestPersistence_RotatesAtSizeCap`: tiny cap forces rotation;
+  `.1` exists, active file < cap.
+- `TestStore_EnablePersistence_SeedsAndAppends`: ring seeded with
+  prior; new Append uses `max(prior.Seq)+1`; only the live append
+  hits disk (seed isn't re-written).
+- `TestStore_EnablePersistence_RingCapTrimsPrior`: cap=3 + 10 prior
+  → only last 3 (seqs 8/9/10) survive in the ring.
+- `TestEnableDefaultPersistence_RestoresAcrossInstances`: end-to-end
+  restart simulation via singleton reset — entries from process #1
+  reappear in process #2.
+
+`go vet -tags nofyne ./...` clean. All three errtrace lints still **0
+violations** (LINT_MODE=fail). All `internal/ui/...` packages green.
+
+### Files changed
+- created `internal/ui/errlog/persist.go`
+- created `internal/ui/errlog/persist_test.go`
+- edited `internal/ui/errlog/errlog.go` (persister field + Append hook)
+- edited `internal/ui/app.go` (enableErrorLogPersistence + Run wiring)

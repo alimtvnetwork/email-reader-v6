@@ -60,6 +60,11 @@ type Store struct {
 	cap         int
 	nextSeq     uint64
 	subscribers []chan Entry
+	// persister is called once per Append, after the entry's Seq is
+	// assigned and before fan-out, with the lock held. nil disables
+	// persistence (the default). Wired by EnablePersistence — see
+	// persist.go (Phase 4.1: data/error-log.jsonl).
+	persister func(Entry)
 	// unread counts entries appended since the last MarkAllRead call.
 	// Held as atomic so the sidebar badge can read it without taking
 	// the store lock on every paint.
@@ -116,9 +121,17 @@ func (s *Store) Append(e Entry) {
 	}
 	s.entries = append(s.entries, e)
 	subs := append([]chan Entry(nil), s.subscribers...)
+	persister := s.persister
 	s.mu.Unlock()
 
 	s.unread.Add(1)
+
+	// Best-effort persist. Done outside the lock so a slow disk does
+	// not block in-process subscribers. Persister itself is guarded
+	// by its own mutex (see persist.go).
+	if persister != nil {
+		persister(e)
+	}
 
 	// Fan out without holding the lock. select+default makes a stuck
 	// subscriber drop the event rather than wedge ReportError.
