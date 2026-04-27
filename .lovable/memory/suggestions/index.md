@@ -7,6 +7,6 @@
 | 20260427-141502-flip-oi-rows-closed | ✅ closed (Slice #182 — audit-only; OI rows already ✅ Closed in #133-#139, AC-PROJ-35 already off allowlist via #144) | medium | Flip OI-1..6 in tools/99-consistency-report to ✅ Closed |
 | 20260427-141503-update-feature-overview-status | ✅ closed (Slice #181) | low | Update feature index UI status `Planned` → `✅ Done` |
 | 20260427-141504-restate-watchevents-name-lock | ✅ closed (Slice #183 — added 🔒 callouts to §4 OpenedUrls + §5 WatchEvents in `spec/23-app-database/01-schema.md`, bumped to v1.0.1) | medium | Restate `WatchEvents` table-name lock in `23-app-database/01-schema.md` |
-| 20260427-141505-add-sandbox-feasibility-tag | open | medium | Add 🟢/🟡/🔴 sandbox-feasibility tag to each per-feature 97 file |
+| 20260427-141505-add-sandbox-feasibility-tag | ✅ closed (Slice #184 — legend + per-section tag in 9 AC files via deterministic script; risk-report Tier table cross-referenced) | medium | Add 🟢/🟡/🔴 sandbox-feasibility tag to each per-feature 97 file |
 
 Archive: `.lovable/memory/suggestions/archive/` (empty).

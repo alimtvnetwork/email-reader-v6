@@ -1,7 +1,7 @@
 # 23 — App Database — Acceptance Criteria
 
-**Version:** 1.0.0
-**Updated:** 2026-04-25
+**Version:** 1.0.1
+**Updated:** 2026-04-27
 **Status:** Approved
 **AI Confidence:** Production-Ready
 **Ambiguity:** None
@@ -14,7 +14,26 @@ Binary, machine-checkable acceptance criteria for `spec/23-app-database/`. Each 
 
 ---
 
+---
+
+## Sandbox feasibility legend (added Slice #184 — see `mem://workflow/progress-tracker.md`)
+
+A fresh AI picking up an unchecked row should consult the `**Sandbox:**` tag immediately under
+each section header to decide whether the row is implementable in the Lovable sandbox or must
+be deferred to a workstation/CI runner.
+
+| Tag | Meaning | Implementable in sandbox? |
+|---|---|---|
+| 🟢 **headless** | Go unit/integration tests, AST scanners, log greps, spec-doc edits. Verified via `nix run nixpkgs#go -- test -tags nofyne ./...`. | **Yes** — preferred sandbox work. |
+| 🟡 **cgo-required** | Fyne canvas widget tests, real driver behaviour. Needs cgo + GL/X11. See `mem://workflow/canvas-harness-starter.md` (Slice #180). | **No** — defer to workstation; planned. |
+| 🔴 **needs bench / E2E infra** | p95 perf gates (bench infra) or multi-process IMAP+browser E2E. See `mem://workflow/{bench,e2e}-harness-starter.md` (Slices #178/#179). | **No** — defer to CI runner; planned. |
+| ⚪ **N/A** | Manual sign-off checklist; no automated test possible. | **No** — human reviewer. |
+
+A section may carry **two** tags when its rows split (e.g. `🟢 + 🔴`); pick the right tag per row by reading the row itself.
+
 ## A. Schema Integrity
+
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
 
 | # | Criterion | Test ID |
 |---|---|---|
@@ -30,12 +49,16 @@ Binary, machine-checkable acceptance criteria for `spec/23-app-database/`. Each 
 
 ## B. PRAGMAs
 
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
+
 | # | Criterion | Test ID |
 |---|---|---|
 | AC-DB-10 | Every connection from the pool reports `journal_mode=wal`, `synchronous=1` (NORMAL), `foreign_keys=1`, `busy_timeout=5000`. | `Test_Store_PragmaOnEveryConn` |
 | AC-DB-11 | Closing then reopening preserves WAL mode (does not silently fall back to DELETE). | `Test_Store_WalPersists` |
 
 ## C. Named Queries
+
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
 
 | # | Criterion | Test ID |
 |---|---|---|
@@ -51,6 +74,8 @@ Binary, machine-checkable acceptance criteria for `spec/23-app-database/`. Each 
 
 ## D. Migrations
 
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
+
 | # | Criterion | Test ID |
 |---|---|---|
 | AC-DB-30 | `migrate.Apply` on an empty DB applies all 4 v1.0.0 migrations in order. | `Test_Migrate_FreshApplyAll` |
@@ -63,6 +88,8 @@ Binary, machine-checkable acceptance criteria for `spec/23-app-database/`. Each 
 | AC-DB-37 | AST scan: only `internal/store/migrate` issues `CREATE`/`ALTER`/`DROP`. | `Test_AST_DdlOnlyInMigrate` |
 
 ## E. Maintenance / Retention
+
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
 
 | # | Criterion | Test ID |
 |---|---|---|
@@ -77,6 +104,8 @@ Binary, machine-checkable acceptance criteria for `spec/23-app-database/`. Each 
 
 ## F. Ownership / Anti-Features
 
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
+
 | # | Criterion | Test ID |
 |---|---|---|
 | AC-DB-50 | AST scan: only `internal/store` (and its sub-packages) imports a SQL driver. | `Test_AST_DriverImportLimit` |
@@ -88,6 +117,8 @@ Binary, machine-checkable acceptance criteria for `spec/23-app-database/`. Each 
 
 ## G. Performance
 
+**Sandbox:** 🔴 **needs bench infra** — see `mem://workflow/bench-infra-starter.md` (Slice #178).
+
 | # | Criterion | Threshold |
 |---|---|---|
 | AC-DBP-01 | Cold `Open()` on 100 k-row DB | ≤ 80 ms p95 |
@@ -98,5 +129,7 @@ Binary, machine-checkable acceptance criteria for `spec/23-app-database/`. Each 
 | AC-DBP-06 | Memory used by `ExportCsv` over 100 k rows | ≤ 32 MiB peak (streaming) |
 
 ## H. Definition of Done
+
+**Sandbox:** ⚪ **N/A** — manual sign-off checklist; no automated gate.
 
 All AC-DB-*, AC-DBP-* automated tests pass on `linux/amd64`, `darwin/arm64`, `windows/amd64`. `make spec-check` reports zero TODOs in `spec/23-app-database/`. `EXPLAIN QUERY PLAN` golden files committed under `internal/store/queries/testdata/`.

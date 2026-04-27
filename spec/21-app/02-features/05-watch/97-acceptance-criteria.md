@@ -1,7 +1,7 @@
 # 05 — Watch — Acceptance Criteria
 
-**Version:** 1.0.0
-**Updated:** 2026-04-25
+**Version:** 1.0.1
+**Updated:** 2026-04-27
 **Status:** Approved
 **AI Confidence:** Production-Ready
 **Ambiguity:** None
@@ -22,7 +22,26 @@ Cross-references:
 
 ---
 
+---
+
+## Sandbox feasibility legend (added Slice #184 — see `mem://workflow/progress-tracker.md`)
+
+A fresh AI picking up an unchecked row should consult the `**Sandbox:**` tag immediately under
+each section header to decide whether the row is implementable in the Lovable sandbox or must
+be deferred to a workstation/CI runner.
+
+| Tag | Meaning | Implementable in sandbox? |
+|---|---|---|
+| 🟢 **headless** | Go unit/integration tests, AST scanners, log greps, spec-doc edits. Verified via `nix run nixpkgs#go -- test -tags nofyne ./...`. | **Yes** — preferred sandbox work. |
+| 🟡 **cgo-required** | Fyne canvas widget tests, real driver behaviour. Needs cgo + GL/X11. See `mem://workflow/canvas-harness-starter.md` (Slice #180). | **No** — defer to workstation; planned. |
+| 🔴 **needs bench / E2E infra** | p95 perf gates (bench infra) or multi-process IMAP+browser E2E. See `mem://workflow/{bench,e2e}-harness-starter.md` (Slices #178/#179). | **No** — defer to CI runner; planned. |
+| ⚪ **N/A** | Manual sign-off checklist; no automated test possible. | **No** — human reviewer. |
+
+A section may carry **two** tags when its rows split (e.g. `🟢 + 🔴`); pick the right tag per row by reading the row itself.
+
 ## 1. Functional (must-pass)
+
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
 
 | #   | Criterion                                                                                                  | Test                                                       |
 |-----|------------------------------------------------------------------------------------------------------------|------------------------------------------------------------|
@@ -45,6 +64,8 @@ Cross-references:
 
 ## 2. Heartbeat Invariant 🔴 (must-pass — single-handedly blocks merge)
 
+**Sandbox:** 🟢 **headless** (most rows) + 🔴 **E2E** for cross-process timing — see `mem://workflow/e2e-harness-starter.md` (Slice #179).
+
 | #   | Criterion                                                                                                  | Test                                                       |
 |-----|------------------------------------------------------------------------------------------------------------|------------------------------------------------------------|
 | H-01 | Every poll cycle emits **one** `INFO` log line per `05-logging-strategy.md` §6.4, even when `NewCount == 0`. | `Watcher_HeartbeatLogEveryCycle_EvenWhenIdle`              |
@@ -59,6 +80,8 @@ Cross-references:
 ---
 
 ## 3. Reconnect Backoff Ladder
+
+**Sandbox:** 🟢 **headless** (most rows) + 🔴 **E2E** for cross-process timing — see `mem://workflow/e2e-harness-starter.md` (Slice #179).
 
 | #   | Criterion                                                                                                  | Test                                                       |
 |-----|------------------------------------------------------------------------------------------------------------|------------------------------------------------------------|
@@ -75,6 +98,8 @@ Cross-references:
 
 ## 4. Mode Negotiation (IDLE vs Poll)
 
+**Sandbox:** 🟢 **headless** (most rows) + 🔴 **E2E** for cross-process timing — see `mem://workflow/e2e-harness-starter.md` (Slice #179).
+
 | #   | Criterion                                                                                                  | Test                                                       |
 |-----|------------------------------------------------------------------------------------------------------------|------------------------------------------------------------|
 | M-01 | `WatchModeAuto` attempts IMAP IDLE; on success `WatchState.Mode == Idle`.                                  | `Watcher_AutoMode_PrefersIdleWhenSupported`                |
@@ -86,6 +111,8 @@ Cross-references:
 ---
 
 ## 5. Event Fan-out (subscriber semantics)
+
+**Sandbox:** 🟢 **headless** (most rows) + 🔴 **E2E** for cross-process timing — see `mem://workflow/e2e-harness-starter.md` (Slice #179).
 
 | #   | Criterion                                                                                                  | Test                                                       |
 |-----|------------------------------------------------------------------------------------------------------------|------------------------------------------------------------|
@@ -99,6 +126,8 @@ Cross-references:
 ---
 
 ## 6. Frontend (UI contract)
+
+**Sandbox:** 🟡 **cgo-required** — needs Fyne canvas harness; see `mem://workflow/canvas-harness-starter.md` (Slice #180).
 
 | #   | Criterion                                                                                                  | Test                                                       |
 |-----|------------------------------------------------------------------------------------------------------------|------------------------------------------------------------|
@@ -122,6 +151,8 @@ Cross-references:
 
 ## 7. Performance (CI-gated benchmarks)
 
+**Sandbox:** 🔴 **needs bench infra** — see `mem://workflow/bench-infra-starter.md` (Slice #178).
+
 | #   | Op                                                       | Budget        | Bench                              |
 |-----|----------------------------------------------------------|---------------|------------------------------------|
 | P-01 | One poll cycle (FETCH + cursor update + heartbeat)       | ≤ **150 ms** p95 (100 messages, no new) | `BenchmarkPollCycle`     |
@@ -136,6 +167,8 @@ Cross-references:
 ---
 
 ## 8. Code Quality
+
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
 
 | #   | Criterion                                                                                       | How verified                       |
 |-----|-------------------------------------------------------------------------------------------------|------------------------------------|
@@ -152,6 +185,8 @@ Cross-references:
 
 ## 9. Security & PII
 
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
+
 | #   | Criterion                                                                                       | Test                                              |
 |-----|-------------------------------------------------------------------------------------------------|---------------------------------------------------|
 | S-01 | IMAP password is **never** logged in any code path (heartbeat, errors, debug).                  | `Logging_NeverContainsPassword` (regex over logs) |
@@ -164,6 +199,8 @@ Cross-references:
 
 ## 10. Logging
 
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
+
 | #   | Criterion                                                                                       | Test                                              |
 |-----|-------------------------------------------------------------------------------------------------|---------------------------------------------------|
 | L-01 | Every poll cycle emits one INFO line with all fields per `05-logging-strategy.md` §6.4.         | `Logging_HeartbeatStructure_FullFields` (= H-03)  |
@@ -175,6 +212,8 @@ Cross-references:
 ---
 
 ## 11. Database (cursor & state)
+
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
 
 | #   | Criterion                                                                                       | Test                                              |
 |-----|-------------------------------------------------------------------------------------------------|---------------------------------------------------|
@@ -189,6 +228,8 @@ Cross-references:
 
 ## 12. Atomicity & Safety
 
+**Sandbox:** 🟢 **headless** — Go unit/integration tests verifiable via `nix run nixpkgs#go -- test -tags nofyne ./...`.
+
 | #   | Criterion                                                                                       | Test                                              |
 |-----|-------------------------------------------------------------------------------------------------|---------------------------------------------------|
 | A-01 | `Start` is idempotent under concurrent calls (mutex-protected `runners` map).                   | `Watch_Start_ConcurrentCallers_OnlyOneRunner`     |
@@ -201,6 +242,8 @@ Cross-references:
 
 ## 13. Accessibility
 
+**Sandbox:** 🟡 **cgo-required** — needs Fyne canvas harness; see `mem://workflow/canvas-harness-starter.md` (Slice #180).
+
 | #   | Criterion                                                                                       | How verified                       |
 |-----|-------------------------------------------------------------------------------------------------|------------------------------------|
 | X-01 | Status dot is decorative; `statusLabel` carries semantic state for screen readers.              | Manual a11y audit + golden snapshot |
@@ -212,6 +255,8 @@ Cross-references:
 ---
 
 ## 14. Sign-off
+
+**Sandbox:** ⚪ **N/A** — manual sign-off checklist; no automated gate.
 
 A merge into `main` requires **all** of the following on the PR:
 
