@@ -15,8 +15,34 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lovable/email-read/internal/ui/errlog"
 	"github.com/lovable/email-read/internal/watcher"
 )
+
+// ReportWatchEventError forwards error-bearing watcher events into the
+// process-wide error log (Diagnostics → Error Log + persisted
+// data/error-log.jsonl + `email-read errors tail`). Without this hook
+// the Watch view's Raw log tab is the *only* place poll errors appear,
+// and the user (rightly) expected the Error Log to mirror them.
+//
+// Currently forwards EventPollError and the failure branch of
+// EventUrlOpened. Other event kinds carry no error and are skipped.
+// Component tag is namespaced as "watcher.<alias>" so multi-account
+// installs can distinguish sources in the error log without losing the
+// `watcher` prefix the rest of the codebase uses.
+//
+// Safe to call from any goroutine; nil-safe (errlog.ReportError is a
+// no-op when ev.Err is nil).
+func ReportWatchEventError(ev watcher.Event) {
+	switch ev.Kind {
+	case watcher.EventPollError:
+		errlog.ReportError("watcher."+ev.Alias, ev.Err)
+	case watcher.EventUrlOpened:
+		if !ev.OpenOK {
+			errlog.ReportError("watcher.openurl."+ev.Alias, ev.Err)
+		}
+	}
+}
 
 // WatchCounters is the rolling tally shown in the footer. Incremented
 // by accumulateCounters; reset by ResetCounters when the user
