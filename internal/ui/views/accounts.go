@@ -146,10 +146,10 @@ func accountRow(a config.Account, ws store.WatchState, health core.HealthLevel, 
 	// consistent (Edit = pencil, Delete = trash). Importance hints
 	// recolor the buttons via the active theme so they stay legible
 	// in light + dark modes without hard-coding HSL.
-	editBtn := widget.NewButtonWithIcon("Edit", theme.DocumentCreateIcon(),
+	editBtn := widget.NewButtonWithIcon("Edit", theme.IconEdit(),
 		func() { openEditAccountDialog(a, opts, status, reload) })
 	editBtn.Importance = widget.MediumImportance
-	delBtn := widget.NewButtonWithIcon("Delete", theme.DeleteIcon(),
+	delBtn := widget.NewButtonWithIcon("Delete", theme.IconDelete(),
 		func() { confirmDeleteAccount(a, opts, status, reload) })
 	delBtn.Importance = widget.DangerImportance
 	// GridWithColumns(2) gives both buttons identical width so the
