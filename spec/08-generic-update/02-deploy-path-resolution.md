@@ -376,8 +376,8 @@ Output:
 
 | App Spec | Covers |
 |----------|--------|
-| [02-powershell-build-deploy.md](../03-general/02-powershell-build-deploy.md) | Deploy target resolution and nested deploy structure |
-| [09-build-deploy.md](../01-app/09-build-deploy.md) | gitmap deploy target on PATH, nested `gitmap/` subfolder |
+| [PowerShell Integration — Overview](../10-powershell-integration/00-overview.md) | Deploy target resolution and nested deploy structure |
+| [Self-Update & App Update — Deploy Path Resolution](../14-self-update-app-update/02-deploy-path-resolution.md) | App deploy target on PATH, nested subfolder layout |
 
 ## Contributors
 

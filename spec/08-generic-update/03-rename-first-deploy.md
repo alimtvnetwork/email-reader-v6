@@ -233,9 +233,9 @@ destination is free after rename, so retries are for rare edge cases:
 
 | App Spec | Covers |
 |----------|--------|
-| [02-powershell-build-deploy.md](../03-general/02-powershell-build-deploy.md) | Retry-on-lock deploy and PATH sync |
-| [03-self-update-mechanism.md](../03-general/03-self-update-mechanism.md) | Rename-first during self-update, rollback on failure |
-| [09-build-deploy.md](../01-app/09-build-deploy.md) | gitmap rename-first deploy with retry |
+| [PowerShell Integration — Overview](../10-powershell-integration/00-overview.md) | Retry-on-lock deploy and PATH sync |
+| [Self-Update Mechanism (CI/CD)](../13-cicd-pipeline-workflows/06-self-update-mechanism.md) | Rename-first during self-update, rollback on failure |
+| [Self-Update & App Update — Rename-First Deploy](../14-self-update-app-update/03-rename-first-deploy.md) | App rename-first deploy with retry |
 
 ## Contributors
 

@@ -28,7 +28,7 @@ file, so it does not conflict with the original binary's lock.
 
 ### Flow
 
-![Handoff Mechanism Flow](images/handoff-mechanism-flow.mmd)
+_Handoff Mechanism Flow — see Mermaid diagram in `images/handoff-mechanism-flow.mmd` (artifact stored separately from this spec tree)._
 
 ```
 <binary>.exe update
@@ -250,8 +250,8 @@ When the source repo is not available, use a standalone updater binary:
 
 | App Spec | Covers |
 |----------|--------|
-| [02-powershell-build-deploy.md](../03-general/02-powershell-build-deploy.md) | Self-update orchestration (Windows-safe handoff) |
-| [03-self-update-mechanism.md](../03-general/03-self-update-mechanism.md) | Two-phase handoff, worker launch, foreground blocking |
+| [PowerShell Integration — Overview](../10-powershell-integration/00-overview.md) | Self-update orchestration (Windows-safe handoff) |
+| [Self-Update Mechanism (CI/CD)](../13-cicd-pipeline-workflows/06-self-update-mechanism.md) | Two-phase handoff, worker launch, foreground blocking |
 
 ## Contributors
 

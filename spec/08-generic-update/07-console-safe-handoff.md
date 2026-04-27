@@ -258,9 +258,9 @@ If any step uses detached async launch, the implementation is wrong.
   foundation for Windows self-replacement
 - [03-rename-first-deploy.md](03-rename-first-deploy.md) — Rename-first
   strategy for locked binaries
-- [../03-general/02f-self-update-orchestration.md](../03-general/02f-self-update-orchestration.md) — App-level orchestration rules
-- [../03-general/03-self-update-mechanism.md](../03-general/03-self-update-mechanism.md) — Full self-update architecture
-- [../02-app-issues/03-update-sync-lock-loop.md](../02-app-issues/03-update-sync-lock-loop.md) — The real gitmap failure and its resolution
+- _PowerShell self-update orchestration_ — see `../10-powershell-integration/00-overview.md` — App-level orchestration rules
+- [Self-Update Mechanism (CI/CD)](../13-cicd-pipeline-workflows/06-self-update-mechanism.md) — Full self-update architecture
+- _App-specific update sync-lock loop issue_ — historical note from the upstream `02-app-issues/03-update-sync-lock-loop.md` doc (lives outside this spec tree)
 
 ## Contributors
 
