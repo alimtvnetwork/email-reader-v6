@@ -21,10 +21,17 @@ import (
 // AccountsOptions wires the Accounts table to its data + side effects.
 // All fields are optional with sensible defaults so existing callers
 // (app.go's viewFor) keep working.
+//
+// `LoadHealth` is the per-row health badge feed (Slice #112). Returns
+// a per-alias map so the row builder can do an O(1) lookup. When nil,
+// the Accounts table renders the column with "— Unknown" placeholders
+// rather than skipping it — keeps column alignment stable across the
+// "no runtime / store unavailable" degraded path.
 type AccountsOptions struct {
 	List              func() errtrace.Result[[]config.Account]
 	WatchState        func(ctx context.Context, alias string) (store.WatchState, error)
 	Remove            func(alias string) errtrace.Result[struct{}]
+	LoadHealth        func(ctx context.Context) map[string]core.HealthLevel
 	OnAccountsChanged func() // fired after a successful Edit / Delete
 }
 
