@@ -20,7 +20,6 @@ package views
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"fyne.io/fyne/v2"
@@ -28,6 +27,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/lovable/email-read/internal/core"
+	"github.com/lovable/email-read/internal/errtrace"
 	"github.com/lovable/email-read/internal/ui/errlog"
 )
 
@@ -102,4 +102,4 @@ func buildToolsFromFactory(factory ToolsFactory) (*core.Tools, error) {
 // shell's `*Services.Tools` field is nil (e.g. boot-time wiring
 // failure). Kept package-private — sub-tabs render its message via
 // the standard "⚠ setup:" status prefix.
-var errToolsFactoryUnavailable = errors.New("tools factory unavailable (shell bootstrap may have failed)")
+var errToolsFactoryUnavailable = errtrace.New("tools factory unavailable (shell bootstrap may have failed)")

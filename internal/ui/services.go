@@ -26,7 +26,6 @@ package ui
 
 import (
 	"context"
-	"errors"
 	"log"
 
 	"github.com/lovable/email-read/internal/browser"
@@ -237,7 +236,7 @@ func openURLAdapter(factory BrowserFactory) func(rawurl string) error {
 // errBrowserUnavailable is the sentinel surfaced when the shell
 // failed to wire a browser factory. View code converts it to a
 // user-visible status banner without exposing the wiring detail.
-var errBrowserUnavailable = errors.New("browser launcher unavailable")
+var errBrowserUnavailable = errtrace.New("browser launcher unavailable")
 
 // defaultToolsFactory returns the production `ToolsFactory` used by
 // the Tools tab sub-routes when running under the real shell. Splits

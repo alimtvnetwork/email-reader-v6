@@ -28,7 +28,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"time"
 
 	"github.com/lovable/email-read/internal/errtrace"
@@ -369,7 +368,7 @@ func parseSqliteRFC3339(s string) (time.Time, error) {
 		return t.UTC(), nil
 	}
 	return time.Time{}, errtrace.Wrap(
-		errors.New("unrecognised timestamp shape: "+s),
+		errtrace.New("unrecognised timestamp shape: "+s),
 		"parseSqliteRFC3339")
 }
 

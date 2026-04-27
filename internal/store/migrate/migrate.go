@@ -35,7 +35,6 @@ package migrate
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"sort"
 	"sync"
@@ -160,7 +159,7 @@ const schemaVersionInsert = `INSERT OR IGNORE INTO _SchemaVersion (Version, Name
 // IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`, etc.).
 func Apply(ctx context.Context, db *sql.DB) error {
 	if db == nil {
-		return errtrace.Wrap(errors.New("nil db"), "migrate.Apply")
+		return errtrace.Wrap(errtrace.New("nil db"), "migrate.Apply")
 	}
 	if _, err := db.ExecContext(ctx, schemaVersionDDL); err != nil {
 		return errtrace.Wrap(err, "create _SchemaVersion")
