@@ -132,3 +132,15 @@ sites cleared). `check-no-bare-return-err` 23 (unchanged).
 `check-no-errors-new` 4 (unchanged). Total 43 → **35**.
 
 `go vet -tags nofyne ./...` clean; `internal/store/...` tests green.
+
+## Phase 2.3 — settings_logic.go migrated (2026-04-27)
+
+5 validation `fmt.Errorf("…")` → `errtrace.New("…")` in
+`ParsePollSeconds`, `ParseRetentionDays`, `ParseVacuumHourLocal`,
+`ParseWalCheckpointHours`, `ParsePruneBatchSize`. `fmt` import
+removed. Error message text preserved exactly — `errtrace.New(s)
+.Error() == s` so existing tests / status-bar UX are unchanged.
+
+Linter delta: `check-no-fmt-errorf` 8 → **3**. Total **35 → 30**.
+
+`go vet -tags nofyne ./...` clean; `internal/ui/views/...` tests green.
