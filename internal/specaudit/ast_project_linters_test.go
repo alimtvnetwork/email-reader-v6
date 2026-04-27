@@ -221,7 +221,7 @@ func Test_AllQueryRefsResolveInDbQueries(t *testing.T) {
 		// Strip code fences: query plans inside ```sql blocks
 		// sometimes echo Q-codes as comments that aren't real refs.
 		clean := stripCodeFences(body)
-		for _, code := range uniqueMatches(queryCodeRe, clean) {
+		for code := range uniqueMatches(queryCodeRe, clean) {
 			if !defined[code] {
 				missing[code] = append(missing[code], rel)
 			}
