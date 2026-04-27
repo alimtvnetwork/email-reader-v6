@@ -1,7 +1,7 @@
 # 01 — Schema
 
-**Version:** 1.0.0
-**Updated:** 2026-04-25
+**Version:** 1.0.1
+**Updated:** 2026-04-27
 **Status:** Approved
 **AI Confidence:** Production-Ready
 **Ambiguity:** None
