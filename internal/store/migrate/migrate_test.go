@@ -31,10 +31,27 @@ func newDB(t *testing.T) *sql.DB {
 	return db
 }
 
+// resetRegistry isolates one black-box test from both (a) production
+// migrations registered via init() in sibling m00xx_*.go files and (b)
+// any registrations made by other tests in this file.
+//
+// We snapshot whatever is currently registered, hand the test a clean
+// empty registry, and restore the snapshot on Cleanup. This matters
+// when the test binary runs with `-count>1`: under the old behaviour,
+// the first iteration's t.Cleanup wiped the registry to empty, so the
+// in-package m00xx_*_test.go suite (which reads registry[N] directly,
+// without re-running init) saw "Version N not registered" on every
+// subsequent iteration.
 func resetRegistry(t *testing.T) {
 	t.Helper()
-	migrate.Reset()
-	t.Cleanup(migrate.Reset)
+	migrate.SwapRegistryForTest(map[int]migrate.Migration{})
+	t.Cleanup(func() {
+		// Restore production migrations registered by sibling init()s.
+		// SwapRegistryForTest returns the prior contents we displaced;
+		// putting them back leaves the package in the state it had
+		// when the test started.
+		_ = migrate.RestoreBaselineRegistryForTest()
+	})
 }
 
 func countSchemaVersionRows(t *testing.T, db *sql.DB) int {
