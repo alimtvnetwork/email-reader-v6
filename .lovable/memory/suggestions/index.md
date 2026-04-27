@@ -10,7 +10,8 @@
 | 20260427-141505-add-sandbox-feasibility-tag | ✅ closed (Slice #184 — legend + per-section tag in 9 AC files via deterministic script; risk-report Tier table cross-referenced) | medium | Add 🟢/🟡/🔴 sandbox-feasibility tag to each per-feature 97 file |
 | 20260427-155000-rotate-seeded-credentials-broader-scope | open (blocked on user policy verdict a/b/c — see Slice #185 finding) | **HIGH (security)** | Rotate seeded IMAP credentials — **plaintext password in `internal/config/seed.go` line 33** ships in binary |
 | 20260427-160000-errlog-persist-nil-writer-race | ✅ closed (Slice #190 — `Write` now returns `ErrPersistenceClosed` instead of nil-deref; `TestEnableDefaultPersistence_RestoresAcrossInstances` adds `t.Cleanup(resetSingletonForTest)`; new `TestPersistence_WriteAfterCloseIsSafe` pins regression; `errlog` green under `-race -count=2`) | medium | `errlog.Persistence.Write` panics with nil `*bufio.Writer` under `-race -count=2` |
-| 20260427-170000-migrate-race-count2-not-idempotent | open (sandbox-doable, discovered by Slice #190 wider sweep) | medium | `internal/store/migrate` m0011..m0014 fail under `-race -count=2` — registry/init not re-armed between iterations (pre-existing, unmasked by errlog fix) |
+| 20260427-170000-migrate-race-count2-not-idempotent | ✅ closed (Slice #191 — added `SwapRegistryForTest`/`RestoreBaselineRegistryForTest` with once-captured baseline; black-box `migrate_test` now snapshot/restore instead of wipe) | medium | `internal/store/migrate` m0011..m0014 fail under `-race -count=2` |
+| 20260427-180000-perfgates-flap-under-race | ✅ closed (Slice #192 — `perfgate_{race,norace}_test.go` build-tag pair + `perfGateSkipRace(t)` helper wired into all 6 PerfGate tests; SKIP under `-race`, RUN otherwise; entire repo green under `-race -count=2`) | low | Wall-clock perf gates flap under `-race` due to detector overhead |
 
 Archive: `.lovable/memory/suggestions/archive/` (empty).
 
