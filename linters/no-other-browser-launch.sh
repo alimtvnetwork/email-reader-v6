@@ -66,18 +66,22 @@ VIOLATIONS=0
 
 # Walk every *.go file outside the prune list, skip *_test.go (test
 # files document anti-patterns), grep for forbidden patterns.
+# Walk every *.go file outside the prune list, skip *_test.go (test
+# files document anti-patterns). Two-stage match: line must contain
+# `exec.Command(` AND match the launcher regex. The two-stage form
+# avoids false positives from unrelated string literals (e.g. a Go
+# enum value `"start"` for an event-kind constant).
 while IFS= read -r -d '' file; do
   case "$file" in
     *_test.go) continue ;;
   esac
-  for pat in "${PATTERNS[@]}"; do
-    if grep -nF -- "$pat" "$file" >/tmp/no-other-browser-hits.$$ 2>/dev/null; then
-      while IFS= read -r line; do
-        echo "$file:$line  (pattern: $pat)" >&2
-        VIOLATIONS=$((VIOLATIONS + 1))
-      done < /tmp/no-other-browser-hits.$$
-    fi
-  done
+  if grep -n 'exec\.Command(' "$file" 2>/dev/null \
+        | grep -E -- "$LAUNCHER_RE" >/tmp/no-other-browser-hits.$$ 2>/dev/null; then
+    while IFS= read -r line; do
+      echo "$file:$line" >&2
+      VIOLATIONS=$((VIOLATIONS + 1))
+    done < /tmp/no-other-browser-hits.$$
+  fi
   rm -f /tmp/no-other-browser-hits.$$
 done < <(find . "${prune_expr[@]}" -type f -name '*.go' -print0)
 
