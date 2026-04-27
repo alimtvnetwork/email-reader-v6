@@ -47,6 +47,8 @@ var leakedSqlTypes = map[string]bool{
 // audit. Forward-slashed.
 const storeRootRel = "internal/store"
 
+// Satisfies AC-PROJ-19 — public core API must not leak `database/sql`
+// types; verified by AST scan over all packages outside store/.
 func Test_AST_NoSqlTypeLeak(t *testing.T) {
 	root := repoRootForMaintenanceGuard(t) // shared with #34/#35
 	storeDir := filepath.Join(root, filepath.FromSlash(storeRootRel))

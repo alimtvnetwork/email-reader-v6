@@ -49,6 +49,8 @@ var driverImportPaths = map[string]bool{
 // a SQL driver. Forward-slashed, repo-relative.
 const driverAllowedPrefix = "internal/store/"
 
+// Satisfies AC-PROJ-16 — only `internal/store` may import any SQL
+// driver (`database/sql`, `modernc.org/sqlite`, `mattn/go-sqlite3`).
 func Test_AST_DriverImportLimit(t *testing.T) {
 	root := repoRootForMaintenanceGuard(t) // reused from ast_maintenance_only_test.go
 	violations := scanRepoForDriverImports(t, root)
