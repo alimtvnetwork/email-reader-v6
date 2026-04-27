@@ -20,6 +20,8 @@ func newTestSettings(t *testing.T) *Settings {
 	return r.Value()
 }
 
+// Satisfies AC-SB-01 — Get on a fresh config.json returns the
+// documented defaults from 01-backend.md §3.
 func TestSettings_GetReturnsDefaults(t *testing.T) {
 	withIsolatedConfig(t, func() {
 		s := newTestSettings(t)
@@ -46,6 +48,8 @@ func TestSettings_GetReturnsDefaults(t *testing.T) {
 	})
 }
 
+// Satisfies AC-SB-02 — Get after Save(in) returns a snapshot
+// byte-equivalent to in after normalization.
 func TestSettings_SaveAndRoundTrip(t *testing.T) {
 	withIsolatedConfig(t, func() {
 		s := newTestSettings(t)
@@ -120,6 +124,12 @@ func TestSettings_SavePreservesAccountsAndRules(t *testing.T) {
 	})
 }
 
+// Satisfies AC-SB-03 (PollSeconds=0 → ER-SET-21771),
+// AC-SB-04 (PollSeconds=61 → ER-SET-21771),
+// AC-SB-05 (Theme=unknown → ER-SET-21772),
+// AC-SB-06 (scheme="javascript" → ER-SET-21773),
+// AC-SB-09 (IncognitoArg injection → ER-SET-21775), and
+// AC-SB-10 (Localhost without http → ER-SET-21777) via subtests.
 func TestSettings_ValidationErrors(t *testing.T) {
 	withIsolatedConfig(t, func() {
 		s := newTestSettings(t)
@@ -187,6 +197,8 @@ func TestSettings_ValidationErrors(t *testing.T) {
 	})
 }
 
+// Satisfies AC-SB-08 — Save with non-existent ChromePath returns
+// ER-SET-21774 (and a real tempfile passes).
 func TestSettings_ChromePathValidation(t *testing.T) {
 	withIsolatedConfig(t, func() {
 		s := newTestSettings(t)
@@ -217,6 +229,8 @@ func TestSettings_ChromePathValidation(t *testing.T) {
 	})
 }
 
+// Satisfies AC-SB-16 — ResetToDefaults resets only the six owned
+// scalar fields and leaves Accounts/Rules byte-identical.
 func TestSettings_ResetToDefaults(t *testing.T) {
 	withIsolatedConfig(t, func() {
 		s := newTestSettings(t)
@@ -237,6 +251,8 @@ func TestSettings_ResetToDefaults(t *testing.T) {
 	})
 }
 
+// Satisfies AC-SB-17 — Save emits exactly one
+// SettingsEvent{Kind: SettingsSaved}.
 func TestSettings_SubscribeReceivesEvents(t *testing.T) {
 	withIsolatedConfig(t, func() {
 		s := newTestSettings(t)
@@ -275,6 +291,8 @@ func TestSettings_SubscribeReceivesEvents(t *testing.T) {
 	})
 }
 
+// Satisfies AC-SB-19 — Subscribe cancel func stops delivery; later
+// Save does not panic and does not deadlock.
 func TestSettings_SubscribeCancelStopsDelivery(t *testing.T) {
 	withIsolatedConfig(t, func() {
 		s := newTestSettings(t)
@@ -293,6 +311,8 @@ func TestSettings_SubscribeCancelStopsDelivery(t *testing.T) {
 	})
 }
 
+// Satisfies AC-SB-22 — DetectChrome returns ChromeNotFound (not an
+// error) when nothing is found on disk or in env.
 func TestSettings_DetectChromeNotFoundIsNotError(t *testing.T) {
 	withIsolatedConfig(t, func() {
 		// Point env at a non-existent path; the probe should still succeed

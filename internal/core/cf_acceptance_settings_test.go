@@ -69,6 +69,8 @@ func TestCF_W1_Watch_PollReload_OnSettingsEvent(t *testing.T) {
 // byte-identical (alias, host, port, password). Stronger than the
 // existing "preserves accounts" test because it locks every field of
 // the persisted Account, not just presence.
+//
+// Satisfies AC-SB-11 — Save preserves Accounts array byte-identically.
 func TestCF_A1_Save_Accounts_Untouched(t *testing.T) {
 	withIsolatedConfig(t, func() {
 		// Seed an account directly via the config layer so we don't
@@ -113,6 +115,9 @@ func TestCF_A1_Save_Accounts_Untouched(t *testing.T) {
 // final state must contain BOTH the latest Settings value AND the
 // account that survived the cycle — proving disjoint top-level keys
 // and the WriteAtomic serialisation never lose either side's update.
+//
+// Satisfies AC-SB-15 — concurrent Save calls produce exactly one of
+// the two snapshots, never a merge.
 func TestCF_A2_Concurrent_Settings_Accounts_NoLoss(t *testing.T) {
 	withIsolatedConfig(t, func() {
 		s := newTestSettings(t)
