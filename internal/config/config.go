@@ -207,15 +207,16 @@ func Load() (*Config, error) {
 		return nil, errtrace.Wrap(err, "load: path")
 	}
 	b, err := os.ReadFile(p)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return Default(), nil
-		}
-		return nil, errtrace.Wrapf(err, "read config %s", p)
-	}
 	var c Config
-	if err := json.Unmarshal(b, &c); err != nil {
-		return nil, errtrace.Wrapf(err, "parse config %s", p)
+	switch {
+	case err != nil && os.IsNotExist(err):
+		c = *Default()
+	case err != nil:
+		return nil, errtrace.Wrapf(err, "read config %s", p)
+	default:
+		if err := json.Unmarshal(b, &c); err != nil {
+			return nil, errtrace.Wrapf(err, "parse config %s", p)
+		}
 	}
 	if c.Watch.PollSeconds <= 0 {
 		c.Watch.PollSeconds = 3
@@ -226,7 +227,31 @@ func Load() (*Config, error) {
 	if c.Rules == nil {
 		c.Rules = []Rule{}
 	}
+	// Seed default accounts (skipping any the user has tombstoned).
+	// Persist immediately so the seeded entries survive even if the
+	// caller never triggers a Save of its own.
+	if applySeedDefaults(&c) {
+		if err := saveLocked(&c, p); err != nil {
+			// Non-fatal: surface the seeded copy in memory anyway so
+			// the UI is usable; next Save attempt will retry.
+			_ = err
+		}
+	}
 	return &c, nil
+}
+
+// saveLocked writes c to path p. Caller MUST already hold mu (used by
+// Load's seed-write path to avoid double-locking).
+func saveLocked(c *Config, p string) error {
+	b, err := json.MarshalIndent(c, "", "  ")
+	if err != nil {
+		return errtrace.Wrap(err, "marshal config")
+	}
+	tmp := p + ".tmp"
+	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+		return errtrace.Wrapf(err, "write config %s", tmp)
+	}
+	return os.Rename(tmp, p)
 }
 
 // Save atomically writes the config to disk with pretty-printed JSON.
