@@ -60,7 +60,6 @@ package core
 
 import (
 	"context"
-	"errors"
 	"os"
 	"testing"
 	"time"
