@@ -19,6 +19,8 @@ Cross-references:
 - Emails backend: [`../21-app/02-features/02-emails/01-backend.md`](../21-app/02-features/02-emails/01-backend.md)
 - Dashboard backend: [`../21-app/02-features/01-dashboard/01-backend.md`](../21-app/02-features/01-dashboard/01-backend.md)
 
+> **Drift notice (Slice #137).** Table-name references throughout this file (`Email`, `OpenedUrl`, `IX_Email_*`, `SCAN Email`, etc.) still use the **historical singular** forms. The locked Phase 2.1 verdict (see `01-schema.md` §1) is **plural for entity collections** — actual production tables are `Emails`, `OpenedUrls`, `WatchEvents`, with `WatchState` (singleton-per-key) and `_SchemaVersion` (bookkeeping) staying singular. The full sweep of every `Q-*` query body, projection, and EXPLAIN-plan cell is tracked in the deferred "schema-evolution work, ~12 AC-DB rows" backlog item — it requires either editing every query template here AND every callsite in `internal/store/queries/*.go` in lockstep, or a full SQL-rewrite migration. The convention rule and the canonical table names live in `01-schema.md` §1; treat that as the source of truth when this file disagrees.
+
 ---
 
 ## 1. Convention

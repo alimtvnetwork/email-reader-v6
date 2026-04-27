@@ -49,12 +49,14 @@ Total: 5 tables. No others. Adding a table requires bumping this spec's MAJOR ve
 
 
 
-## 2. Table `Email`
+## 2. Table `Emails`
 
 Persisted copy of every IMAP message that the watcher has fetched. The on-disk `.eml` file is the source of truth for body bytes; this table indexes metadata for search and filtering.
 
+> **Drift notice (Slice #137).** The DDL block below shows the **logical / specified** shape (post-Phase-2.1: `HasAttachment`, `ReceivedAt NOT NULL`, four named indexes). The **canonical, in-database** shape is whatever `internal/store/migrate/m0001_emails_table.go` (+ additive `m0010_add_email_flags.go`, `m0012_add_email_deletedat.go`, `m0013_email_deletedat_index.go`) emits. Differences (e.g. `ReceivedAt` is nullable in m0001; `MessageId UNIQUE` is inline rather than via the named `UX_Emails_Alias_MessageId`; flags & soft-delete columns are not reflected here yet) are tracked in the deferred "schema-evolution work, ~12 AC-DB rows" backlog item — they require new numbered migrations to reconcile, not edits to this prose. The table **name** (plural `Emails`) and the convention rule are now authoritative; column-by-column reconciliation lands later.
+
 ```sql
-CREATE TABLE Email (
+CREATE TABLE Emails (
     Id            INTEGER PRIMARY KEY AUTOINCREMENT,
     Alias         TEXT    NOT NULL,
     MessageId     TEXT    NOT NULL,
@@ -71,15 +73,15 @@ CREATE TABLE Email (
     CreatedAt     DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
-CREATE UNIQUE INDEX UX_Email_Alias_MessageId ON Email (Alias, MessageId);
-CREATE        INDEX IX_Email_Alias_Uid       ON Email (Alias, Uid DESC);
-CREATE        INDEX IX_Email_ReceivedAt      ON Email (ReceivedAt DESC);
-CREATE        INDEX IX_Email_Alias_Received  ON Email (Alias, ReceivedAt DESC);
+CREATE UNIQUE INDEX UX_Emails_Alias_MessageId ON Emails (Alias, MessageId);
+CREATE        INDEX IX_Emails_Alias_Uid       ON Emails (Alias, Uid DESC);
+CREATE        INDEX IX_Emails_ReceivedAt      ON Emails (ReceivedAt DESC);
+CREATE        INDEX IX_Emails_Alias_Received  ON Emails (Alias, ReceivedAt DESC);
 ```
 
 | Column | Type | Notes |
 |---|---|---|
-| `Id` | `INTEGER` PK | rowid alias; FK target for `OpenedUrl.EmailId`. |
+| `Id` | `INTEGER` PK | rowid alias; FK target for `OpenedUrls.EmailId`. |
 | `Alias` | `TEXT NOT NULL` | Account alias from `config.json` `Accounts[*].Alias`. |
 | `MessageId` | `TEXT NOT NULL` | RFC 822 `Message-ID`. Empty messages get a synthesized `<sha1>@no-id.local` value (Watch backend §4). |
 | `Uid` | `INTEGER NOT NULL` | IMAP UID. Per-`Alias` monotonic, but **never** assumed globally unique. |
@@ -106,6 +108,8 @@ CREATE        INDEX IX_Email_Alias_Received  ON Email (Alias, ReceivedAt DESC);
 
 Per-alias high-water mark + last-seen metadata. Read at the start of every poll cycle, written at the end. Owned exclusively by the Watch backend.
 
+> **Drift notice (Slice #137).** The DDL block below shows the **logical** shape (with `LastMessageId`, `LastPolledAt`, `LastErrorCode`). The **canonical, in-database** shape is whatever `internal/store/migrate/m0003_watch_state_table.go` (+ additive `m0014_watchstate_consecutive_failures.go`) emits. m0003 currently lacks `LastMessageId`/`LastPolledAt`/`LastErrorCode`; m0014 added `ConsecutiveFailures` (not reflected here). Bringing the two into alignment is part of the deferred "schema-evolution work" backlog. The table **name** (singular — singleton-per-key state, per the §1 verdict matrix) is authoritative.
+
 ```sql
 CREATE TABLE WatchState (
     Alias          TEXT     PRIMARY KEY,
@@ -121,7 +125,7 @@ CREATE TABLE WatchState (
 
 | Column | Type | Notes |
 |---|---|---|
-| `Alias` | `TEXT` PK | Matches `Email.Alias`. No FK (Email rows can be pruned independently). |
+| `Alias` | `TEXT` PK | Matches `Emails.Alias`. No FK (Emails rows can be pruned independently). |
 | `LastUid` | `INTEGER NOT NULL` | Highest `Uid` successfully persisted for this alias. `0` = first run. |
 | `LastMessageId` | `TEXT NOT NULL` | `Message-ID` of the most recent successfully persisted message. |
 | `LastSubject` | `TEXT NOT NULL` | Subject of the most recent message (UI display). |
@@ -137,12 +141,14 @@ CREATE TABLE WatchState (
 
 ---
 
-## 4. Table `OpenedUrl`
+## 4. Table `OpenedUrls`
 
 Forensic ledger for every URL the app considers opening — including blocked decisions. Used both for deduplication (don't double-launch the same URL within `OpenUrlDedupWindow`) and for the Tools "Recent opened URLs" view.
 
+> **Drift notice (Slice #137).** The DDL block below shows the **logical** shape (with `Origin`/`Decision`/`BlockedReason`/`LaunchedAt`, `ON DELETE SET NULL`, partial unique on `Decision='Launched'`). The **canonical, in-database** shape is whatever `internal/store/migrate/m0004_opened_urls_table.go` (+ `m0005_opened_urls_audit_columns.go` adding `Alias/Origin/OriginalUrl/IsDeduped/IsIncognito/TraceId`, `m0006_opened_urls_alias_opened_at_index.go`, `m0009_opened_urls_opened_at_index.go`) emits. m0004 uses `(EmailId, Url)` UNIQUE + `ON DELETE CASCADE` — the partial-unique-on-`Decision='Launched'` and the `ON DELETE SET NULL` shown here are spec-side targets that need new numbered migrations. Tracked in deferred "schema-evolution work". The table **name** (plural `OpenedUrls`) is authoritative.
+
 ```sql
-CREATE TABLE OpenedUrl (
+CREATE TABLE OpenedUrls (
     Id             INTEGER PRIMARY KEY AUTOINCREMENT,
     EmailId        INTEGER,
     Alias          TEXT    NOT NULL,
@@ -154,20 +160,20 @@ CREATE TABLE OpenedUrl (
     BlockedReason  TEXT    NOT NULL DEFAULT '',
     LaunchedAt     DATETIME,
     CreatedAt      DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-    FOREIGN KEY (EmailId) REFERENCES Email(Id) ON DELETE SET NULL
+    FOREIGN KEY (EmailId) REFERENCES Emails(Id) ON DELETE SET NULL
 );
 
-CREATE        INDEX IX_OpenedUrl_Alias_Created ON OpenedUrl (Alias, CreatedAt DESC);
-CREATE        INDEX IX_OpenedUrl_EmailId       ON OpenedUrl (EmailId);
-CREATE UNIQUE INDEX UX_OpenedUrl_Dedup
-       ON OpenedUrl (Alias, OriginalUrl, LaunchedAt)
+CREATE        INDEX IX_OpenedUrls_Alias_Created ON OpenedUrls (Alias, CreatedAt DESC);
+CREATE        INDEX IX_OpenedUrls_EmailId       ON OpenedUrls (EmailId);
+CREATE UNIQUE INDEX UX_OpenedUrls_Dedup
+       ON OpenedUrls (Alias, OriginalUrl, LaunchedAt)
        WHERE Decision = 'Launched';
 ```
 
 | Column | Type | Notes |
 |---|---|---|
 | `Id` | `INTEGER` PK | |
-| `EmailId` | `INTEGER NULL` | FK → `Email.Id`. NULL for `Origin='Manual'` (Tools UI launches). `ON DELETE SET NULL` so pruning Email rows preserves the audit trail. |
+| `EmailId` | `INTEGER NULL` | FK → `Emails.Id`. NULL for `Origin='Manual'` (Tools UI launches). `ON DELETE SET NULL` so pruning Emails rows preserves the audit trail. |
 | `Alias` | `TEXT NOT NULL` | Account alias context (always populated, even for Manual). |
 | `RuleName` | `TEXT NOT NULL` | Empty unless `Origin='Rule'`. |
 | `Origin` | `TEXT NOT NULL` | Enum: `Watcher` (auto-open by polling loop), `Manual` (Tools UI), `Rule` (explicit rule action). |
@@ -179,18 +185,20 @@ CREATE UNIQUE INDEX UX_OpenedUrl_Dedup
 | `CreatedAt` | `DATETIME NOT NULL` | UTC. Always set, even for Blocked/Failed. |
 
 **Invariants:**
-- `UX_OpenedUrl_Dedup` is a **partial unique index** — only over `Decision='Launched'` rows. Blocked attempts are never deduped (every block is independently audited).
+- `UX_OpenedUrls_Dedup` is a **partial unique index** — only over `Decision='Launched'` rows. Blocked attempts are never deduped (every block is independently audited).
 - `OriginalUrl` is encrypted at rest? **No** — explicit non-feature; documented in Tools backend §11.
 - The Tools backend MUST insert the `OpenedUrl` row **after** the browser launch returns (forensic completeness — Tools backend §3.4 step 7).
 
 ---
 
-## 5. Table `SchemaMigration`
+## 5. Table `_SchemaVersion`
 
 Owned by `internal/store/migrate`. Feature code MUST NOT read or write this table.
 
+> **Drift notice (Slice #137).** The DDL block below shows the **logical** shape (with `Checksum` for tamper detection per `03-migrations.md` §4). The **canonical, in-database** shape is `internal/store/migrate/migrate.go` `schemaVersionDDL`, which has `Version`/`Name`/`AppliedAt` only — **no `Checksum` column**. The runner's checksum-on-startup check is currently in-memory only (compares each registered migration's SQL hash against itself, not against a stored value), so the spec'd column is aspirational. Adding it requires a numbered migration; tracked in deferred "schema-evolution work". The table **name** (`_SchemaVersion`, leading underscore = bookkeeping per the §1 verdict matrix) is authoritative — the legacy `SchemaMigration` name is superseded.
+
 ```sql
-CREATE TABLE SchemaMigration (
+CREATE TABLE _SchemaVersion (
     Version    INTEGER PRIMARY KEY,
     Name       TEXT    NOT NULL,
     AppliedAt  DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
@@ -211,9 +219,9 @@ CREATE TABLE SchemaMigration (
 
 | # | Constraint | Mechanism |
 |---|---|---|
-| X-1 | `OpenedUrl.EmailId` MUST point at an existing `Email.Id` or be NULL. | FK `ON DELETE SET NULL`. |
-| X-2 | `WatchState.Alias` and `Email.Alias` SHOULD agree, but no FK — Email rows survive alias deletion (audit value). | Application-level. |
-| X-3 | `OpenedUrl.Alias` SHOULD match `Email.Alias` when `EmailId` is set. | Application-level (Tools backend §3.4 step 5). |
+| X-1 | `OpenedUrls.EmailId` MUST point at an existing `Emails.Id` or be NULL. | FK `ON DELETE SET NULL`. |
+| X-2 | `WatchState.Alias` and `Emails.Alias` SHOULD agree, but no FK — Emails rows survive alias deletion (audit value). | Application-level. |
+| X-3 | `OpenedUrls.Alias` SHOULD match `Emails.Alias` when `EmailId` is set. | Application-level (Tools backend §3.4 step 5). |
 | X-4 | All `*At` columns are stored as ISO-8601 UTC strings (SQLite `DATETIME` is text). | Insert defaults via `strftime('%Y-%m-%dT%H:%M:%fZ','now')`. |
 | X-5 | All boolean columns are positive (`HasAttachment`, future booleans) per `18-database-conventions.md` §3. | `CHECK (col IN (0,1))`. |
 

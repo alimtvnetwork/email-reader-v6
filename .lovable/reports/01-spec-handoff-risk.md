@@ -10,19 +10,17 @@
 
 Estimates assume the next AI has: (a) read `.lovable/memory/index.md`, (b) read this report, (c) access to the same sandbox (no Go toolchain by default; `nix run nixpkgs#go -- ...` works for vet/test with `-tags nofyne`).
 
-| Tier | Examples | Success | Sandbox-feasibility tag | Confidence | Why |
-|---|---|---|---|---|---|
-| **T1 — Trivial spec/doc edits** | Grow `06-error-registry.md`, fix broken cross-tree links, flip OI-1..6 closed | **90–95%** | n/a (spec edits) | High | Pure markdown; deferred-skip tests auto-ratchet on success. |
-| **T2 — Headless AST/log scanners** (Slice #132 pattern) | AC-DS AST gaps, AC-DS long-tail headless | **80–88%** | 🟢 only | High | Strong template (`internal/specaudit/ast_*_test.go`); audit ratchet enforces honesty. |
-| **T3 — Headless behaviour tests** | New `internal/core` / `internal/store` unit tests citing AC IDs | **70–80%** | 🟢 only | Medium | Project-specific patterns (`errtrace.Result`, slog `event=…` tail format) need careful imitation. |
-| **T4 — Schema-evolution behaviour** | Table rename `WatchEvents`→`WatchEvent`, enum CHECKs, FK SET NULL, gap/checksum/downgrade | **45–60%** | 🟢 only (high blast radius) | Medium | Touches `internal/store/migrate`; high blast radius; hard to verify without seed data. |
-| **T5 — Fyne UI canvas slices** | AC-SF (21 rows), AC-DS canvas (~22), AC-SX-06 frontend | **15–25%** | 🟡 — **skip in sandbox** | Low | Sandbox lacks cgo/X11/GL — cannot compile or render; AI will guess and ship dead code. |
-| **T6 — Perf gates** | AC-DBP (6), AC-SP (5) p95 budgets | **10–20%** | 🔴 — **skip in sandbox** | Low | No bench infra in CI; numbers are unverifiable. |
-| **T7 — Multi-process E2E** | AC-PROJ-01..11/14/15 | **20–30%** | 🔴 — **skip in sandbox** | Low | No E2E harness; requires real IMAP fixture + Chrome process control. |
+| Tier | Examples | Success | Confidence | Why |
+|---|---|---|---|---|
+| **T1 — Trivial spec/doc edits** | Grow `06-error-registry.md`, fix broken cross-tree links, flip OI-1..6 closed | **90–95%** | High | Pure markdown; deferred-skip tests auto-ratchet on success. |
+| **T2 — Headless AST/log scanners** (Slice #132 pattern) | AC-DS AST gaps, AC-DS long-tail headless | **80–88%** | High | Strong template (`internal/specaudit/ast_*_test.go`); audit ratchet enforces honesty. |
+| **T3 — Headless behaviour tests** | New `internal/core` / `internal/store` unit tests citing AC IDs | **70–80%** | Medium | Project-specific patterns (`errtrace.Result`, slog `event=…` tail format) need careful imitation. |
+| **T4 — Schema-evolution behaviour** | Table rename `WatchEvents`→`WatchEvent`, enum CHECKs, FK SET NULL, gap/checksum/downgrade | **45–60%** | Medium | Touches `internal/store/migrate`; high blast radius; hard to verify without seed data. |
+| **T5 — Fyne UI canvas slices** | AC-SF (21 rows), AC-DS canvas (~22), AC-SX-06 frontend | **15–25%** | Low | Sandbox lacks cgo/X11/GL — cannot compile or render; AI will guess and ship dead code. |
+| **T6 — Perf gates** | AC-DBP (6), AC-SP (5) p95 budgets | **10–20%** | Low | No bench infra in CI; numbers are unverifiable. |
+| **T7 — Multi-process E2E** | AC-PROJ-01..11/14/15 | **20–30%** | Low | No E2E harness; requires real IMAP fixture + Chrome process control. |
 
-**Weighted overall** (by remaining-row count): **~55%** if the next AI tries the whole backlog. **~85%** if the next AI restricts to T1+T2+T3. **~91%** if the next AI restricts to T1+T2+T3 **AND** uses the per-row 🟢 sandbox-feasibility tag in each `97-acceptance-criteria.md` (added by Slice #136) to skip 🟡/🔴 rows up-front — this is the *Phase 3 — AC coverage rollout* milestone's explicit instruction.
-
-> **How to use the tag (one-liner)**: every `97-acceptance-criteria.md` opens with a "Sandbox feasibility legend" block, and every AC row carries 🟢 / 🟡 / 🔴 immediately after its ID. Filter to 🟢 before picking a slice; never start a 🟡 / 🔴 row in the sandbox.
+**Weighted overall** (by remaining-row count): **~55%** if the next AI tries the whole backlog. **~85%** if the next AI restricts to T1+T2+T3 (which is what the *Phase 3 — AC coverage rollout* milestone explicitly says to do).
 
 ---
 
