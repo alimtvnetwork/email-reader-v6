@@ -146,7 +146,7 @@ CREATE TABLE WatchState (
 > **🔒 Naming lock (Phase 2.1, LOCKED 2026-04-26 — see `mem://design/schema-naming-convention`).**
 > Table name is **`OpenedUrls`** (plural — entity collection). Go struct is **`OpenedUrl`** (singular — one row). **Do NOT rename** — Slice #137 already pluralised the table; reverting would re-break Tools (`02-features/06-tools`) and Rules (`02-features/03-rules`) callers.
 >
-> **🔒 `Decision` enum rollout (Q-OPEN-PRUNE split, deferred to schema-evolution work).**
+> **🔒 `Decision` enum rollout (`Q-OPEN-PRUNE-LAUNCHED` / `Q-OPEN-PRUNE-BLOCKED` split, deferred to schema-evolution work).**
 > The `Decision` column shown below (`Launched`/`Blocked`/`Skipped`/`Failed`) is a **spec-side target** not yet emitted by any migration. The canonical, in-database shape comes from `m0004` + `m0005` + `m0006` + `m0009` (see Drift notice). Any future migration that adds `Decision` MUST: (a) seed existing rows to `Launched` (forensic safe default), (b) keep `BlockedReason` populated only when `Decision != 'Launched'`, (c) re-create `UX_OpenedUrls_Dedup` as a partial unique index over `Decision = 'Launched'` only, (d) bump the partial-unique migration in lockstep — see Tools backend §3.4 step 7 for the decision matrix that must remain stable across the rename.
 
 Forensic ledger for every URL the app considers opening — including blocked decisions. Used both for deduplication (don't double-launch the same URL within `OpenUrlDedupWindow`) and for the Tools "Recent opened URLs" view.
