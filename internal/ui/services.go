@@ -49,6 +49,14 @@ import (
 // returned by `core.NewStoreActivitySource(rt.Store)`. Same lazy-
 // attach pattern as `HealthSource` (Slice #105). When nil the
 // dashboard hides its recent-activity list rather than panicking.
+//
+// `Watch` is the long-lived `*core.Watch` singleton owned by
+// `WatchRuntimeOrNil()`. Stays nil until `AttachWatch` is called
+// from the NavWatch arm — mirrors `HealthSource` / `ActivitySource`
+// so every typed service is reachable through the same `*Services`
+// pointer (Slice #116b, Phase 6.2). Views that fall back to
+// reaching into `WatchRuntimeOrNil()` directly still work; the
+// field is the spec-aligned access path.
 type Services struct {
 	Dashboard      *core.DashboardService
 	Emails         *core.EmailsService
