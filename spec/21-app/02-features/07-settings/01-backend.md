@@ -17,7 +17,7 @@ Cross-references:
 - Architecture: [`../../07-architecture.md`](../../07-architecture.md) §4.7
 - Coding standards: [`../../04-coding-standards.md`](../../04-coding-standards.md) (PascalCase keys §1.1, ≤15-line fns §3, no `any`/`interface{}` §6)
 - Logging: [`../../05-logging-strategy.md`](../../05-logging-strategy.md) §6.7
-- Errors: [`../../06-error-registry.md`](../../06-error-registry.md) — codes `21770–21789` (Settings) + wrapped `ER-CFG-21000..21009` (config IO), `ER-COR-21704` (path escape)
+- Errors: [`../../06-error-registry.md`](../../06-error-registry.md) — codes `21770–21789` (Settings) + wrapped `ER-CFG-21001..21008` (config IO; canonical block `21000–21099`, see `04-coding-standards.md` §5.4), `ER-COR-21704` (path escape) <!-- Slice #160: corrected from `ER-CFG-21000..21009` — registry has no code at 21000 or 21009; real codes are 21001..21008. -->
 - DB conventions: `spec/12-consolidated-guidelines/18-database-conventions.md`
 - Watcher consumer: [`../05-watch/01-backend.md`](../05-watch/01-backend.md) §6 (poll interval reload)
 - Browser consumer: [`../06-tools/01-backend.md`](../06-tools/01-backend.md) §3.4 (chrome path/incognito)
