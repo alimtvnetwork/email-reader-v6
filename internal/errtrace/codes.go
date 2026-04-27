@@ -26,6 +26,7 @@ const (
 	ErrConfigPasswordCrypt Code = "ER-CFG-21005"
 	ErrConfigAccountDup    Code = "ER-CFG-21006"
 	ErrConfigAccountMissing Code = "ER-CFG-21007"
+	ErrConfigSchemaMigration Code = "ER-CFG-21008"
 
 	// ER-DB (Store / SQLite) — block 21100–21199
 	ErrDbOpen        Code = "ER-DB-21101"
@@ -88,6 +89,9 @@ const (
 	ErrCoreContextCancelled Code = "ER-COR-21703"
 	ErrCorePathOutsideData  Code = "ER-COR-21704"
 	ErrCoreClockSkew        Code = "ER-COR-21705"
+	ErrCoreAccountRemoveRollback Code = "ER-COR-21710"
+	ErrCoreAccountRenameRollback Code = "ER-COR-21711"
+	ErrCoreAccountUpdateRollback Code = "ER-COR-21712"
 
 	// ER-CLI (Cobra) — block 21800–21899
 	ErrCliUsage              Code = "ER-CLI-21801"
@@ -103,6 +107,10 @@ const (
 	ErrUiViewRender        Code = "ER-UI-21904"
 	ErrUiClipboard         Code = "ER-UI-21905"
 	ErrRulesServiceUnwired Code = "ER-UI-21906"
+	ErrUiUnknownRoute      Code = "ER-UI-21910"
+	ErrUiViewEnter         Code = "ER-UI-21911"
+	ErrUiLeaveBlocked      Code = "ER-UI-21912"
+	ErrUiReserved21913     Code = "ER-UI-21913"
 
 	// ER-SET (Settings) — block 21770–21789
 	ErrSettingsConstruct        Code = "ER-SET-21770"

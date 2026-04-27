@@ -55,6 +55,9 @@ blocks:
       - const: ErrConfigAccountMissing
         code: "ER-CFG-21007"
         description: Lookup for an alias returned no matching account.
+      - const: ErrConfigSchemaMigration
+        code: "ER-CFG-21008"
+        description: config.json schema migration step failed (FromVersion → ToVersion).
 
   - name: Store
     prefix: ER-DB
@@ -241,6 +244,15 @@ blocks:
       - const: ErrCoreClockSkew
         code: "ER-COR-21705"
         description: Detected wall-clock time moved backwards unexpectedly.
+      - const: ErrCoreAccountRemoveRollback
+        code: "ER-COR-21710"
+        description: Accounts.Remove rollback failed — could not re-INSERT the deleted WatchState row after a config.json revert.
+      - const: ErrCoreAccountRenameRollback
+        code: "ER-COR-21711"
+        description: Accounts.Rename rollback failed — could not restore the prior Alias on the WatchState row after a config.json revert.
+      - const: ErrCoreAccountUpdateRollback
+        code: "ER-COR-21712"
+        description: Accounts.Update rollback failed — could not re-load the prior config.json snapshot after a credential test rejected the new values.
 
   - name: CLI
     prefix: ER-CLI
@@ -286,6 +298,18 @@ blocks:
       - const: ErrRulesServiceUnwired
         code: "ER-UI-21906"
         description: ui.Services.Rename/Reorder called before bootstrap wired a *core.RulesService (degraded shell).
+      - const: ErrUiUnknownRoute
+        code: "ER-UI-21910"
+        description: Router received an unknown route string and fell back to /dashboard (logged at WARN).
+      - const: ErrUiViewEnter
+        code: "ER-UI-21911"
+        description: A view's Enter() returned an error; router fell back to /dashboard with a toast.
+      - const: ErrUiLeaveBlocked
+        code: "ER-UI-21912"
+        description: Navigation aborted because the current view's Leave() blocked on dirty-confirm (informational).
+      - const: ErrUiReserved21913
+        code: "ER-UI-21913"
+        description: Reserved sentinel for the 21913–21919 router-error sub-block (spec/24-app-design-system-and-ui §03).
 
   - name: Settings
     prefix: ER-SET
