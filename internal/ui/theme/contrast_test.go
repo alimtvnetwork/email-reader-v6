@@ -35,8 +35,8 @@ import (
 // passing ratio. Mirrors the rows from spec §1.
 //
 // `knownDrift` flags rows where the live measurement falls short of
-// the spec table by a small margin caught by Slice #118b's lit-up
-// matrix. Three rows were affected:
+// the spec table by a small margin. Slice #118b discovered three
+// such rows; Slice #118d resolved two via palette tune:
 //
 //   - PrimaryForeground on Primary (Dark): spec says 5.1; measured
 //     3.32. The pair is used on `widget.Button` surfaces, which
@@ -44,20 +44,19 @@ import (
 //     bar — so we lower the threshold to 3.0 here and the row
 //     PASSes. A future palette-tune slice may bump `ColorPrimary`
 //     darker for AA body-text compliance.
-//   - Success on Background (Light): spec says 4.6; measured 3.23.
-//     The pair is used for inline status text. Marked drift; runs
-//     at the spec-claimed 4.5 threshold and intentionally FAILs in
-//     a follow-up palette-tune slice. For now it logs WARN and
-//     skips the assertion so today's CI stays green while the bug
-//     is visible.
-//   - RawLogTimestamp on CodeBg (Dark): spec says 4.6; measured
-//     4.42. Same drift treatment.
+//   - Success on Background (Light): spec says 4.5; was measured
+//     3.23. Slice #118d darkened `ColorSuccess` from
+//     (34,160,90) → (20,130,70), now ratio 4.67. PASS.
+//   - RawLogTimestamp on CodeBg (Dark): spec says 4.5; was measured
+//     4.42. Slice #118d lightened `ColorRawLogTimestamp` from
+//     (120,125,135) → (140,145,155), now ratio 5.77. PASS.
 //
-// The `knownDrift` flag is intentionally explicit per row so a
-// reviewer skimming the matrix can see exactly which assertions
-// are pinned vs. tolerated. When a palette-tune slice fixes a row,
-// flip `knownDrift` to false in the same diff and the test starts
-// enforcing the spec threshold again.
+// The `knownDrift` flag is intentionally kept on the struct (even
+// though no row currently sets it) so future regressions caught by
+// this matrix can be tolerated visibly without deleting test rows.
+// When a palette-tune slice fixes a row, flip `knownDrift` to false
+// in the same diff and the test starts enforcing the spec
+// threshold again.
 type contrastCase struct {
 	id         string // human label used in failure messages
 	mode       core.ThemeMode
