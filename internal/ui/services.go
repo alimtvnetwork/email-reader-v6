@@ -53,14 +53,16 @@ type Services struct {
 	Dashboard      *core.DashboardService
 	Emails         *core.EmailsService
 	Rules          *core.RulesService
+	Accounts       *core.AccountsService // Slice #115 (Phase 6.1) typed shell over the Accounts free funcs
 	HealthSource   core.AccountHealthSource
 	ActivitySource core.ActivitySource
 }
 
-// BuildServices constructs all three Phase 2 services. Call once at
-// app boot. On any individual constructor failure the corresponding
-// field stays nil and a log line is emitted — bootstrap continues so
-// the rest of the UI still renders.
+// BuildServices constructs all four typed services (Phase 2 +
+// Slice #115 Accounts shell). Call once at app boot. On any
+// individual constructor failure the corresponding field stays nil
+// and a log line is emitted — bootstrap continues so the rest of the
+// UI still renders.
 //
 // Construction order matters only for `Dashboard`: it consumes
 // `Emails.Count` as its emails-counter dep, so `Emails` must be
@@ -80,6 +82,16 @@ func BuildServices() *Services {
 		log.Printf("services: NewDefaultRulesService failed: %v", r.Error())
 	} else {
 		s.Rules = r.Value()
+	}
+
+	// Slice #115: Accounts shell. Stateless construction can't fail
+	// today, but the Result envelope leaves the door open for future
+	// deps (e.g. an injected config loader for tests) without a
+	// signature break.
+	if r := core.NewDefaultAccountsService(); r.HasError() {
+		log.Printf("services: NewDefaultAccountsService failed: %v", r.Error())
+	} else {
+		s.Accounts = r.Value()
 	}
 
 	// Pick the emails-counter dep for the dashboard. Prefer the
