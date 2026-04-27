@@ -299,7 +299,7 @@ func connectAndSelect(opts Options, logger *log.Logger, start time.Time) (*mailc
 	}
 	mc, err := mailclient.Dial(opts.Account)
 	if err != nil {
-		return nil, mailclient.MailboxStats{}, errtrace.Wrap(err, "dial imap")
+		return nil, mailclient.MailboxStats{}, errtrace.WrapCode(err, errtrace.ErrMailDial, "watcher.connectAndSelect: dial imap")
 	}
 	if v {
 		logger.Printf("%s  · [%s] connected (%s)", ts(), alias, time.Since(start).Round(time.Millisecond))
@@ -307,7 +307,7 @@ func connectAndSelect(opts Options, logger *log.Logger, start time.Time) (*mailc
 	stats, err := mc.SelectInbox()
 	if err != nil {
 		mc.Close()
-		return nil, mailclient.MailboxStats{}, errtrace.Wrap(err, "select inbox")
+		return nil, mailclient.MailboxStats{}, errtrace.WrapCode(err, errtrace.ErrMailSelectMailbox, "watcher.connectAndSelect: select inbox")
 	}
 	if v {
 		logger.Printf("%s  · [%s] mailbox %q messages=%d unseen=%d uidNext=%d uidValidity=%d",
