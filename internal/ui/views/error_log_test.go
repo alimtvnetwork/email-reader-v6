@@ -78,3 +78,42 @@ func contains(s, sub string) bool {
 	}
 	return false
 }
+
+func TestOpenLogFile_EmptyPath(t *testing.T) {
+	if got := openLogFile("", func(string) error { return nil }); got != "Disk log unavailable." {
+		t.Errorf("empty path = %q, want %q", got, "Disk log unavailable.")
+	}
+}
+
+func TestOpenLogFile_NilOpener(t *testing.T) {
+	if got := openLogFile("/tmp/x.jsonl", nil); got != "Open handler not wired." {
+		t.Errorf("nil opener = %q, want %q", got, "Open handler not wired.")
+	}
+}
+
+func TestOpenLogFile_Success(t *testing.T) {
+	var got string
+	msg := openLogFile("/tmp/x.jsonl", func(p string) error {
+		got = p
+		return nil
+	})
+	if got != "/tmp/x.jsonl" {
+		t.Errorf("opener received %q, want %q", got, "/tmp/x.jsonl")
+	}
+	if msg != "Opened /tmp/x.jsonl" {
+		t.Errorf("status = %q, want %q", msg, "Opened /tmp/x.jsonl")
+	}
+}
+
+func TestOpenLogFile_Failure(t *testing.T) {
+	msg := openLogFile("/tmp/x.jsonl", func(string) error { return errBoom })
+	if !contains(msg, "Open failed:") || !contains(msg, "boom") {
+		t.Errorf("failure status = %q, want prefix 'Open failed:' and message 'boom'", msg)
+	}
+}
+
+type sentinelErr string
+
+func (e sentinelErr) Error() string { return string(e) }
+
+var errBoom sentinelErr = "boom"

@@ -11,6 +11,7 @@ package ui
 import (
 	"context"
 	"log"
+	"net/url"
 	"path/filepath"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 
 	"github.com/lovable/email-read/internal/config"
 	"github.com/lovable/email-read/internal/core"
+	"github.com/lovable/email-read/internal/errtrace"
 	"github.com/lovable/email-read/internal/ui/errlog"
 	"github.com/lovable/email-read/internal/ui/theme"
 	"github.com/lovable/email-read/internal/ui/views"
@@ -81,11 +83,14 @@ func Run() {
 
 // enableErrorLogPersistence wires the process-wide errlog singleton to
 // `<dataDir>/error-log.jsonl`, restoring prior history into the ring
-// and routing future appends to disk. Returns the *Persistence so the
-// caller can Close() it on shutdown. Returns nil (and logs) if the
-// data dir cannot be resolved or persistence cannot be opened — in
-// that degraded mode the in-memory ring still works, the user only
-// loses cross-restart history.
+// and routing future appends to disk. Stores the resolved path in
+// `errLogPath` so the Error Log view's "Open log file" button can
+// reach it without re-resolving the data dir on every nav switch.
+// Returns the *Persistence so the caller can Close() it on shutdown.
+// Returns nil (and logs) if the data dir cannot be resolved or
+// persistence cannot be opened — in that degraded mode the in-memory
+// ring still works, the user only loses cross-restart history (and
+// the "Open log file" button stays disabled).
 func enableErrorLogPersistence() *errlog.Persistence {
 	dir, err := config.DataDir()
 	if err != nil {
@@ -98,8 +103,15 @@ func enableErrorLogPersistence() *errlog.Persistence {
 		log.Printf("ui: errlog persistence: enable: %v (continuing in-memory only)", err)
 		return nil
 	}
+	errLogPath = path
 	return p
 }
+
+// errLogPath holds the resolved on-disk path of the persisted error
+// log after enableErrorLogPersistence succeeds. Empty string means
+// persistence is disabled (boot fallback) — the Error Log view
+// disables its "Open log file" button in that case.
+var errLogPath string
 
 // errLogNotifier is the process-wide first-error toast dispatcher,
 // wired in Run(). nil under unit tests / headless harnesses where
@@ -376,8 +388,15 @@ func viewFor(item NavItem, state *AppState, services *Services, gotoNav func(Nav
 		// Phase 3.3 — Diagnostics → Error Log. The view pulls from
 		// the process-wide errlog ring buffer (defaults filled in
 		// inside BuildErrorLog when fields are nil) and uses the
-		// Fyne app's clipboard for the Copy button.
-		opts := views.ErrorLogOptions{}
+		// Fyne app's clipboard for the Copy button. Phase 4.2 adds
+		// the "Open log file" affordance — wired to the persisted
+		// error-log.jsonl path resolved at boot.
+		opts := views.ErrorLogOptions{
+			LogPath: errLogPath,
+			OpenPath: func(path string) error {
+				return openLogFileWithFyne(path)
+			},
+		}
 		if a := fyne.CurrentApp(); a != nil {
 			if w := a.Driver().AllWindows(); len(w) > 0 {
 				opts.Clipboard = w[0].Clipboard()
@@ -438,3 +457,26 @@ func accountsHealthLoader(services *Services) func(ctx context.Context) map[stri
 	}
 }
 
+
+// openLogFileWithFyne hands `path` to the OS default handler via
+// `fyne.CurrentApp().OpenURL(file://…)`. Pulled out as its own
+// function so the NavErrorLog wiring stays a one-liner and the
+// fallback paths (no Fyne app, URL parse failure) read clearly.
+//
+// Returns an error so the view can render it inline next to the
+// button instead of opening a popup dialog.
+func openLogFileWithFyne(path string) error {
+	a := fyne.CurrentApp()
+	if a == nil {
+		return errtrace.New("no Fyne app (headless mode)")
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return errtrace.Wrap(err, "openLogFileWithFyne: abs path")
+	}
+	u := &url.URL{Scheme: "file", Path: abs}
+	if err := a.OpenURL(u); err != nil {
+		return errtrace.Wrap(err, "openLogFileWithFyne: OpenURL")
+	}
+	return nil
+}

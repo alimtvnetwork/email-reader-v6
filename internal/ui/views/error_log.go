@@ -47,6 +47,17 @@ type ErrorLogOptions struct {
 	// a seam for tests so we don't need a Fyne app to verify the
 	// "copy" button calls through with the right payload.
 	Clipboard fyne.Clipboard
+	// LogPath is the on-disk path of the persisted error log
+	// (`<dataDir>/error-log.jsonl`). When empty, the "Open log file"
+	// button is hidden — keeps the headless test path tidy and the
+	// view degraded-but-functional when persistence failed at boot.
+	LogPath string
+	// OpenPath, when non-nil, is invoked with LogPath when the user
+	// clicks "Open log file". Production wiring builds a closure
+	// around `fyne.CurrentApp().OpenURL(file://…)` so the OS default
+	// handler picks up the .jsonl file. Tests substitute a recorder
+	// so we can assert the button calls through with the right path.
+	OpenPath func(path string) error
 }
 
 // BuildErrorLog returns the Error Log detail pane: a header, a split
@@ -121,7 +132,24 @@ func BuildErrorLog(opts ErrorLogOptions) fyne.CanvasObject {
 		selectedTrace = ""
 	})
 
-	footer := container.NewHBox(copyBtn, clearBtn)
+	// Status line for the "Open log file" action — empty by default,
+	// flips to "Opened {path}" or the error string after a click.
+	// Lives in the footer (next to the buttons) so the user gets
+	// inline feedback without a popup dialog.
+	openStatus := widget.NewLabel("")
+	openStatus.Importance = widget.LowImportance
+
+	openBtn := widget.NewButton("Open log file", func() {
+		msg := openLogFile(opts.LogPath, opts.OpenPath)
+		openStatus.SetText(msg)
+	})
+	if opts.LogPath == "" {
+		// Persistence is disabled (boot fallback) → no file to open.
+		openBtn.Disable()
+		openStatus.SetText("Disk log unavailable.")
+	}
+
+	footer := container.NewHBox(copyBtn, clearBtn, openBtn, openStatus)
 
 	// Mark unread → read on open so the sidebar badge clears.
 	opts.MarkRead()
@@ -187,4 +215,22 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n-1] + "…"
+}
+
+// openLogFile invokes opener with path and returns a short status
+// string suitable for a single-line label. Pulled out as a pure
+// helper so the headless test path can assert behavior without a
+// Fyne app. nil opener is treated as "not wired" — matches how the
+// Copy button degrades when Clipboard is nil.
+func openLogFile(path string, opener func(string) error) string {
+	if path == "" {
+		return "Disk log unavailable."
+	}
+	if opener == nil {
+		return "Open handler not wired."
+	}
+	if err := opener(path); err != nil {
+		return "Open failed: " + err.Error()
+	}
+	return "Opened " + path
 }
