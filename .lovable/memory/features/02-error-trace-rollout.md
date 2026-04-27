@@ -144,3 +144,23 @@ removed. Error message text preserved exactly — `errtrace.New(s)
 Linter delta: `check-no-fmt-errorf` 8 → **3**. Total **35 → 30**.
 
 `go vet -tags nofyne ./...` clean; `internal/ui/views/...` tests green.
+
+## Phase 2.4 — views/{rules,emails}.go migrated (2026-04-27)
+
+3 sites converted, all string-only constructors:
+- `rules.go` L259 (rename validator): `fmt.Errorf("name required")`
+  → `errtrace.New(...)`.
+- `emails.go` L50 (degraded service banner): `fmt.Errorf(...)`
+  → `errtrace.New(...)`.
+- `emails.go` L162 (`openURLUnwired`): `fmt.Errorf(...)`
+  → `errtrace.New(...)`.
+
+`fmt` import retained in both files (still used for other
+formatting). Error strings unchanged → status banners and
+validator messages render identically.
+
+Linter delta: `check-no-fmt-errorf` 3 → **0** ✅ (target cleared).
+`check-no-bare-return-err` 23 (unchanged).
+`check-no-errors-new` 4 (unchanged). Total **30 → 27**.
+
+`go vet -tags nofyne ./internal/ui/views/...` clean; views tests green.
