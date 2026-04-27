@@ -347,6 +347,7 @@ This project's reserved range from `spec/12-consolidated-guidelines/03-error-man
 | `21800–21899` | `ER-CLI` | `internal/cli` |
 | `21900–21999` | `ER-UI` | `internal/ui` |
 | `22100–22199` | `ER-MIG` | `internal/store/migrate` (allocated Slice #155 — moved out of CLI's 21800-block to resolve range collision; see `spec/23-app-database/03-migrations.md` §9) |
+| `22200–22299` | `ER-ACC` | `internal/core/accounts*.go` (allocated Slice #158 — Accounts feature had no canonical block; original spec refs at `21430/21431` collided with the Watcher block. See `spec/21-app/02-features/04-accounts/`.) |
 
 > If new error needed, add to [`06-error-registry.md`](./06-error-registry.md) first, then reference the constant.
 

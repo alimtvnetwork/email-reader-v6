@@ -36,7 +36,7 @@ Because no helpful error was surfaced to the user beyond `AUTHENTICATIONFAILED`,
 
 No code fix was required for the underlying bug — it was a user-data error. Two procedural learnings were applied:
 
-1. The `Accounts` feature now documents (in `02-features/04-accounts/02-frontend.md`) that on `Test Connection` failure with code **`ER-ACC-21430`** (`AccountTestFailed`), the UI must instruct the user to verify the password via raw IMAP before assuming the app is at fault.
+1. The `Accounts` feature now documents (in `02-features/04-accounts/02-frontend.md`) that on `Test Connection` failure with code **`ER-ACC-22201`** (`ErrAccountTestFailed`), the UI must instruct the user to verify the password via raw IMAP before assuming the app is at fault. *(Slice #158: renumbered from `ER-ACC-21430` — original number fell in the Watcher block `21400–21499`. The Accounts feature now owns its own block `22200–22299` per `spec/21-app/04-coding-standards.md` §5.4.)*
 2. The CLI `doctor` command (introduced later in v0.13.0 — see issue 03) gained a "decoded password rune dump" so users can audit what is actually being sent.
 
 ### Verification procedure (now documented for users)

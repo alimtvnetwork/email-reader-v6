@@ -157,6 +157,19 @@ const (
 	ErrEmailsDeleteAlreadyDeleted Code = "ER-EML-22021"
 	ErrEmailsUndeleteNotDeleted   Code = "ER-EML-22022"
 
+	// ER-ACC (Accounts feature) — block 22200–22299
+	//
+	// Allocated in Slice #158 to resolve historical spec references at
+	// ER-ACC-21430/31 that collided with the Watcher block
+	// (21400–21499). The Accounts feature previously had no canonical
+	// block in spec/21-app/04-coding-standards.md §5.4. Sits cleanly
+	// after ER-MIG (22100–22199, allocated Slice #155). Reservation:
+	//   22200–22219 Test-Connection / sanitization warnings
+	//   22220–22249 account-lifecycle errors (planned)
+	//   22250–22299 future surfaces
+	ErrAccountTestFailed         Code = "ER-ACC-22201"
+	ErrAccountPasswordSanitized  Code = "ER-ACC-22202"
+
 	// Fallback — used by Err[T](nil) defensive path and as last resort.
 	ErrUnknown Code = "ER-UNKNOWN-21999"
 )

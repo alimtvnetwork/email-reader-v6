@@ -438,6 +438,37 @@ blocks:
         code: "ER-EML-22022"
         description: Reserved — strict-mode Undelete called on a UID whose DeletedAt was already NULL (idempotent path does not surface this today).
 
+  - name: Accounts
+    prefix: ER-ACC
+    range: [22200, 22299]
+    description: |
+      Accounts feature (`internal/core/accounts*.go`) — Test-Connection,
+      password sanitization, and account-lifecycle errors. Allocated in
+      Slice #158 to resolve historical spec references at ER-ACC-21430/31
+      that collided with the Watcher block (21400–21499). The Accounts
+      feature previously had no canonical block in
+      `spec/21-app/04-coding-standards.md` §5.4. This block sits cleanly
+      after ER-MIG (22100–22199, allocated Slice #155).
+        Reserves 22200–22219 for Test-Connection / sanitization warnings,
+      22220–22249 for account-lifecycle errors (add/remove/rename/update),
+      22250–22299 for future surfaces.
+    codes:
+      - const: ErrAccountTestFailed
+        code: "ER-ACC-22201"
+        description: |
+          Test Connection failed against the configured IMAP endpoint.
+          The UI must surface the underlying reason and instruct the user
+          to verify the password via raw IMAP before assuming the app is
+          at fault. See spec/21-app/03-issues/solved/01-imap-auth-failed-wrong-password.md.
+      - const: ErrAccountPasswordSanitized
+        code: "ER-ACC-22202"
+        description: |
+          Non-fatal warning — the configured password contained hidden
+          Unicode (zero-width chars, RTL marks, etc.) that was stripped
+          during load. Surface as a one-time toast so the user knows the
+          stored password differs from what they pasted. See
+          spec/21-app/03-issues/solved/03-imap-auth-failed-hidden-unicode.md.
+
   - name: Unknown
     prefix: ER-UNKNOWN
     range: [21999, 21999]
