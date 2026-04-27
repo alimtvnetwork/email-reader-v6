@@ -366,7 +366,11 @@ var coverageGapAllowlist = map[string]struct{}{
 	// counts as the spec citation.
 	"AC-SF-01":   {},
 	"AC-SF-02":   {},
-	"AC-SF-03":   {},
+	// AC-SF-03 closed by Slice #149 — Test_AST_SettingsPaths_NoEntryWidget
+	// in ast_settings_paths_readonly_test.go pins the structural rule:
+	// the `newSettingsPaths` constructor in internal/ui/views/settings.go
+	// may not invoke any `widget.New*Entry`-shaped call (today it uses
+	// only widget.NewLabel / widget.NewLabelWithStyle).
 	"AC-SF-04":   {},
 	"AC-SF-05":   {},
 	"AC-SF-06":   {},
