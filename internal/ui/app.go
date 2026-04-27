@@ -374,6 +374,13 @@ func viewFor(item NavItem, state *AppState, services *Services, gotoNav func(Nav
 			opts.PollSeconds = rt.PollSeconds
 			opts.Bus = rt.Bus
 		}
+		// Wire the system clipboard so the Raw log "Copy all" button
+		// works. Mirrors the Error Log view's clipboard wiring below.
+		if a := fyne.CurrentApp(); a != nil {
+			if w := a.Driver().AllWindows(); len(w) > 0 {
+				opts.Clipboard = w[0].Clipboard()
+			}
+		}
 		return views.BuildWatch(opts)
 	case NavTools:
 		return views.BuildTools(views.ToolsOptions{
