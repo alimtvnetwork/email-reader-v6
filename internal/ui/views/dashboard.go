@@ -271,10 +271,10 @@ func makeDashboardActivityRefresh(opts DashboardOptions, rows *[]core.ActivityRo
 		}
 		header.SetText("Recent activity:")
 		header.Show()
-		// Cap height so 10 rows don't push the rest of the dashboard
-		// off-screen on a small window. Width is left to the parent
-		// VBox so the list grows horizontally with the window.
-		list.Resize(fyne.NewSize(list.Size().Width, activityListMaxHeight))
+		// Height is reserved by the parent fixedHeightLayout slot
+		// (see BuildDashboard) — no need to Resize the list here;
+		// doing so fought the parent layout and produced the visual
+		// overlap with the live-counters row below.
 		list.Show()
 		list.Refresh()
 	}
