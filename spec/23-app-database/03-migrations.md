@@ -79,9 +79,9 @@ var M001 = migrate.Migration{
 
 ## 3. Ordering Rules
 
-1. `Version` is `uint16`, monotonic, starts at `1`, no gaps. Gaps cause `ER-MIG-21801` at startup.
+1. `Version` is `uint16`, monotonic, starts at `1`, no gaps. Gaps cause `ER-MIG-22101` at startup.
 2. `Apply` sorts `all` by `Version` and applies in order.
-3. Each migration runs in its own `BEGIN IMMEDIATE … COMMIT` tx. A failure rolls the tx back and aborts the whole run with `ER-MIG-21802`; subsequent migrations are not attempted.
+3. Each migration runs in its own `BEGIN IMMEDIATE … COMMIT` tx. A failure rolls the tx back and aborts the whole run with `ER-MIG-22102`; subsequent migrations are not attempted.
 4. After successful tx commit, the runner inserts a `SchemaMigration` row in a separate tx. If process dies between the two txs, the next start re-applies the migration — therefore migrations MUST be **idempotent** (use `CREATE TABLE IF NOT EXISTS`, etc.).
 
 ---
@@ -93,8 +93,8 @@ On every startup, after reading `SchemaMigration`, the runner compares each stor
 | Outcome | Action | Code |
 |---|---|---|
 | Match | Continue | — |
-| Mismatch | Abort startup, surface as fatal app error | `ER-MIG-21803` |
-| Stored row but no in-memory migration with that `Version` | Abort (downgrade detected) | `ER-MIG-21804` |
+| Mismatch | Abort startup, surface as fatal app error | `ER-MIG-22103` |
+| Stored row but no in-memory migration with that `Version` | Abort (downgrade detected) | `ER-MIG-22104` |
 
 This catches accidental in-place edits to a shipped migration. The fix is always: write a NEW migration with a higher `Version`.
 
@@ -132,24 +132,27 @@ The `SchemaMigration` table is itself created by an unconditional `CREATE TABLE 
 
 ## 8. Concurrency
 
-- The migration runner takes a `BEGIN IMMEDIATE` lock per migration; if another process holds the database, it waits up to `busy_timeout` (5 s) then fails with `ER-MIG-21805`.
+- The migration runner takes a `BEGIN IMMEDIATE` lock per migration; if another process holds the database, it waits up to `busy_timeout` (5 s) then fails with `ER-MIG-22105`.
 - Mailpulse is a single-user desktop app — concurrent runners are not an expected case but the lock is correct-by-construction.
 
 ---
 
-## 9. Error Registry — Block 21800–21809
+## 9. Error Registry — Block 22100–22109
+
+> **Slice #155 renumber (2026-04-27):** This block originally lived at `21800–21809`, which collides with the canonical `ER-CLI` block (`21800–21899`, see `spec/21-app/04-coding-standards.md` §5.4). `ER-MIG` now owns its own range `22100–22199` (allocated in §5.4); the migration runner uses `22100–22109`. The remainder is reserved for future migration-related errors. No production code references the old `21800` numbers — the renumber is spec-only.
 
 | Code | Meaning | Recovery |
 |---|---|---|
-| `ER-MIG-21800` | Reserved (sentinel) | — |
-| `ER-MIG-21801` | Version gap detected | Fix migration list at compile time |
-| `ER-MIG-21802` | Migration tx failed | Read SQL error in surrounding log entry; fix forward |
-| `ER-MIG-21803` | Checksum mismatch | Never edit a shipped migration; write a new one |
-| `ER-MIG-21804` | Downgrade detected | User opened a newer DB with an older binary — refuse to start, ask to upgrade |
-| `ER-MIG-21805` | Busy timeout acquiring lock | Close other instance; retry |
-| `ER-MIG-21806..21809` | Reserved | — |
+| `ER-MIG-22100` | Reserved (sentinel) | — |
+| `ER-MIG-22101` | Version gap detected | Fix migration list at compile time |
+| `ER-MIG-22102` | Migration tx failed | Read SQL error in surrounding log entry; fix forward |
+| `ER-MIG-22103` | Checksum mismatch | Never edit a shipped migration; write a new one |
+| `ER-MIG-22104` | Downgrade detected | User opened a newer DB with an older binary — refuse to start, ask to upgrade |
+| `ER-MIG-22105` | Busy timeout acquiring lock | Close other instance; retry |
+| `ER-MIG-22106..22109` | Reserved | — |
+| `ER-MIG-22110..22199` | Reserved for future migration-related errors | — |
 
-Block 21800–21809 is reserved exclusively for the migration runner.
+Block 22100–22109 is reserved exclusively for the migration runner. The wider 22100–22199 range belongs to `internal/store/migrate`.
 
 ---
 
@@ -177,14 +180,14 @@ Tests live in `internal/store/migrate/migrate_test.go`. 14 required cases:
 
 1. Apply on empty DB applies all migrations in order.
 2. Apply on up-to-date DB is a no-op (`Report.Applied == nil`).
-3. Apply with a version gap returns `ER-MIG-21801`.
-4. Apply with a tampered checksum returns `ER-MIG-21803`.
-5. Apply with a stored unknown version returns `ER-MIG-21804`.
+3. Apply with a version gap returns `ER-MIG-22101`.
+4. Apply with a tampered checksum returns `ER-MIG-22103`.
+5. Apply with a stored unknown version returns `ER-MIG-22104`.
 6. Apply mid-tx failure leaves the DB at the prior version (no partial row in `SchemaMigration`).
 7. Apply after a partial run (DB has migration applied but no `SchemaMigration` row) re-applies idempotently.
 8. M004 on a DB with legacy `Emails`/`OpenedUrls` renames them.
 9. M004 on a DB without legacy tables is a no-op.
-10. Concurrent `Apply` × 2 via two processes: one wins, the other gets `ER-MIG-21805`.
+10. Concurrent `Apply` × 2 via two processes: one wins, the other gets `ER-MIG-22105`.
 11. After full run, `EXPLAIN QUERY PLAN` for every `Q-*` matches the golden snapshot in `02-queries.md` §4.
 12. Migration files lint-clean (no `interface{}`, no `any`, no `fmt.Errorf` per coding standards).
 13. AST scan: `internal/store/migrate` is the only package importing a SQL driver (other than `internal/store` itself).

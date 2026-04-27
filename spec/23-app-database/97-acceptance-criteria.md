@@ -55,9 +55,9 @@ Binary, machine-checkable acceptance criteria for `spec/23-app-database/`. Each 
 |---|---|---|
 | AC-DB-30 | `migrate.Apply` on an empty DB applies all 4 v1.0.0 migrations in order. | `Test_Migrate_FreshApplyAll` |
 | AC-DB-31 | `migrate.Apply` on an up-to-date DB is a no-op. | `Test_Migrate_NoOpWhenCurrent` |
-| AC-DB-32 | Version gap returns `ER-MIG-21801`. | `Test_Migrate_GapDetected` |
-| AC-DB-33 | Tampered checksum returns `ER-MIG-21803`. | `Test_Migrate_ChecksumMismatch` |
-| AC-DB-34 | Stored unknown version returns `ER-MIG-21804`. | `Test_Migrate_DowngradeRejected` |
+| AC-DB-32 | Version gap returns `ER-MIG-22101`. | `Test_Migrate_GapDetected` |
+| AC-DB-33 | Tampered checksum returns `ER-MIG-22103`. | `Test_Migrate_ChecksumMismatch` |
+| AC-DB-34 | Stored unknown version returns `ER-MIG-22104`. | `Test_Migrate_DowngradeRejected` |
 | AC-DB-35 | Mid-tx crash leaves DB at prior version (no partial `_SchemaVersion` row). | `Test_Migrate_CrashSafe` |
 | AC-DB-36 | M004 renames legacy `Emails`/`OpenedUrls` when present; no-op otherwise. | `Test_Migrate_LegacyRename` |
 | AC-DB-37 | AST scan: only `internal/store/migrate` issues `CREATE`/`ALTER`/`DROP`. | `Test_AST_DdlOnlyInMigrate` |
