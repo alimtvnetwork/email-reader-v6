@@ -313,9 +313,10 @@ Each query has a golden `EXPLAIN QUERY PLAN` snapshot in `internal/store/queries
 | `Q-EMAIL-GET-BY-ID` | `SEARCH Emails USING INTEGER PRIMARY KEY (rowid=?)` |
 | `Q-EMAIL-COUNT-BY-ALIAS` | `SCAN Emails` + `USE TEMP B-TREE FOR GROUP BY` (acceptable for small N) |
 | `Q-WATCH-GET` | `SEARCH WatchState USING INDEX sqlite_autoindex_WatchState_1 (Alias=?)` (TEXT PK → autoindex, not INTEGER PK) |
-| `Q-OPEN-DEDUP` | `SEARCH OpenedUrls USING INDEX IxOpenedUrlsAliasOpenedAt (Alias=? AND OpenedAt>?)` |
-| `Q-OPEN-LIST` | `SEARCH OpenedUrls USING INDEX IxOpenedUrlsAliasOpenedAt (Alias=?)` (alias filter) or `SCAN OpenedUrls` (no alias) |
+| `Q-OPEN-DEDUP` | `SEARCH OpenedUrls USING INDEX IxOpenedUrlsUnique (EmailId=? AND Url=?)` (covering equality probe per Slice #167) |
+| `Q-OPEN-LIST` | `SEARCH OpenedUrls USING INDEX IxOpenedUrlsAliasOpenedAt (Alias=? AND OpenedAt<?)` (alias filter) or `SEARCH OpenedUrls USING INDEX IxOpenedUrlsOpenedAt (OpenedAt<?)` (no alias, m0009) |
 | `Q-EXPORT-STREAM` (alias set) | `SEARCH Emails USING INDEX IxEmailsAliasUid (Alias=?)` |
+| `Q-EXPORT-STREAM` (alias empty) | `SCAN Emails` (`ORDER BY Id ASC` served straight off the rowid; no temp B-tree sort) |
 
 ---
 
