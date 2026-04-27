@@ -65,6 +65,13 @@ func TestPruneOpenedUrlsBefore_DeletesOnlyOldRows(t *testing.T) {
 	}
 }
 
+// TestPruneOpenedUrlsBefore_ZeroCutoffIsNoop satisfies AC-DB-42
+// (retention 0 disables the corresponding prune entirely — zero
+// DELETE statements observed) for the time-cutoff branch. The
+// `n != 0` assertion locks the "no rows touched" guarantee; the
+// zero-time.Time argument models the disabled-retention setting
+// from the Settings UI. Pairs with TestPruneOpenedUrlsBeforeBatched_
+// ZeroCutoffNoop in vacuum_batched_test.go for the batched path.
 func TestPruneOpenedUrlsBefore_ZeroCutoffIsNoop(t *testing.T) {
 	dir := t.TempDir()
 	s, err := OpenAt(filepath.Join(dir, "ret.db"))
