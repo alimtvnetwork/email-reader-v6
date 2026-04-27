@@ -14,6 +14,9 @@ Honest-scope principle: skipped tests with `t.Logf` + `t.Skip` are tripwires, no
 
 ## Memories
 - [Workflow status](mem://workflow/01-status) — Current milestone, completed slices through #131, remaining work, verification commands.
+- [Spec hand-off risk report](.lovable/reports/01-spec-handoff-risk.md) — Tiered success-probability map, failure modes, corrective actions. Read before handing slices to a fresh AI.
+- [Suggestions folder convention](mem://suggestions/00-readme) — Structured per-suggestion files; index in `mem://suggestions/index`.
+- [Root plan.md](plan.md) — AI-handoff backlog with Next task selection menu.
 - [AC coverage rollout pattern](mem://decisions/06-ac-coverage-rollout-pattern) — Slice template, AST/linter/log-scan patterns, honest-scope principle, anti-patterns.
 - [Desktop run procedure](mem://decisions/05-desktop-run-procedure) — How to run `email-read` CLI + UI on Windows/macOS/Linux + smoke-test checklist.
 - [Architecture decisions](mem://decisions/01-architecture) — Core architectural choices.
