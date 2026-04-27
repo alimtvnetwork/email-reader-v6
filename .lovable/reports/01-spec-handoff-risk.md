@@ -63,10 +63,10 @@ Estimates assume the next AI has: (a) read `.lovable/memory/index.md`, (b) read 
 |---|---|---|---|---|
 | 1 | Grow `06-error-registry.md` to define the 39 referenced ER codes (Settings 217xx, Migrations 218xx, UI 219xx, plus stragglers). | Project-wide error registry | M | +5% (unblocks AC-PROJ-31 deferred-skip → ratchet) |
 | 2 | Fix the 33 broken cross-tree spec links surfaced by `Test_NoBrokenSpecLinks_GreenInCi`. | `02-coding-guidelines/`, `08-generic-update/`, `13-cicd-pipeline-workflows/` | M | +5% (unblocks AC-PROJ-33) |
-| 3 | Update `spec/21-app/02-features/00-overview.md` UI status column from "Planned" → "✅ Done" for the 7 features. | One file | XS | +3% (eliminates false ambiguity for fresh AI) |
-| 4 | Restate `WatchEvents` table-name lock and the `OpenedUrls.Decision` column rollout plan in `spec/23-app-database/01-schema.md` headers. | Two anchor sections | S | +4% (prevents T4 misfires) |
-| 5 | In each per-feature `97-acceptance-criteria.md`, add a one-line "Sandbox feasibility" note: 🟢 headless · 🟡 cgo-required · 🔴 needs bench infra. | 7 spec files | S | +6% (lets fresh AI skip T5/T6 cleanly) |
-| 6 | Resolve or delete the OI-1..OI-6 rows in `spec/21-app/02-features/06-tools/99-consistency-report.md`. | One file | XS | +2% (closes AC-PROJ-35) |
+| 3 | ~~Update `spec/21-app/02-features/00-overview.md` UI status column from "Planned" → "✅ Done" for the 7 features.~~ ✅ **Done Slice #181.** | One file | XS | +3% (eliminates false ambiguity for fresh AI) |
+| 4 | ~~Restate `WatchEvents` table-name lock and the `OpenedUrls.Decision` column rollout plan in `spec/23-app-database/01-schema.md` headers.~~ ✅ **Done Slice #183** — `🔒 Naming lock` callouts added to §4 + §5. | Two anchor sections | S | +4% (prevents T4 misfires) |
+| 5 | ~~In each per-feature `97-acceptance-criteria.md`, add a one-line "Sandbox feasibility" note: 🟢 headless · 🟡 cgo-required · 🔴 needs bench infra.~~ ✅ **Done Slice #184** — legend block + per-section `**Sandbox:**` tag in all 9 AC files (7 features + DB + design system); Tier table above now cross-references the tags. | 9 spec files | S | +6% (lets fresh AI skip T5/T6 cleanly) |
+| 6 | ~~Resolve or delete the OI-1..OI-6 rows in `spec/21-app/02-features/06-tools/99-consistency-report.md`.~~ ✅ **Done Slice #182** (audit-only — already closed in earlier slices). | One file | XS | +2% (closes AC-PROJ-35) |
 | 7 | Add a one-paragraph "honest-scope" callout to `mem://decisions/06-ac-coverage-rollout-pattern` showing the **wrong** pattern (citing AC inside `t.Skip`) explicitly. | One memory file | XS | +3% (prevents the most likely T2 regression) |
 | 8 | Promote two tripwires from `t.Skip` → `t.Fatal` once items 1+2 land, so the audit catches reintroduction. | `internal/specaudit/ast_project_linters_test.go` | XS | +2% |
 
