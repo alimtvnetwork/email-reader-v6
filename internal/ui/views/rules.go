@@ -134,9 +134,14 @@ func BuildRules(opts RulesOptions) fyne.CanvasObject {
 
 	refreshBtn := widget.NewButton("Refresh", reload)
 	scroll := container.NewVScroll(body)
+	// Border layout: refresh button pinned left, status label fills the
+	// remaining horizontal width. NewHBox would give `status` zero
+	// width and TextWrapWord would break each character onto its own
+	// line — see accounts.go for the same fix.
+	footer := container.NewBorder(nil, nil, refreshBtn, nil, status)
 	return container.NewBorder(
 		container.NewVBox(heading, subtitle, widget.NewSeparator()),
-		container.NewVBox(widget.NewSeparator(), container.NewHBox(refreshBtn, status)),
+		container.NewVBox(widget.NewSeparator(), footer),
 		nil, nil,
 		scroll,
 	)
