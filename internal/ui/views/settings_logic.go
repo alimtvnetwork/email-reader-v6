@@ -7,10 +7,10 @@
 package views
 
 import (
-	"fmt"
 	"strconv"
 
 	"github.com/lovable/email-read/internal/core"
+	"github.com/lovable/email-read/internal/errtrace"
 )
 
 // densityChoice is the on-wire label form used by the Density Select.
@@ -27,7 +27,7 @@ const (
 func ParsePollSeconds(raw string) (uint16, error) {
 	n, err := strconv.Atoi(raw)
 	if err != nil || n < 1 || n > 60 {
-		return 0, fmt.Errorf("poll interval must be 1–60 seconds")
+		return 0, errtrace.New("poll interval must be 1–60 seconds")
 	}
 	return uint16(n), nil
 }
@@ -38,7 +38,7 @@ func ParsePollSeconds(raw string) (uint16, error) {
 func ParseRetentionDays(raw string) (uint16, error) {
 	n, err := strconv.Atoi(raw)
 	if err != nil || n < 0 || n > 3650 {
-		return 0, fmt.Errorf("retention must be 0–3650 days (0 = never prune)")
+		return 0, errtrace.New("retention must be 0–3650 days (0 = never prune)")
 	}
 	return uint16(n), nil
 }
@@ -48,7 +48,7 @@ func ParseRetentionDays(raw string) (uint16, error) {
 func ParseVacuumHourLocal(raw string) (uint8, error) {
 	n, err := strconv.Atoi(raw)
 	if err != nil || n < 0 || n > 23 {
-		return 0, fmt.Errorf("vacuum hour must be 0–23 (24-hour clock)")
+		return 0, errtrace.New("vacuum hour must be 0–23 (24-hour clock)")
 	}
 	return uint8(n), nil
 }
@@ -58,7 +58,7 @@ func ParseVacuumHourLocal(raw string) (uint8, error) {
 func ParseWalCheckpointHours(raw string) (uint8, error) {
 	n, err := strconv.Atoi(raw)
 	if err != nil || n < 1 || n > 168 {
-		return 0, fmt.Errorf("WAL checkpoint hours must be 1–168 (1h..1 week)")
+		return 0, errtrace.New("WAL checkpoint hours must be 1–168 (1h..1 week)")
 	}
 	return uint8(n), nil
 }
@@ -68,7 +68,7 @@ func ParseWalCheckpointHours(raw string) (uint8, error) {
 func ParsePruneBatchSize(raw string) (uint32, error) {
 	n, err := strconv.Atoi(raw)
 	if err != nil || n < 100 || n > 50000 {
-		return 0, fmt.Errorf("prune batch size must be 100–50000")
+		return 0, errtrace.New("prune batch size must be 100–50000")
 	}
 	return uint32(n), nil
 }
