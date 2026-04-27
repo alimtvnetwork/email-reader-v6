@@ -4,7 +4,29 @@ import (
 	"testing"
 
 	"github.com/lovable/email-read/internal/config"
+	"github.com/lovable/email-read/internal/core"
 )
+
+func TestFormatAccountHealthBadge_Table(t *testing.T) {
+	cases := []struct {
+		name string
+		in   core.HealthLevel
+		want string
+	}{
+		{"healthy", core.HealthHealthy, "● Healthy"},
+		{"warning", core.HealthWarning, "◐ Warning"},
+		{"error", core.HealthError, "✗ Error"},
+		{"empty (not loaded)", "", "— Unknown"},
+		{"unknown future value", "Degraded", "? Degraded"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := formatAccountHealthBadge(tc.in); got != tc.want {
+				t.Errorf("formatAccountHealthBadge(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
 
 func TestAccountServer(t *testing.T) {
 	cases := []struct {
