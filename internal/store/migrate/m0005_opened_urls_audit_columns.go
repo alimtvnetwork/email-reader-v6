@@ -30,7 +30,7 @@ func init() {
 func applyOpenedUrlsAuditColumns(ctx context.Context, db *sql.DB) error {
 	have, err := openedUrlsColumns(ctx, db)
 	if err != nil {
-		return fmt.Errorf("introspect OpenedUrls: %w", err)
+		return errtrace.Wrapf(err, "introspect OpenedUrls")
 	}
 	adds := []struct{ name, ddl string }{
 		{"Alias", `ALTER TABLE OpenedUrls ADD COLUMN Alias TEXT NOT NULL DEFAULT ''`},
@@ -45,7 +45,7 @@ func applyOpenedUrlsAuditColumns(ctx context.Context, db *sql.DB) error {
 			continue
 		}
 		if _, err := db.ExecContext(ctx, a.ddl); err != nil {
-			return fmt.Errorf("add column %s: %w", a.name, err)
+			return errtrace.Wrapf(err, "add column %s", a.name)
 		}
 	}
 	return nil
