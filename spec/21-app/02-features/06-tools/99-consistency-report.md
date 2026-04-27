@@ -283,16 +283,16 @@ Because audit completeness is the security promise of this feature, the single-l
 
 ## 14. Open Issues
 
-| #    | Issue                                                                                  | Owner          | Resolves in task |
-|------|----------------------------------------------------------------------------------------|----------------|------------------|
-| OI-1 | `ColorDiagStep*` / `ColorOpenUrl*` design tokens referenced in frontend §3 but not yet registered in `spec/24-app-design-system-and-ui/` | Design system  | Task #33 |
-| OI-2 | Error registry `21750–21769` block to be added to `06-error-registry.md`               | Errors         | Task #35 |
-| OI-3 | Add cross-test `RulesVM_TestRule_OpenUrl_OriginManualWithRuleName` to `03-rules/97`    | Rules          | Task #35 |
-| OI-4 | Update `07-architecture.md` §4.6 to match the richer Tools API (5 method signatures + 1 internal) | Architecture   | Task #35 |
-| OI-5 | New lint script `linters/no-other-browser-launch.sh` + `linters/no-incognito-false.sh` | Lint toolchain | Task #34/#35 |
-| OI-6 | Canonical `OpenedUrl` schema home moves from this spec to `spec/23-app-database/`      | DB schema      | Task #32 |
+| #    | Issue                                                                                  | Owner          | Resolves in task | Status |
+|------|----------------------------------------------------------------------------------------|----------------|------------------|--------|
+| OI-1 | `ColorDiagStep*` / `ColorOpenUrl*` design tokens referenced in frontend §3 but not yet registered in `spec/24-app-design-system-and-ui/` | Design system  | Task #33 | 🟡 Open — no `DiagStep`/`OpenUrl` token entries found in `spec/24-app-design-system-and-ui/` (verified 2026-04-27) |
+| OI-2 | Error registry `21750–21769` block to be added to `06-error-registry.md`               | Errors         | Task #35 | 🟡 Open — `21750–21769` range currently allocated to TLS in `internal/errtrace/codes.yaml`; Tools block needs renumbering decision before this can land |
+| OI-3 | Add cross-test `RulesVM_TestRule_OpenUrl_OriginManualWithRuleName` to `03-rules/97`    | Rules          | Task #35 | 🟡 Open — symbol absent from `spec/21-app/02-features/03-rules/97-acceptance-criteria.md` (verified 2026-04-27) |
+| OI-4 | Update `07-architecture.md` §4.6 to match the richer Tools API (5 method signatures + 1 internal) | Architecture   | Task #35 | ✅ Closed 2026-04-27 — `spec/21-app/07-architecture.md` §4.6 now lists `ReadOnce`, `ExportCsv`, `Diagnose`, `OpenUrl`, `RecentOpenedUrls` + internal `OnAccountUpdate` |
+| OI-5 | New lint script `linters/no-other-browser-launch.sh` + `linters/no-incognito-false.sh` | Lint toolchain | Task #34/#35 | ✅ Closed — both scripts present at `linters/no-other-browser-launch.sh` and `linters/no-incognito-false.sh` |
+| OI-6 | Canonical `OpenedUrl` schema home moves from this spec to `spec/23-app-database/`      | DB schema      | Task #32 | ✅ Closed — canonical `OpenedUrl` table defined in `spec/23-app-database/01-schema.md` §4 |
 
-All six are forward-references to scheduled tasks; **no rework** required in Tools when they land — just verify references match.
+Three of six closed (OI-4, OI-5, OI-6). Three remain (OI-1, OI-2, OI-3) — each is a forward-reference still pending its parent task; **no rework** required in Tools when they land — just verify references match.
 
 ---
 
