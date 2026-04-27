@@ -54,6 +54,12 @@ var scannedRoots = []string{
 // classify a string literal as inline SQL.
 var sqlStarters = []string{"SELECT ", "INSERT ", "UPDATE ", "DELETE "}
 
+// TestAST_NoInlineSQL satisfies AC-DB-21 (no SQL string outside
+// internal/store/queries/ or internal/store/migrate/) from
+// spec/23-app-database/97-acceptance-criteria.md §C. The
+// `sqlStarters` table catches SELECT/INSERT/UPDATE/DELETE leading
+// tokens; the `scannedRoots` allowlist scopes the scan to the
+// callers (core, cli) we care about.
 func TestAST_NoInlineSQL(t *testing.T) {
 	t.Parallel()
 
