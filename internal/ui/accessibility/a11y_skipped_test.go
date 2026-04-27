@@ -35,22 +35,23 @@ func Test_Contrast_Matrix(t *testing.T) {
 
 // Spec §8 #2 — Test_FocusOrder_Declared
 //
-// AST scan asserting every view file under `internal/ui/views/`
-// declares a `func (vm *View) FocusOrder() []fyne.Focusable` method.
-// Today zero views declare it (verified with
-// `rg -c '^func.*FocusOrder\(\)' internal/ui/views/`); landing the
-// declarations in each view is what Slice #118b actually does, so
-// the guard goes live in the same slice that satisfies it.
-func Test_FocusOrder_Declared(t *testing.T) {
-	t.Skip("Slice #118b — depends on FocusOrder() landing in every view file first")
-}
+// **Slice #118c: lit up.** Lives in `a11y_render_harness_test.go`
+// in this package as a pure AST scan (no Fyne runtime needed).
+// Seeded with an allowlist of every existing view file; the
+// allowlist must shrink monotonically as Slice #118e rolls out
+// `FocusOrder()` declarations across the views package.
 
 // Spec §8 #3 — Test_FocusOrder_NoHiddenInOrder
 //
-// Once `FocusOrder()` exists, asserts the returned slice contains
-// no widgets whose `Hidden` or `Disabled` is true. Pairs with #2.
+// Once `FocusOrder()` declarations exist (Slice #118e), asserts the
+// returned slice contains no widgets whose `Hidden` or `Disabled`
+// is true at construction time. Pairs with #2 and needs the live
+// widget tree to inspect — gated on `A11Y_RENDER=1`.
 func Test_FocusOrder_NoHiddenInOrder(t *testing.T) {
-	t.Skip("Slice #118b — needs FocusOrder() declarations to scan")
+	if !a11yRenderHarnessEnabled() {
+		t.Skip("Slice #118e — needs A11Y_RENDER=1 + FocusOrder() declarations from #118e rollout")
+	}
+	t.Skip("Slice #118e — implementation pending (harness enabled but assertions not yet ported)")
 }
 
 // Spec §8 #4 — Test_StatusHasTextLabel
