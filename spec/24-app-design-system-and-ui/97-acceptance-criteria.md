@@ -22,7 +22,7 @@ Binary, machine-checkable acceptance criteria for `spec/24-app-design-system-and
 | AC-DS-02 | Every `SizeName`, `RadiusName`, `ElevName`, `MotionName` matches `01-tokens.md` §3–§7. | `Test_Tokens_NonColorParity` |
 | AC-DS-03 | Each color has both Dark and Light variants in `palette_dark.go` / `palette_light.go`. | `Test_Tokens_PaletteCoverage` |
 | AC-DS-04 | All `Watch*` and `RawLog*` tokens listed in `01-tokens.md` §2.5–§2.6 are present. (Resolves OI-1.) | `Test_Tokens_WatchAndRawLogPresent` |
-| AC-DS-05 | No two distinct tokens share the same RGB triple in the same variant. | `Test_Tokens_NoDuplicateValues` |
+| AC-DS-05 | No two distinct tokens share the same RGB triple in the same variant **unless registered in `01-tokens.md` §2.12 NamedAliases**; every registered alias's RGB equality (and asymmetry-tag, if any) is enforced. | `Test_Tokens_NoDuplicateValues` |
 
 ## B. Theme implementation
 
