@@ -20,24 +20,17 @@ import (
 	"github.com/lovable/email-read/internal/ui/errlog"
 )
 
-// withDataDir points config.DataDir() at a temporary directory by
-// chdir'ing into it. We restore the prior CWD on cleanup. Cheap and
-// avoids exporting a config-package seam just for tests.
+// withDataDir installs a test path resolver pointing at a fresh
+// temp directory and returns the canonical error-log path inside it.
+// Cleans up the override on test exit so other tests stay isolated.
 func withDataDir(t *testing.T) string {
 	t.Helper()
 	tmp := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(tmp, "data"), 0o700); err != nil {
-		t.Fatalf("mkdir data: %v", err)
-	}
-	prev, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	if err := os.Chdir(tmp); err != nil {
-		t.Fatalf("chdir: %v", err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(prev) })
-	return filepath.Join(tmp, "data", "error-log.jsonl")
+	path := filepath.Join(tmp, "error-log.jsonl")
+	prev := errLogPathResolver
+	errLogPathResolver = func() (string, error) { return path, nil }
+	t.Cleanup(func() { errLogPathResolver = prev })
+	return path
 }
 
 // writeJSONL appends each entry as one JSON line. Mirrors what
