@@ -70,10 +70,10 @@ func newReadOutputs() (*widget.Entry, *widget.Label) {
 }
 
 // runReadIntoUI invokes core.Tools.ReadOnce and reflects progress + result.
-func runReadIntoUI(alias, limitStr string, output *widget.Entry, status *widget.Label) {
+func runReadIntoUI(factory ToolsFactory, alias, limitStr string, output *widget.Entry, status *widget.Label) {
 	output.SetText("")
 	status.SetText("Connecting…")
-	tools, err := buildReadTools()
+	tools, err := buildToolsFromFactory(factory)
 	if err != nil {
 		status.SetText("⚠ setup: " + err.Error())
 		return
