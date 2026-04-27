@@ -73,12 +73,13 @@ func BuildAccounts(opts AccountsOptions) fyne.CanvasObject {
 			return
 		}
 
-		header := container.NewGridWithColumns(6,
+		header := container.NewGridWithColumns(7,
 			widget.NewLabelWithStyle("Alias", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 			widget.NewLabelWithStyle("Email", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 			widget.NewLabelWithStyle("Server", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 			widget.NewLabelWithStyle("Mailbox", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 			widget.NewLabelWithStyle("Last UID", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+			widget.NewLabelWithStyle("Health", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 			widget.NewLabelWithStyle("Actions", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		)
 		rows := []fyne.CanvasObject{header, widget.NewSeparator()}
@@ -86,9 +87,17 @@ func BuildAccounts(opts AccountsOptions) fyne.CanvasObject {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
+		// Per-row health is loaded once per reload (not per row) so a
+		// 50-account user pays one query, not 50. Nil-safe: empty map
+		// means every row gets "— Unknown".
+		var health map[string]core.HealthLevel
+		if opts.LoadHealth != nil {
+			health = opts.LoadHealth(ctx)
+		}
+
 		for _, a := range accts {
 			ws, _ := opts.WatchState(ctx, a.Alias)
-			rows = append(rows, accountRow(a, ws, opts, status, reload))
+			rows = append(rows, accountRow(a, ws, health[a.Alias], opts, status, reload))
 		}
 		body.Objects = rows
 		body.Refresh()
