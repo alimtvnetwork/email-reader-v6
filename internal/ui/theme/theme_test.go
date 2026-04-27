@@ -35,6 +35,12 @@ func Test_Palettes_Parity(t *testing.T) {
 // Test_Color_ResolvesPerMode walks a representative subset of tokens and
 // confirms that switching ThemeMode flips the resolved color. Picks
 // tokens whose Dark/Light values differ in the spec.
+//
+// Contributes to AC-DS-10 (theme.Apply(ThemeDark) → Color(...)
+// returns dark RGB) and AC-DS-11 (light branch) by exercising both
+// modes and asserting they differ — the spot-value lock for AC-DS-10
+// lives in Test_Color_KnownTokens, and the per-mode RGB lock for
+// AC-DS-11 lives in Test_Color_RawLogBadgeCodeTokens.
 func Test_Color_ResolvesPerMode(t *testing.T) {
 	t.Cleanup(resetForTest)
 	cases := []ColorName{
