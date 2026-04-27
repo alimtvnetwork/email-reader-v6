@@ -6,7 +6,7 @@ Updated: 2026-04-27
 ## Core
 Email watcher RCA: stable IMAP `messages`/`uidNext` means no new server-visible mail; diagnose delivery/folder before watcher logic.
 IMAP `AUTHENTICATIONFAILED`: always run `email-read doctor <alias>` first to rule out hidden Unicode (U+2060 word-joiner from chat copy-paste) before blaming code.
-All errors must use `internal/errtrace` so failures show file:line stack traces.
+All errors must use `internal/errtrace` (no `fmt.Errorf` / `errors.New` / bare `return err` — 3 lints in fail mode); UI handlers additionally call `errlog.ReportError(component, err)` to populate the ring buffer + `data/error-log.jsonl` + `email-read errors tail`.
 App spec lives at `spec/21-app/` (App Project Template). Old paths `spec/21-golang-email-reader/` and `spec/22-fyne-ui/` were merged here on 2026-04-25 — never recreate them.
 Sandbox has no preinstalled Go; verify with `nix run nixpkgs#go -- {vet,test} -tags nofyne ./...`. Files outside `.lovable/` may revert between sessions — verify on disk before assuming.
 AC coverage rollout (Phase 3) is the active workstream: shrink `coverageGapAllowlist` monotonically. Current: 51.6% (96/186), allowlist 90. See `mem://workflow/progress-tracker`.
