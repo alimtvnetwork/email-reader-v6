@@ -18,6 +18,13 @@ func newTestStore(t *testing.T) *Store {
 	return s
 }
 
+// TestUpsertEmailAndDedup satisfies AC-DB-04 (UX_Email_Alias_MessageId
+// is enforced — second insert with the same (Alias, MessageId)
+// returns the original row id, not a constraint error, because the
+// upsert routes the conflict through ON CONFLICT DO UPDATE) and
+// AC-DB-22 (Q-EMAIL-UPSERT returns the same Id on second call with
+// the same (Alias, MessageId)) from spec/23-app-database/
+// 97-acceptance-criteria.md §A and §C.
 func TestUpsertEmailAndDedup(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
