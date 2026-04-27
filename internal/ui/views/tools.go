@@ -2,6 +2,13 @@
 // per inline mutating form. Phase 4 lands one form at a time; this file
 // is the host that future steps extend.
 //
+// **Slice #116c (Phase 6.3)** added `ToolsFactory` to `ToolsOptions`.
+// The four sub-tabs that need a `*core.Tools` instance (OpenUrl, Read,
+// Export, Recent opens) now consume the factory from the `*Services`
+// bundle instead of calling `config.Load()` inline. This closes the
+// remaining Tools-route entries in the AST guard's
+// `viewLayerGlobalsAllowlist` (`tools_openurl.go`, `tools_read.go`).
+//
 // Behind the !nofyne build tag because it imports the Fyne widget set.
 //go:build !nofyne
 
@@ -15,6 +22,13 @@ import (
 	"github.com/lovable/email-read/internal/core"
 )
 
+// ToolsFactory is the per-call `*core.Tools` builder injected from the
+// shell's `*Services` bundle. Returning a fresh instance each call
+// preserves the live-config-edit semantics from Phase 4. Nil-safe at
+// the sub-tab layer — when nil, each sub-tab renders the documented
+// degraded-path status line instead of panicking.
+type ToolsFactory = func() (*core.Tools, error)
+
 // ToolsOptions wires shared callbacks. OnAccountsChanged fires after the
 // Add Account form saves so the shell can refresh the sidebar picker.
 // OnRulesChanged fires after the Add Rule form saves.
@@ -23,15 +37,20 @@ import (
 // the embedded Add Rule form (constructed via `core.NewDefaultRulesService`
 // in app bootstrap). Nil-safe: when absent the form falls back to its
 // own degraded-path message.
+//
+// **Slice #116c (Phase 6.3) addition.** `ToolsFactory` is the typed
+// seam consumed by OpenUrl / Read / Export / Recent opens. Threaded
+// through from `services.Tools` in `app.go::viewFor`.
 type ToolsOptions struct {
 	OnAccountsChanged func()
 	OnRulesChanged    func()
 	RulesService      *core.RulesService
+	ToolsFactory      ToolsFactory
 }
 
 // BuildTools returns the Tools view with one tab per form / sub-tool.
-// As of 2026-04-26 it ships: Add account, Add rule, Doctor, Diagnose;
-// Read / Export CSV / OpenUrl land with `core.Tools`.
+// As of Slice #116c the four `*core.Tools`-consuming tabs receive
+// their factory through the parent options bundle.
 func BuildTools(opts ToolsOptions) fyne.CanvasObject {
 	heading := widget.NewLabelWithStyle("Tools", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	subtitle := widget.NewLabel("Mutating actions and read-only diagnostics. Each tab runs inline — no modal popups.")
@@ -46,10 +65,10 @@ func BuildTools(opts ToolsOptions) fyne.CanvasObject {
 		})),
 		container.NewTabItem("Doctor", BuildDoctorTab()),
 		container.NewTabItem("Diagnose", BuildDiagnoseTab()),
-		container.NewTabItem("Read", BuildReadTab()),
-		container.NewTabItem("Export CSV", BuildExportTab()),
-		container.NewTabItem("OpenUrl", BuildOpenUrlTab()),
-		container.NewTabItem("Recent opens", BuildRecentOpensTab()),
+		container.NewTabItem("Read", BuildReadTab(opts.ToolsFactory)),
+		container.NewTabItem("Export CSV", BuildExportTab(opts.ToolsFactory)),
+		container.NewTabItem("OpenUrl", BuildOpenUrlTab(opts.ToolsFactory)),
+		container.NewTabItem("Recent opens", BuildRecentOpensTab(opts.ToolsFactory)),
 	)
 	tabs.SetTabLocation(container.TabLocationTop)
 
