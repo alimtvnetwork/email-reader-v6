@@ -277,6 +277,24 @@ go mod tidy
 ok "Modules resolved."
 
 # ===================================================================
+# Step C.1: Error-trace lint guardrails (Phase 1, warn-only)
+# These print today's error-handling debt without failing the build.
+# Set LINT_MODE=fail in the environment to enforce in CI.
+# ===================================================================
+step "Error-trace guardrails (warn-only)"
+for guard in \
+    "$REPO_ROOT/linter-scripts/check-no-fmt-errorf.sh" \
+    "$REPO_ROOT/linter-scripts/check-no-bare-return-err.sh" \
+    "$REPO_ROOT/linter-scripts/check-no-errors-new.sh"
+do
+    if [[ -x "$guard" ]]; then
+        bash "$guard" || true
+    elif [[ -f "$guard" ]]; then
+        bash "$guard" || true
+    fi
+done
+
+# ===================================================================
 # INSTALL MODE — stop here.
 # ===================================================================
 if $INSTALL; then
