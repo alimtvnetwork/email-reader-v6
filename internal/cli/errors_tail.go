@@ -86,6 +86,17 @@ Examples:
 	return cmd
 }
 
+// errLogPathResolver is overridable in tests so we can point
+// runErrorsTail at a fixture file without wrestling with config's
+// executable-relative DataDir(). Production stays on config.DataDir().
+var errLogPathResolver = func() (string, error) {
+	dir, err := config.DataDir()
+	if err != nil {
+		return "", errtrace.Wrap(err, "errors tail: data dir")
+	}
+	return filepath.Join(dir, "error-log.jsonl"), nil
+}
+
 // runErrorsTail is the testable core: takes an io.Writer + flags so
 // unit tests can capture output and avoid touching real stdout.
 func runErrorsTail(parent context.Context, out io.Writer, follow bool, lines int) error {
@@ -95,11 +106,10 @@ func runErrorsTail(parent context.Context, out io.Writer, follow bool, lines int
 	ctx, stop := signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	dir, err := config.DataDir()
+	path, err := errLogPathResolver()
 	if err != nil {
-		return errtrace.Wrap(err, "errors tail: data dir")
+		return errtrace.Wrap(err, "errors tail: resolve path")
 	}
-	path := filepath.Join(dir, "error-log.jsonl")
 
 	entries, err := errlog.LoadFromFile(path)
 	if err != nil {
