@@ -40,6 +40,12 @@ import (
 // so the rotated `.1` file always carries strictly older context.
 const DefaultSizeCap int64 = 5 * 1024 * 1024
 
+// ErrPersistenceClosed is returned by Write when the underlying file
+// has already been Close()d. Production callers (Store.Append) swallow
+// it; tests that hold the *Persistence directly can assert against it
+// via errors.Is.
+var ErrPersistenceClosed = errors.New("errlog: persistence is closed")
+
 // Persistence owns the open log file plus the rotation policy. One
 // instance per Store. Public so tests can construct it directly with
 // custom paths and size caps.
@@ -89,6 +95,15 @@ func NewPersistence(path string, sizeCap int64) (*Persistence, error) {
 func (p *Persistence) Write(e Entry) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	// Guard against use-after-Close. Without this, a stale persister
+	// callback wired into the package singleton (e.g. by a test that
+	// called EnableDefaultPersistence and then Close()d its handle)
+	// would deref a nil *bufio.Writer on the next ReportError. We
+	// degrade to a typed sentinel error so callers can detect it; the
+	// production fan-out in Store.Append swallows the error already.
+	if p.f == nil || p.w == nil {
+		return errtrace.Wrap(ErrPersistenceClosed, "errlog: write after close")
+	}
 	line, err := json.Marshal(e)
 	if err != nil {
 		return errtrace.Wrap(err, "errlog: marshal entry")

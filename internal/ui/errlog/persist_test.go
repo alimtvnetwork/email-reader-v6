@@ -3,6 +3,7 @@ package errlog
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -181,6 +182,11 @@ func TestStore_EnablePersistence_RingCapTrimsPrior(t *testing.T) {
 func TestEnableDefaultPersistence_RestoresAcrossInstances(t *testing.T) {
 	// Use a fresh process-wide singleton state by Clearing first.
 	Clear()
+	// Restore singleton to a pristine state when this test exits so a
+	// later test (or a `-count=2` re-run of this same binary) does not
+	// observe a dangling persister pointing at a now-closed file —
+	// that used to nil-deref bufio.Writer in Persistence.Write.
+	t.Cleanup(resetSingletonForTest)
 	dir := t.TempDir()
 	path := filepath.Join(dir, "subdir", "error-log.jsonl") // exercises MkdirAll
 
@@ -226,3 +232,23 @@ func onceForTest() (o sync.Once) { return }
 type testErr string
 
 func (e testErr) Error() string { return string(e) }
+
+// TestPersistence_WriteAfterCloseIsSafe pins the regression caught by
+// Slice #189: `go test -race -count=2` panicked because a stale
+// persister wired to a closed *Persistence dereffed nil bufio.Writer.
+// Write must now return ErrPersistenceClosed instead of panicking.
+func TestPersistence_WriteAfterCloseIsSafe(t *testing.T) {
+	dir := t.TempDir()
+	p, err := NewPersistence(filepath.Join(dir, "log.jsonl"), 0)
+	if err != nil {
+		t.Fatalf("NewPersistence: %v", err)
+	}
+	if err := p.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	// Must NOT panic and must return the sentinel.
+	err = p.Write(Entry{Seq: 1, Component: "x", Summary: "after-close"})
+	if !errors.Is(err, ErrPersistenceClosed) {
+		t.Fatalf("Write after Close = %v, want ErrPersistenceClosed", err)
+	}
+}
