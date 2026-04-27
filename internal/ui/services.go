@@ -142,7 +142,62 @@ func BuildServices() *Services {
 		s.Dashboard = r.Value()
 	}
 
+	// Slice #116c: default Tools factory. Same `config.Load() +
+	// core.NewTools(...)` shape that used to live inline inside
+	// `views/tools_openurl.go::buildOpenUrlTools` and
+	// `views/tools_read.go::buildReadTools`. Re-evaluated per call so
+	// browser-path / dedup-window edits land without restart.
+	s.Tools = defaultToolsFactory()
+
 	return s
+}
+
+// defaultToolsFactory returns the production `ToolsFactory` used by
+// the Tools tab sub-routes when running under the real shell. Splits
+// out of `BuildServices` so tests can swap a fake factory by setting
+// `services.Tools = func() (*core.Tools, error) { ... }` directly.
+//
+// The closure mirrors the pre-Slice-#116c per-call constructors:
+// load config, build a fresh `*browser.Launcher` from `cfg.Browser`,
+// and wrap both in `core.NewTools` with the spec defaults. Each call
+// returns an independent `*core.Tools` instance — the in-memory dedup
+// map is not shared across sub-tabs, matching the prior behaviour.
+func defaultToolsFactory() ToolsFactory {
+	return func() (*core.Tools, error) {
+		cfg, err := config.Load()
+		if err != nil {
+			return nil, err
+		}
+		r := core.NewTools(browser.New(cfg.Browser), defaultOpenedUrlRecorder{}, core.DefaultToolsConfig())
+		if r.HasError() {
+			return nil, r.Error()
+		}
+		return r.Value(), nil
+	}
+}
+
+// defaultOpenedUrlRecorder is the no-op `openedUrlRecorder` used by
+// every UI-driven Tools sub-route (manual launches set `EmailId=0`,
+// so the FK-bound persistent insert is skipped and the in-memory
+// dedup index alone protects against rapid double-clicks).
+//
+// Mirrors the pre-Slice-#116c `noopOpenedUrlStore` that lived inside
+// `views/tools_openurl.go`. Hoisted here so the type is built once
+// alongside the factory, the views package no longer needs its own
+// copy, and the contract (HasOpenedUrl / RecordOpenedUrl /
+// RecordOpenedUrlExt all silently succeed) is documented in one place.
+type defaultOpenedUrlRecorder struct{}
+
+func (defaultOpenedUrlRecorder) HasOpenedUrl(_ context.Context, _ int64, _ string) (bool, error) {
+	return false, nil
+}
+
+func (defaultOpenedUrlRecorder) RecordOpenedUrl(_ context.Context, _ int64, _, _ string) (bool, error) {
+	return true, nil
+}
+
+func (defaultOpenedUrlRecorder) RecordOpenedUrlExt(_ context.Context, _ store.OpenedUrlInsert) (bool, error) {
+	return true, nil
 }
 
 // dashboardEmailsCounter returns the emails-counter callback the
