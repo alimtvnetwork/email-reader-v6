@@ -281,14 +281,14 @@ Each query has a golden `EXPLAIN QUERY PLAN` snapshot in `internal/store/queries
 
 | Query | Expected plan snippet |
 |---|---|
-| `Q-EMAIL-LIST` (alias set) | `SEARCH Email USING INDEX IX_Email_Alias_Received` |
-| `Q-EMAIL-LIST` (alias empty) | `SEARCH Email USING INDEX IX_Email_ReceivedAt` |
-| `Q-EMAIL-GET-BY-ID` | `SEARCH Email USING INTEGER PRIMARY KEY (rowid=?)` |
-| `Q-EMAIL-COUNT-BY-ALIAS` | `SCAN Email` + `USE TEMP B-TREE FOR GROUP BY` (acceptable for small N) |
+| `Q-EMAIL-LIST` (alias set) | `SEARCH Emails USING INDEX IX_Email_Alias_Received` |
+| `Q-EMAIL-LIST` (alias empty) | `SEARCH Emails USING INDEX IX_Email_ReceivedAt` |
+| `Q-EMAIL-GET-BY-ID` | `SEARCH Emails USING INTEGER PRIMARY KEY (rowid=?)` |
+| `Q-EMAIL-COUNT-BY-ALIAS` | `SCAN Emails` + `USE TEMP B-TREE FOR GROUP BY` (acceptable for small N) |
 | `Q-WATCH-GET` | `SEARCH WatchState USING INTEGER PRIMARY KEY` |
-| `Q-OPEN-DEDUP` | `SEARCH OpenedUrl USING INDEX IX_OpenedUrl_Alias_Created` |
-| `Q-OPEN-LIST` | `SEARCH OpenedUrl USING INDEX IX_OpenedUrl_Alias_Created` |
-| `Q-EXPORT-STREAM` (alias set) | `SEARCH Email USING INDEX IX_Email_Alias_Received` |
+| `Q-OPEN-DEDUP` | `SEARCH OpenedUrls USING INDEX IX_OpenedUrl_Alias_Created` |
+| `Q-OPEN-LIST` | `SEARCH OpenedUrls USING INDEX IX_OpenedUrl_Alias_Created` |
+| `Q-EXPORT-STREAM` (alias set) | `SEARCH Emails USING INDEX IX_Email_Alias_Received` |
 
 ---
 
