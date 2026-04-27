@@ -50,6 +50,138 @@ ok()    { echo "    ${C_GREEN}$*${C_RESET}"; }
 warn()  { echo "    ${C_YELLOW}$*${C_RESET}"; }
 fail()  { echo "${C_RED}ERROR: $*${C_RESET}" >&2; }
 
+# -- OS detection --------------------------------------------------
+OS_KIND="unknown"
+case "$(uname -s)" in
+    Darwin*) OS_KIND="macos" ;;
+    Linux*)  OS_KIND="linux" ;;
+esac
+
+# Run a command with sudo if available; otherwise run directly.
+maybe_sudo() {
+    if [[ $EUID -eq 0 ]]; then
+        "$@"
+    elif command -v sudo >/dev/null 2>&1; then
+        sudo "$@"
+    else
+        warn "sudo not available; trying without elevation."
+        "$@"
+    fi
+}
+
+# ---- Auto-install: Xcode Command Line Tools (macOS) ----
+ensure_xcode_clt() {
+    [[ "$OS_KIND" == "macos" ]] || return 0
+    if xcode-select -p >/dev/null 2>&1; then
+        ok "Xcode Command Line Tools already installed."
+        return 0
+    fi
+    step "Installing Xcode Command Line Tools (one-time, ~5 min)"
+    warn "A system dialog will appear. Click 'Install' and wait for it to finish."
+    # Trigger the GUI installer and poll until it completes.
+    xcode-select --install >/dev/null 2>&1 || true
+    local waited=0
+    until xcode-select -p >/dev/null 2>&1; do
+        sleep 5
+        waited=$((waited + 5))
+        if (( waited % 30 == 0 )); then
+            warn "Still waiting for Xcode CLT install... (${waited}s)"
+        fi
+        if (( waited > 1800 )); then
+            fail "Xcode CLT install timed out after 30 min. Run 'xcode-select --install' manually."
+            exit 1
+        fi
+    done
+    ok "Xcode Command Line Tools installed."
+}
+
+# ---- Auto-install: Homebrew (macOS) ----
+ensure_homebrew() {
+    [[ "$OS_KIND" == "macos" ]] || return 0
+    if command -v brew >/dev/null 2>&1; then
+        ok "Homebrew already installed."
+        return 0
+    fi
+    step "Installing Homebrew (needed to install Go automatically)"
+    NONINTERACTIVE=1 /bin/bash -c \
+        "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    # Add brew to PATH for this shell session.
+    if [[ -x /opt/homebrew/bin/brew ]]; then
+        eval "$(/opt/homebrew/bin/brew shellenv)"
+    elif [[ -x /usr/local/bin/brew ]]; then
+        eval "$(/usr/local/bin/brew shellenv)"
+    fi
+    ok "Homebrew installed."
+}
+
+# ---- Auto-install: Linux build deps ----
+ensure_linux_build_deps() {
+    [[ "$OS_KIND" == "linux" ]] || return 0
+    # Skip if all key headers/tools already present.
+    if command -v gcc >/dev/null 2>&1 && \
+       ldconfig -p 2>/dev/null | grep -q libGL.so && \
+       [[ -f /usr/include/X11/Xlib.h || -f /usr/include/X11/Xrandr.h ]]; then
+        ok "Linux build dependencies already installed."
+        return 0
+    fi
+    step "Installing Linux build dependencies (gcc, OpenGL, X11 headers)"
+    if command -v apt-get >/dev/null 2>&1; then
+        maybe_sudo apt-get update -y
+        maybe_sudo apt-get install -y \
+            build-essential pkg-config \
+            libgl1-mesa-dev xorg-dev libxkbcommon-dev
+    elif command -v dnf >/dev/null 2>&1; then
+        maybe_sudo dnf install -y \
+            gcc gcc-c++ make pkgconfig \
+            mesa-libGL-devel libX11-devel libXcursor-devel \
+            libXrandr-devel libXinerama-devel libXi-devel libXxf86vm-devel
+    elif command -v pacman >/dev/null 2>&1; then
+        maybe_sudo pacman -Sy --noconfirm \
+            base-devel mesa libx11 libxcursor libxrandr libxinerama libxi
+    else
+        warn "Unknown Linux package manager. Install gcc + OpenGL/X11 headers manually."
+    fi
+    ok "Linux build dependencies installed."
+}
+
+# ---- Auto-install: Go toolchain ----
+ensure_go() {
+    if command -v go >/dev/null 2>&1; then
+        return 0
+    fi
+    step "Installing Go toolchain automatically"
+    case "$OS_KIND" in
+        macos)
+            ensure_homebrew
+            brew install go
+            ;;
+        linux)
+            if command -v apt-get >/dev/null 2>&1; then
+                maybe_sudo apt-get update -y
+                maybe_sudo apt-get install -y golang-go
+            elif command -v dnf >/dev/null 2>&1; then
+                maybe_sudo dnf install -y golang
+            elif command -v pacman >/dev/null 2>&1; then
+                maybe_sudo pacman -Sy --noconfirm go
+            else
+                fail "Could not auto-install Go: unknown package manager."
+                fail "Install Go 1.22+ manually from https://go.dev/dl/ and re-run."
+                exit 1
+            fi
+            ;;
+        *)
+            fail "Unsupported OS for auto-install. Install Go 1.22+ from https://go.dev/dl/."
+            exit 1
+            ;;
+    esac
+    if ! command -v go >/dev/null 2>&1; then
+        fail "Go install reported success but 'go' is still not on PATH."
+        fail "Open a new terminal and re-run ./run.sh -d"
+        exit 1
+    fi
+    ok "Go installed: $(go version)"
+}
+
 show_usage() {
     cat <<EOF
 
