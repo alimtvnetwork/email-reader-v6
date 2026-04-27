@@ -356,77 +356,39 @@ green.
 - edited `internal/ui/app.go` (errLogPath var + openLogFileWithFyne
   + NavErrorLog wiring + net/url + errtrace imports)
 
-## Phase 4.3 — `email-read errors tail` CLI subcommand (2026-04-27)
+## Phase 5.1 — Spec page shipped (2026-04-27)
 
-Shipped a CLI counterpart to the in-app Error Log view so users can
-forward the persisted log without launching the desktop UI.
+Created `spec/03-error-manage/04-app-error-log-view/00-overview.md`
+formalizing the desktop Error Log surface so future regressions have
+a documented baseline to lint against.
 
-### Surface
-- New command group `errors` (reserved for future siblings) with one
-  subcommand: `errors tail [-f|--follow] [-n|--lines N]`.
-- Reads `<dataDir>/error-log.jsonl` via `errlog.LoadFromFile` (same
-  parser as the UI; corrupt lines skipped, 1 MiB max line).
-- Prints each entry as `[seq] RFC3339  component  summary` followed
-  by 4-space-indented `errtrace.Format` trace lines + a blank line
-  separator. Trace block elided when identical to summary.
-- `--lines N` trims to the newest N before printing.
-- `--follow` polls every 1 s; emits any entry whose `Seq > lastSeq`,
-  so rotations stream correctly (Seq is monotonic across rotations).
-  Cancels cleanly on Ctrl-C / SIGTERM via `signal.NotifyContext`.
+### Contents
+- **System Boundary** ASCII diagram: errtrace.Wrap call sites →
+  errlog.Store → {Subscribe → badge/toast, persister → JSONL → CLI tail}.
+- **Components & Source Map** table: 8 layers, each pinned to its
+  source file (errtrace, errlog Store, persistence, boot wiring,
+  view, sidebar badge, toast notifier, CLI tail).
+- **Data Model**: Entry struct + JSONL-on-disk format + rotation policy.
+- **12 Acceptance Criteria** (AC-ELV-01 … AC-ELV-12) covering:
+  - capture with stack trace + nil-error / empty-component edges,
+  - bounded ring + monotonic Seq,
+  - non-blocking subscriber fan-out,
+  - badge label format with 99+ collapse,
+  - first-error toast with quiet-period re-arm + 140-char body cap,
+  - persistence round-trip across restart with Seq monotonicity,
+  - rotation at 5 MiB with at-most-2-files invariant,
+  - graceful degradation when boot persistence fails,
+  - "Open log file" routing (4 status branches),
+  - Copy/Clear footer (Clear is view-only, JSONL preserved),
+  - `errors tail` CLI output contract incl. -n, -f, missing-file,
+  - errtrace lints stay at 0 violations under LINT_MODE=fail.
+- **Cross-references** to peer Error Modal spec (web surface) +
+  README §9 + memory files + runtime sources.
 
-### Test seam
-`runErrorsTail` resolves the log path through a package-level
-`errLogPathResolver` var (default = `config.DataDir() +
-"error-log.jsonl"`). Tests override it to point at a tempdir
-fixture, avoiding a `chdir` dance and keeping `config` untouched.
-
-### Tests (6 new in `internal/cli/errors_tail_test.go`)
-- `TestWriteEntry_HeaderAndIndentedTrace`: header format + 4-space
-  indent + trailing blank.
-- `TestWriteEntry_SkipsTraceWhenSameAsSummary`: dedup of one-liner
-  errors.
-- `TestWriteEntry_FallbackComponent`: empty Component → `-`.
-- `TestRunErrorsTail_EmptyFile`: missing file → friendly empty-state
-  naming the resolved path.
-- `TestRunErrorsTail_PrintsOldestFirst`: file order preserved.
-- `TestRunErrorsTail_LinesFlagTrims`: `--lines 1` keeps only newest.
-- `TestRunErrorsTail_FollowPicksUpNewEntries`: appended Seq=2 after
-  follow start surfaces on stdout, then ctx-cancel exits cleanly.
-
-### Verification
-- `go vet -tags nofyne ./...` clean.
-- `go test -tags nofyne ./internal/cli/...` green (suite ~1.5 s).
-- All three errtrace lints still **0 violations** at `LINT_MODE=fail`.
+### Registry update
+- Appended row 04 to the parent `spec/03-error-manage/00-overview.md`
+  Categories table so the spec is discoverable from the index.
 
 ### Files changed
-- created `internal/cli/errors_tail.go`
-- created `internal/cli/errors_tail_test.go`
-- edited `internal/cli/cli.go` (registered `newErrorsCmd()` on root)
-
-## Phase 4.4 — README "Reporting a bug" section (2026-04-27)
-
-Phase 4 closes with user-facing documentation that ties together every
-prior slice: errtrace stack traces (Phase 2), the in-app Error Log
-view + sidebar badge + first-error toast (Phase 3), on-disk
-`error-log.jsonl` with rotation (4.1), the "Open log file" button
-(4.2), and the `email-read errors tail [-f] [-n N]` command (4.3).
-
-### README changes
-- Added `email-read errors tail` row to the §4 Command Reference
-  table with a forward reference to §9.
-- Appended new **§9 Reporting a bug** section after Troubleshooting:
-  - "What gets captured": stack trace at wrap site, component +
-    summary + timestamp, ring buffer + disk persistence with
-    rotation policy.
-  - "Three ways to grab the log": (1) UI → Open log file button,
-    (2) `errors tail` one-shot with example output, (3) `errors
-    tail -f` for live reproduction.
-  - "What to include in a bug report": version, repro steps, log
-    entries from `data\error-log.jsonl`, redacted config.
-
-### Files changed
-- edited `README.md` (added `errors tail` to command table; added §9)
-
-**Phase 4 complete.** Disk persistence, "Open log file" button, CLI
-tail subcommand, and user-facing docs all shipped. Remaining work is
-spec/memory polish (Phase 5).
+- created `spec/03-error-manage/04-app-error-log-view/00-overview.md`
+- edited `spec/03-error-manage/00-overview.md` (added category row 04)

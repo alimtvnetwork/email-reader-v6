@@ -56,7 +56,7 @@ and automatically opens matching URLs in Chrome incognito based on regex rules.`
 
 	root.AddCommand(newAddCmd(), newAddQuickCmd(), newListCmd(), newRemoveCmd(),
 		newWatchCmd(), newDiagnoseCmd(), newDoctorCmd(), newRulesCmd(), newExportCsvCmd(),
-		newReadCmd(), newErrorsCmd())
+		newReadCmd())
 	return root
 }
 
