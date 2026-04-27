@@ -54,3 +54,18 @@ message.
   `views/error_log.go` (passive log surface, default focus order).
 - `go vet -tags nofyne ./...` clean. `go test -tags nofyne
   ./internal/ui/...` all green.
+
+## Phase 3.4 — Sidebar unread badge shipped (2026-04-27)
+
+- New fyne-free `internal/ui/sidebar_badge.go::formatNavRowLabel`
+  renders "Title  (N)" with a 99+ collapse rule. Pure function;
+  unit-tested in `sidebar_badge_test.go` (no build tag, headless).
+- `SidebarOptions` gains `BadgeFor(NavKind) int64` and
+  `BadgeSubscribe() <-chan errlog.Entry`. Defaults wire NavErrorLog
+  to `errlog.Unread()` and the singleton Subscribe channel.
+- `NewSidebar` uses the badge in the list binder and starts a
+  goroutine that refreshes the list on every Subscribe tick. The
+  OnSelected handler also calls `list.Refresh()` after opening
+  NavErrorLog because `errlog.MarkRead` (called synchronously
+  inside `BuildErrorLog`) does not fan out on Subscribe.
+- All `internal/ui/...` tests green under `-tags nofyne`.
