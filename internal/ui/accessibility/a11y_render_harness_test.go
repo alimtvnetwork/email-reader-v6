@@ -204,6 +204,12 @@ func Test_FocusOrder_Declared(t *testing.T) {
 // above and `Test_NoIconOnlyButtons_WithoutLabel` (which also passes
 // on a clean tree but catches the next regression).
 
+// Test_KeyboardShortcuts_Sidebar satisfies AC-DS-66 (Cmd/Ctrl+1..7
+// map to the seven sidebar routes) from
+// spec/24-app-design-system-and-ui/97-acceptance-criteria.md §E.
+// PASSes on the empty baseline; flips to FAIL the moment the first
+// `desktop.CustomShortcut` is registered with a non-{1..7} digit
+// or with the wrong modifier.
 func Test_KeyboardShortcuts_Sidebar(t *testing.T) {
 	expected := map[string]struct{}{"1": {}, "2": {}, "3": {}, "4": {}, "5": {}, "6": {}, "7": {}}
 	found := map[string]struct{}{}
