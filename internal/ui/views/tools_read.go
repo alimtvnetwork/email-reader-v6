@@ -24,6 +24,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/lovable/email-read/internal/core"
+	"github.com/lovable/email-read/internal/ui/errlog"
 )
 
 // BuildReadTab returns the Read sub-tool body: alias + limit inputs,
@@ -75,7 +76,8 @@ func runReadIntoUI(factory ToolsFactory, alias, limitStr string, output *widget.
 	status.SetText("Connecting…")
 	tools, err := buildToolsFromFactory(factory)
 	if err != nil {
-		status.SetText("⚠ setup: " + err.Error())
+		errlog.ReportError("tools.read.setup", err)
+		status.SetText("⚠ setup: " + err.Error() + " — see Diagnostics → Error Log")
 		return
 	}
 	limit := parseLimit(limitStr)

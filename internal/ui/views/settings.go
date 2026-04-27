@@ -23,6 +23,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/lovable/email-read/internal/core"
+	"github.com/lovable/email-read/internal/ui/errlog"
 	"github.com/lovable/email-read/internal/ui/theme"
 )
 
@@ -53,10 +54,12 @@ func BuildSettings(opts SettingsOptions) fyne.CanvasObject {
 }
 
 // settingsFatal renders a single error pane when Settings cannot construct
-// or load. Keeps the shell navigable.
+// or load. Keeps the shell navigable. The trace is routed through errlog
+// so the Diagnostics → Error Log view shows the file:line chain.
 func settingsFatal(err error) fyne.CanvasObject {
+	errlog.ReportError("settings", err)
 	heading := widget.NewLabelWithStyle("Settings", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-	body := widget.NewLabel("⚠ Settings unavailable: " + err.Error())
+	body := widget.NewLabel("⚠ Settings unavailable: " + err.Error() + " — see Diagnostics → Error Log")
 	body.Wrapping = fyne.TextWrapWord
 	return container.NewVBox(heading, widget.NewSeparator(), body)
 }
@@ -159,12 +162,14 @@ func newSettingsActions(svc *core.Settings, w *settingsWidgets, status *widget.L
 	saveBtn := widget.NewButton("Save", func() {
 		in, err := readSettingsInput(w)
 		if err != nil {
-			status.SetText("⚠ " + err.Error())
+			errlog.ReportError("settings.validate", err)
+			status.SetText("⚠ " + err.Error() + " — see Diagnostics → Error Log")
 			return
 		}
 		res := svc.Save(context.Background(), in)
 		if res.HasError() {
-			status.SetText("⚠ Save failed: " + res.Error().Error())
+			errlog.ReportError("settings.save", res.Error())
+			status.SetText("⚠ Save failed: " + res.Error().Error() + " — see Diagnostics → Error Log")
 			return
 		}
 		status.SetText("Saved at " + time.Now().Format("15:04:05") + ".")
