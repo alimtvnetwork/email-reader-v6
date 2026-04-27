@@ -19,6 +19,7 @@ import (
 
 	"github.com/lovable/email-read/internal/config"
 	"github.com/lovable/email-read/internal/core"
+	"github.com/lovable/email-read/internal/errtrace"
 )
 
 // countEnabledRules is a thin wrapper kept so existing call sites in
@@ -88,7 +89,7 @@ Examples:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			svc, err := rulesService()
 			if err != nil {
-				return err
+				return errtrace.Wrap(err, "rules.add: rulesService")
 			}
 			r := svc.Add(core.RuleInput{
 				Name:         name,
@@ -120,7 +121,7 @@ Examples:
 func runRulesList() error {
 	svc, err := rulesService()
 	if err != nil {
-		return err
+		return errtrace.Wrap(err, "rules.list: rulesService")
 	}
 	res := svc.List()
 	if res.HasError() {
@@ -144,7 +145,7 @@ func runRulesList() error {
 func runRulesToggle(name string, enabled bool) error {
 	svc, err := rulesService()
 	if err != nil {
-		return err
+		return errtrace.Wrap(err, "rules.toggle: rulesService")
 	}
 	if r := svc.SetEnabled(name, enabled); r.HasError() {
 		return r.PropagateError()

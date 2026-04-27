@@ -301,7 +301,7 @@ func runWatch(parent context.Context, alias string, verbose bool) error {
 	}
 	acct, err := resolveWatchAccount(cfg, alias)
 	if err != nil {
-		return err
+		return errtrace.Wrap(err, "runWatch: resolveWatchAccount")
 	}
 
 	st, err := store.Open()
@@ -533,11 +533,11 @@ func runAdd() error {
 	}
 	email, alias, password, defs, err := promptAddIdentity(*cfg)
 	if err != nil {
-		return err
+		return errtrace.Wrap(err, "runAdd: promptAddIdentity")
 	}
 	host, port, useTLS, mailbox, err := promptAddServer(defs)
 	if err != nil {
-		return err
+		return errtrace.Wrap(err, "runAdd: promptAddServer")
 	}
 	r := core.AddAccount(core.AccountInput{
 		Alias: alias, Email: email, PlainPassword: password,
