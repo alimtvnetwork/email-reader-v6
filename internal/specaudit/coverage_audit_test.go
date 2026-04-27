@@ -395,8 +395,12 @@ var staleCodeRefAllowlist = map[string]struct{}{}
 // `failed: ` prefix grep can filter cleanly.
 func Test_AC_CoverageAudit(t *testing.T) {
 	root := repoRoot(t)
-	specRoot := filepath.Join(root, "spec", "21-app")
-
+	// Slice #121: scan the entire `spec/` tree, not just `spec/21-app/`.
+	// The AC matrix lives in five sibling roots (02-coding-guidelines,
+	// 07-design-system, 21-app, 23-app-database, 24-app-design-system-
+	// and-ui); the slice-#119 narrow scope hid 89 rows and falsely
+	// classified 6 real refs as "stale".
+	specRoot := filepath.Join(root, "spec")
 	specIDs := scanIDs(t, specRoot, func(path string, info os.FileInfo) bool {
 		return strings.HasSuffix(path, ".md")
 	})
