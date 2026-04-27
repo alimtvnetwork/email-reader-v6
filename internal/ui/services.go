@@ -28,11 +28,28 @@ import (
 	"context"
 	"log"
 
+	"github.com/lovable/email-read/internal/browser"
 	"github.com/lovable/email-read/internal/config"
 	"github.com/lovable/email-read/internal/core"
 	"github.com/lovable/email-read/internal/errtrace"
 	"github.com/lovable/email-read/internal/store"
 )
+
+// ToolsFactory builds a fresh `*core.Tools` per invocation so that
+// live config edits (browser path, dedup window, allow-localhost)
+// take effect without a process restart. Returned `*core.Tools`
+// instances are independent — each owns its own dedup map — but
+// share the same persistent store via the slim `openedUrlRecorder`
+// the caller wires (UI sub-tools pass `noopOpenedUrlStore{}` because
+// manual launches use EmailId=0 and never touch the OpenedUrls FK).
+//
+// Slice #116c (Phase 6.3) wire-up: the Tools sub-tab views consume
+// this factory through `views.ToolsOptions.ToolsFactory` instead of
+// reaching for `config.Load()` directly. That moves the last two
+// `config.Load()` call sites in `internal/ui/views/tools_*.go` off
+// the AST-guard allowlist and routes Tools construction through the
+// `*Services` bundle like every other typed service.
+type ToolsFactory = func() (*core.Tools, error)
 
 // Services is the typed dependency bundle threaded through `viewFor`.
 // All fields are nil-safe at the view layer (each view has a
