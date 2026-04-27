@@ -256,13 +256,17 @@ else
 fi
 
 # ===================================================================
-# Step B: Verify Go toolchain (shared)
+# Step B: Auto-install OS prerequisites + Go toolchain
 # ===================================================================
-step "Checking Go toolchain"
-if ! command -v go >/dev/null 2>&1; then
-    fail "Go is not installed or not on PATH. Install Go 1.22+ from https://go.dev/dl/"
-    exit 1
+step "Preparing system prerequisites (auto-install if needed)"
+if [[ "$OS_KIND" == "macos" ]]; then
+    ensure_xcode_clt
+elif [[ "$OS_KIND" == "linux" && "$BUILD_UI" == "true" ]]; then
+    ensure_linux_build_deps
 fi
+
+step "Checking Go toolchain"
+ensure_go
 ok "Found $(go version)"
 
 # ===================================================================
