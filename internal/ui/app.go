@@ -271,6 +271,14 @@ func BuildShell(aliases []string) fyne.CanvasObject {
 	rebuildDetail = func() {
 		k := state.Nav()
 		if cached, ok := viewCache[k]; ok {
+			// Skip the swap if the cached view is already mounted —
+			// reassigning detail.Objects to the same slice still
+			// triggers a Refresh() repaint that the user perceives
+			// as a flicker. This guard makes nav clicks a no-op when
+			// you click the section you're already on.
+			if len(detail.Objects) == 1 && detail.Objects[0] == cached {
+				return
+			}
 			detail.Objects = []fyne.CanvasObject{cached}
 			detail.Refresh()
 			return
