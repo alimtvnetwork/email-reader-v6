@@ -117,12 +117,74 @@ if ($SkipPull) {
 }
 
 # =====================================================================
-# Step B: Verify Go toolchain (shared)
+# Step B: Auto-install Go toolchain + C build deps (Windows)
 # =====================================================================
+function Install-WithWinget($id, $name) {
+    $winget = Get-Command winget -ErrorAction SilentlyContinue
+    if (-not $winget) { return $false }
+    Write-Step "Installing $name via winget"
+    winget install --id $id --silent --accept-source-agreements --accept-package-agreements
+    return ($LASTEXITCODE -eq 0)
+}
+
+function Install-WithChoco($pkg, $name) {
+    $choco = Get-Command choco -ErrorAction SilentlyContinue
+    if (-not $choco) { return $false }
+    Write-Step "Installing $name via Chocolatey"
+    choco install $pkg -y --no-progress
+    return ($LASTEXITCODE -eq 0)
+}
+
+function Refresh-Path {
+    $machine = [Environment]::GetEnvironmentVariable('Path', 'Machine')
+    $user    = [Environment]::GetEnvironmentVariable('Path', 'User')
+    $env:Path = ($machine, $user -join ';')
+}
+
+function Ensure-Go {
+    if (Get-Command go -ErrorAction SilentlyContinue) { return }
+    Write-Step "Go not found - installing automatically"
+    if (-not $IsWindowsHost) {
+        throw "Auto-install on non-Windows hosts: please run ./run.sh -d instead."
+    }
+    $ok = Install-WithWinget 'GoLang.Go' 'Go'
+    if (-not $ok) { $ok = Install-WithChoco 'golang' 'Go' }
+    if (-not $ok) {
+        throw "Could not auto-install Go. Install winget or Chocolatey, or grab Go from https://go.dev/dl/."
+    }
+    Refresh-Path
+    if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
+        throw "Go installed but not on PATH yet. Open a NEW PowerShell window and re-run .\run.ps1 -d"
+    }
+    Write-Ok ("Installed: {0}" -f (& go version))
+}
+
+function Ensure-WindowsCC {
+    if (-not $IsWindowsHost) { return }
+    if ($NoUI) { return }
+    if (Get-Command gcc -ErrorAction SilentlyContinue) {
+        Write-Ok "gcc already available."
+        return
+    }
+    Write-Step "C compiler (gcc) not found - installing MinGW for cgo/UI build"
+    $ok = Install-WithWinget 'BrechtSanders.WinLibs.POSIX.UCRT' 'MinGW (WinLibs)'
+    if (-not $ok) { $ok = Install-WithChoco 'mingw' 'MinGW' }
+    if (-not $ok) {
+        Write-WarnLine "Could not auto-install MinGW. Install TDM-GCC or MSYS2 manually,"
+        Write-WarnLine "or re-run with -NoUI to skip the desktop UI."
+        return
+    }
+    Refresh-Path
+}
+
+Write-Step "Preparing system prerequisites (auto-install if needed)"
+Ensure-Go
+Ensure-WindowsCC
+
 Write-Step "Checking Go toolchain"
 $go = Get-Command go -ErrorAction SilentlyContinue
 if (-not $go) {
-    throw "Go is not installed or not on PATH. Install Go 1.22+ from https://go.dev/dl/ and re-run."
+    throw "Go still not on PATH after install attempt. Open a new terminal and re-run."
 }
 Write-Ok ("Found {0}" -f (& go version))
 
