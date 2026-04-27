@@ -20,11 +20,14 @@ import (
 
 // BuildRecentOpensTab returns the Recent-opens body: alias entry +
 // origin dropdown + limit entry + Refresh button + scrolling result.
-func BuildRecentOpensTab() fyne.CanvasObject {
+//
+// `factory` is the injected per-call `*core.Tools` builder; see
+// `BuildOpenUrlTab` for the contract.
+func BuildRecentOpensTab(factory ToolsFactory) fyne.CanvasObject {
 	in := newRecentOpensInputs()
 	output, status := newRecentOpensOutput()
 	refreshBtn := widget.NewButton("Refresh", func() {
-		runRecentOpensIntoUI(RecentOpensFilter{
+		runRecentOpensIntoUI(factory, RecentOpensFilter{
 			Alias:    in.alias.Text,
 			Origin:   in.origin.Selected,
 			LimitStr: in.limit.Text,
