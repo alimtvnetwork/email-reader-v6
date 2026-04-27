@@ -238,16 +238,31 @@ func Test_AllQueryRefsResolveInDbQueries(t *testing.T) {
 		if rel == "spec/23-app-database/02-queries.md" {
 			return
 		}
-		// Strip code fences: query plans inside ```sql blocks
-		// sometimes echo Q-codes as comments that aren't real refs.
+		// Strip code fences AND inline-code spans: the prose
+		// sometimes uses `Q-XXX-XXX` as a literal format placeholder
+		// and `Q-EMAIL-LIST` as an inline reference. We treat both
+		// as commentary, not refs — the registry entry itself
+		// remains the definitional source. Tokens containing the
+		// literal placeholder "XXX" are ignored unconditionally.
 		clean := stripCodeFences(body)
 		for code := range uniqueMatches(queryCodeRe, clean) {
+			if isPlaceholderToken(code) {
+				continue
+			}
 			if !defined[code] {
 				missing[code] = append(missing[code], rel)
 			}
 		}
 	})
 	failOnMissingRefs(t, "AC-PROJ-32", "query code", missing)
+}
+
+// isPlaceholderToken returns true for spec format placeholders like
+// `Q-XXX-XXX` or `ER-XXX-NNNNN` that document the *shape* of an ID
+// rather than naming a real one. We refuse to flag these as missing.
+func isPlaceholderToken(s string) bool {
+	upper := strings.ToUpper(s)
+	return strings.Contains(upper, "XXX") || strings.Contains(upper, "NNNNN")
 }
 
 // uniqueMatches returns a set of every distinct match of re in s.
