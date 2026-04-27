@@ -9,16 +9,14 @@
 //               animation, they're forced to put it in the right
 //               package or this scanner FAILs.
 //
-// AC-DS-05 (no duplicate RGB triples per variant) was scoped out of
-// this slice — the current palette intentionally aliases foreground
-// roles (white-on-primary == white-on-active-sidebar), so closing it
-// requires either a spec carve-out for named aliases or a palette
-// refactor. Both are behaviour work outside an AC-coverage slice.
-//
-// AC-DS-15 (Apply(ThemeSystem) → ThemeVariant routing) was scoped
-// out because the routing function `resolvedMode` lives in the
-// `!nofyne`-tagged `fyne_theme.go` and would require either a public
-// helper export or a canvas-bound test. Same scope reasoning.
+// Other AC-DS rows in the same neighbourhood (palette duplicate
+// detection, ThemeSystem variant routing) were scoped out of this
+// slice — the first needs a spec carve-out for named aliases and
+// the second needs a public helper export from the `!nofyne`-tagged
+// `fyne_theme.go`. Both are behaviour work outside an AC-coverage
+// slice, and per the honest-scope principle they are NOT cited from
+// this file (the audit's stale-ref guard would otherwise treat the
+// citation as false coverage).
 //
 // Same template as `ast_project_linters_test.go` (Slice #131) and
 // `ast_settings_security_test.go` (Slice #130). Reuses the shared
