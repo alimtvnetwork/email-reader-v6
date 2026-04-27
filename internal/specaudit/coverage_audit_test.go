@@ -150,26 +150,138 @@ func scanIDs(t *testing.T, root string, accept func(path string, info os.FileInf
 }
 
 // -----------------------------------------------------------------------------
-// Allowlists — slice-#119 baseline.
+// Allowlists — slice-#121 baseline (post-reconciliation).
 // -----------------------------------------------------------------------------
+//
+// Slice #119 first introduced these allowlists scoped to `spec/21-app/`
+// only. That narrow scope hid the fact that the AC matrix lives in
+// FOUR sibling roots:
+//
+//	spec/02-coding-guidelines/97-acceptance-criteria.md
+//	spec/07-design-system/97-acceptance-criteria.md
+//	spec/21-app/.../97-acceptance-criteria.md
+//	spec/23-app-database/97-acceptance-criteria.md
+//	spec/24-app-design-system-and-ui/97-acceptance-criteria.md
+//
+// Slice #121 broadens the spec scan to the entire `spec/` tree and
+// rebases the baselines. Net effect:
+//
+//	spec rows seen     :  97 → 186  (+89)
+//	stale code refs    :   7 →   1  (6 of the 7 resolved by the
+//	                                 broader scan, only AC-DB-D-04
+//	                                 remained genuinely stale and was
+//	                                 removed from queries.go)
+//	gap allowlist size :  77 → 160  (the AC-DB / AC-DBP / AC-DS
+//	                                 families surfaced by the broader
+//	                                 scan are mostly already-covered-
+//	                                 by-spirit but not yet ID-cited
+//	                                 in tests).
+//
+// The audit's contract is unchanged: both allowlists must shrink
+// monotonically. Slice #121 lowered the stale list from 7 → 0 by
+// completing the spec/code reconciliation; the gap list is the
+// long-tail "AC coverage rollout" backlog tracked in the roadmap.
 
 // coverageGapAllowlist names every spec AC ID that has zero code
-// references at slice-#119 time. **MUST shrink monotonically.**
+// references at slice-#121 time. **MUST shrink monotonically.**
 //
-// Generated 2026-04-27 via:
+// Regenerate with:
 //
-//	cd repo && rg --no-config -oIN 'AC-(DB|DBP|DS|PROJ|SB|SF|SP|SX)-[A-Z0-9]+(-[A-Z0-9]+)?' \
-//	  spec/21-app/ | sort -u | grep -vE -- '-(NN|XX)$' > /tmp/spec.txt
-//	rg --no-config -oIN '...' . --glob '*.go' --glob '!**/spec/**' | sort -u > /tmp/code.txt
+//	cd repo
+//	rg --no-config -oIN 'AC-(DB|DBP|DS|PROJ|SB|SF|SP|SX)-[A-Z0-9]+(-[A-Z0-9]+)?' \
+//	  spec/ | sort -u | grep -vE -- '-(NN|XX)$' > /tmp/spec.txt
+//	rg --no-config -oIN '...same regex...' --glob '*.go' \
+//	  --glob '!**/coverage_audit_test.go' . | sort -u > /tmp/code.txt
 //	comm -23 /tmp/spec.txt /tmp/code.txt
 //
-// Distribution: AC-PROJ (27), AC-SF (21), AC-SB (16), AC-SX (6),
-// AC-SP (5), AC-DB (2). The AC-DB cluster is small because Slice
-// #116d's T-SET matrix and the DB hardening slices already cover
-// most rows.
+// Distribution at slice-#121: AC-DS (45), AC-DB (34), AC-PROJ (27),
+// AC-SF (21), AC-SB (16), AC-SX (6), AC-DBP (6), AC-SP (5).
 var coverageGapAllowlist = map[string]struct{}{
+	"AC-DB-01":   {},
+	"AC-DB-02":   {},
+	"AC-DB-03":   {},
+	"AC-DB-04":   {},
+	"AC-DB-05":   {},
+	"AC-DB-06":   {},
+	"AC-DB-07":   {},
+	"AC-DB-08":   {},
+	"AC-DB-09":   {},
+	"AC-DB-10":   {},
+	"AC-DB-11":   {},
+	"AC-DB-20":   {},
+	"AC-DB-21":   {},
+	"AC-DB-22":   {},
+	"AC-DB-23":   {},
+	"AC-DB-24":   {},
+	"AC-DB-25":   {},
+	"AC-DB-26":   {},
+	"AC-DB-27":   {},
+	"AC-DB-28":   {},
 	"AC-DB-30":   {},
+	"AC-DB-31":   {},
+	"AC-DB-32":   {},
+	"AC-DB-33":   {},
+	"AC-DB-34":   {},
+	"AC-DB-35":   {},
+	"AC-DB-36":   {},
 	"AC-DB-37":   {},
+	"AC-DB-40":   {},
+	"AC-DB-41":   {},
+	"AC-DB-42":   {},
+	"AC-DB-44":   {},
+	"AC-DB-45":   {},
+	"AC-DB-46":   {},
+	"AC-DBP-01":  {},
+	"AC-DBP-02":  {},
+	"AC-DBP-03":  {},
+	"AC-DBP-04":  {},
+	"AC-DBP-05":  {},
+	"AC-DBP-06":  {},
+	"AC-DS-01":   {},
+	"AC-DS-02":   {},
+	"AC-DS-03":   {},
+	"AC-DS-05":   {},
+	"AC-DS-10":   {},
+	"AC-DS-11":   {},
+	"AC-DS-12":   {},
+	"AC-DS-13":   {},
+	"AC-DS-14":   {},
+	"AC-DS-15":   {},
+	"AC-DS-16":   {},
+	"AC-DS-17":   {},
+	"AC-DS-18":   {},
+	"AC-DS-19":   {},
+	"AC-DS-20":   {},
+	"AC-DS-30":   {},
+	"AC-DS-31":   {},
+	"AC-DS-32":   {},
+	"AC-DS-33":   {},
+	"AC-DS-34":   {},
+	"AC-DS-35":   {},
+	"AC-DS-36":   {},
+	"AC-DS-37":   {},
+	"AC-DS-40":   {},
+	"AC-DS-41":   {},
+	"AC-DS-42":   {},
+	"AC-DS-43":   {},
+	"AC-DS-44":   {},
+	"AC-DS-45":   {},
+	"AC-DS-46":   {},
+	"AC-DS-47":   {},
+	"AC-DS-48":   {},
+	"AC-DS-49":   {},
+	"AC-DS-50":   {},
+	"AC-DS-51":   {},
+	"AC-DS-60":   {},
+	"AC-DS-61":   {},
+	"AC-DS-62":   {},
+	"AC-DS-63":   {},
+	"AC-DS-64":   {},
+	"AC-DS-65":   {},
+	"AC-DS-66":   {},
+	"AC-DS-67":   {},
+	"AC-DS-68":   {},
+	"AC-DS-69":   {},
 	"AC-PROJ-01": {},
 	"AC-PROJ-02": {},
 	"AC-PROJ-03": {},
@@ -248,27 +360,23 @@ var coverageGapAllowlist = map[string]struct{}{
 }
 
 // staleCodeRefAllowlist names every code-side AC ID that does NOT
-// resolve to a real spec row at slice-#119 time. **MUST shrink
-// monotonically.** Each row is either (a) a renamed/removed spec ID
-// the code still cites, or (b) a code-internal ID that escaped the
-// `T-*` / `ER-*` namespaces and reached the AC-* prefix by mistake.
+// resolve to a real spec row. **MUST shrink monotonically.**
 //
-// Slice-#119 baseline distribution: 5 in `internal/store/` files
-// referencing AC-DB-43/47/53/54/55 (which the spec renamed during
-// Phase 6 reconciliation), plus AC-DB-D-04 (a parser-artifact ID
-// from spec/23-app-database) and AC-DS-04 (cited in store shims
-// before AC-DS was renamed to AC-DBP). Slice #121 (final
-// reconciliation) is the natural home for resolving these — it's
-// the spec/code reconciliation slice anyway.
-var staleCodeRefAllowlist = map[string]struct{}{
-	"AC-DB-43":   {},
-	"AC-DB-47":   {},
-	"AC-DB-53":   {},
-	"AC-DB-54":   {},
-	"AC-DB-55":   {},
-	"AC-DB-D-04": {},
-	"AC-DS-04":   {},
-}
+// Slice #121 reconciled the slice-#119 baseline of 7 stale rows
+// to zero:
+//
+//   - AC-DB-43 / 47 / 53 / 54 / 55 — appeared stale only because
+//     the slice-#119 audit scanned `spec/21-app/` instead of `spec/`.
+//     They are real rows in `spec/23-app-database/97-acceptance-criteria.md`.
+//   - AC-DS-04 — same root cause; lives in
+//     `spec/24-app-design-system-and-ui/97-acceptance-criteria.md`.
+//   - AC-DB-D-04 — genuinely stale (renaming artifact). The lone
+//     reference in `internal/store/queries/queries.go` was rephrased
+//     to cite the underlying spec rule directly.
+//
+// Empty allowlist is the win — every future stale ref must be
+// resolved before the slice merges.
+var staleCodeRefAllowlist = map[string]struct{}{}
 
 // -----------------------------------------------------------------------------
 // The audit.
