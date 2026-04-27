@@ -5,7 +5,6 @@ package views
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -125,6 +124,15 @@ func buildEmailsToolbar(opts EmailsOptions, onRefresh func()) fyne.CanvasObject 
 // non-data dependencies (OpenURL, MaxResults). Test overrides take
 // precedence over the service so existing test fixtures continue to
 // work unchanged.
+// applyEmailsDefaults fills test-override seams from the injected
+// service when present. The non-data dependencies (`OpenURL`,
+// `MaxResults`) get standard fallbacks too: `MaxResults` defaults
+// to 200, and `OpenURL` defaults to a typed-error stub when the
+// shell did not inject one (Slice #117 / Phase 6.5 removed the
+// inline `openExternal` → `launchInBrowser` → `config.Load()`
+// path; production callers now receive the launcher via
+// `services.OpenURL`). Test fixtures that need to assert link
+// behaviour can still pass their own `OpenURL` closure.
 func applyEmailsDefaults(opts EmailsOptions) EmailsOptions {
 	if opts.Service != nil {
 		if opts.List == nil {
@@ -135,12 +143,22 @@ func applyEmailsDefaults(opts EmailsOptions) EmailsOptions {
 		}
 	}
 	if opts.OpenURL == nil {
-		opts.OpenURL = openExternal
+		opts.OpenURL = openURLUnwired
 	}
 	if opts.MaxResults <= 0 {
 		opts.MaxResults = 200
 	}
 	return opts
+}
+
+// openURLUnwired is the documented degraded-path callback used when
+// neither the shell nor a test fixture injected an `OpenURL`
+// closure. Returns a typed error the link-click handler converts
+// into a status banner. Replaces the pre-Slice-#117
+// `openExternal` → `launchInBrowser` chain that called
+// `config.Load()` directly from the view layer.
+func openURLUnwired(string) error {
+	return fmt.Errorf("browser launcher not wired (no OpenURL injected)")
 }
 
 // loadEmailRows fetches the email summary list with a 5s timeout.
@@ -325,12 +343,4 @@ func renderDetail(d *core.EmailDetail, open func(string) error, status *widget.L
 		}
 	}
 	return objs
-}
-
-func openExternal(rawurl string) error {
-	u, err := url.Parse(rawurl)
-	if err != nil {
-		return err
-	}
-	return launchInBrowser(u.String())
 }

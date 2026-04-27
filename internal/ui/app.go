@@ -264,6 +264,7 @@ func viewFor(item NavItem, state *AppState, services *Services, gotoNav func(Nav
 		return views.BuildEmails(views.EmailsOptions{
 			Alias:   state.Alias(),
 			Service: services.Emails,
+			OpenURL: services.OpenURL, // Slice #117 (Phase 6.5): shell-injected browser launcher
 		})
 	case NavRules:
 		return views.BuildRules(views.RulesOptions{

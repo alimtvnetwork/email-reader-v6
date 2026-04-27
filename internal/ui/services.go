@@ -26,6 +26,7 @@ package ui
 
 import (
 	"context"
+	"errors"
 	"log"
 
 	"github.com/lovable/email-read/internal/browser"
@@ -34,6 +35,22 @@ import (
 	"github.com/lovable/email-read/internal/errtrace"
 	"github.com/lovable/email-read/internal/store"
 )
+
+// BrowserFactory builds a fresh `*browser.Launcher` per invocation
+// using the *current* `cfg.Browser` block. Re-evaluating per call
+// preserves the same live-config-edit semantics the pre-Slice-#117
+// `views/launch.go::launchInBrowser` had: editing the browser path
+// or incognito-arg list in Settings takes effect on the very next
+// link click without a process restart. Returns an error rather
+// than panicking so callers (typically the Emails view's link
+// buttons) can surface a status banner instead of crashing.
+//
+// Slice #117 (Phase 6.5) wire-up: this is the seam that lets the
+// shell inject browser-launching capability into `views/emails.go`,
+// removing the last `config.Load()` call site under
+// `internal/ui/views/` (`views/launch.go`) and clearing the final
+// entry on the AST guard's `viewLayerGlobalsAllowlist`.
+type BrowserFactory = func() (*browser.Launcher, error)
 
 // ToolsFactory builds a fresh `*core.Tools` per invocation so that
 // live config edits (browser path, dedup window, allow-localhost)
@@ -92,6 +109,17 @@ type Services struct {
 	// without restart). Stays nil when constructor wiring fails;
 	// view code falls back to the documented degraded-path message.
 	Tools ToolsFactory
+
+	// OpenURL is the shell-injected browser-launch callback consumed
+	// by `views/emails.go`'s link buttons. Slice #117 (Phase 6.5)
+	// hoist: replaces the inline `config.Load() + browser.New(...)`
+	// path that used to live in `views/launch.go::launchInBrowser`.
+	// Builds a fresh `*browser.Launcher` per call (via
+	// `BrowserFactory`) so live Settings edits land without restart.
+	// Stays nil only when `BuildServices` itself failed to install a
+	// factory — view code treats nil as "browser unavailable" and
+	// falls back to a status-line error rather than panicking.
+	OpenURL func(rawurl string) error
 }
 
 // BuildServices constructs all four typed services (Phase 2 +
@@ -149,8 +177,67 @@ func BuildServices() *Services {
 	// browser-path / dedup-window edits land without restart.
 	s.Tools = defaultToolsFactory()
 
+	// Slice #117 (Phase 6.5): default browser launcher factory +
+	// shell-injected OpenURL adapter. Centralises the
+	// `config.Load() + browser.New(cfg.Browser)` shape that used to
+	// live in `views/launch.go::launchInBrowser` (now deleted), so
+	// the Emails view receives URL-launch capability via the
+	// `*Services` bundle like every other typed dependency. Live
+	// Settings edits to the Browser block still take effect on the
+	// next click — the factory re-evaluates `config.Load()` per
+	// call exactly as the old inline path did.
+	browserFactory := defaultBrowserFactory()
+	s.OpenURL = openURLAdapter(browserFactory)
+
 	return s
 }
+
+// defaultBrowserFactory returns the production `BrowserFactory` used
+// by the shell's `OpenURL` adapter. Splits out so tests can swap a
+// fake factory by reassigning `services.OpenURL` directly without
+// touching the global `config.Load`.
+//
+// Mirrors `defaultToolsFactory`: load config, hand `cfg.Browser` to
+// `browser.New`, and return a fresh `*browser.Launcher` per call.
+// Each launcher is independent, so concurrent link clicks cannot
+// interfere with each other (the underlying `exec.Command` spawn is
+// already process-isolated).
+func defaultBrowserFactory() BrowserFactory {
+	return func() (*browser.Launcher, error) {
+		cfg, err := config.Load()
+		if err != nil {
+			return nil, err
+		}
+		return browser.New(cfg.Browser), nil
+	}
+}
+
+// openURLAdapter wraps a `BrowserFactory` into the simpler
+// `func(rawurl string) error` shape consumed by `views/emails.go`.
+// Two layers of nil-safety: a nil factory degrades to a typed error
+// the view can surface ("browser launcher unavailable"), and a
+// factory that returns a nil launcher without an error is treated
+// the same way so the view never dereferences nil.
+func openURLAdapter(factory BrowserFactory) func(rawurl string) error {
+	if factory == nil {
+		return func(string) error { return errBrowserUnavailable }
+	}
+	return func(rawurl string) error {
+		l, err := factory()
+		if err != nil {
+			return err
+		}
+		if l == nil {
+			return errBrowserUnavailable
+		}
+		return l.Open(rawurl)
+	}
+}
+
+// errBrowserUnavailable is the sentinel surfaced when the shell
+// failed to wire a browser factory. View code converts it to a
+// user-visible status banner without exposing the wiring detail.
+var errBrowserUnavailable = errors.New("browser launcher unavailable")
 
 // defaultToolsFactory returns the production `ToolsFactory` used by
 // the Tools tab sub-routes when running under the real shell. Splits
