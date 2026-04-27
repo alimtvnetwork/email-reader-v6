@@ -284,19 +284,21 @@ WHERE (:Alias = '' OR Alias = :Alias)
 
 ### 3.12 `Q-EXPORT-STREAM` — read (cursor)
 
-Streaming cursor for `ExportCsv`. Driver uses `*sql.Rows` directly; no buffering above the row level.
+Streaming cursor for `ExportCsv`. Driver uses `*sql.Rows` directly; no buffering above the row level. Production query is `queries.EmailExport`.
 
 ```sql
 SELECT Id, Alias, MessageId, Uid, FromAddr, ToAddr, CcAddr,
-       Subject, ReceivedAt, FilePath, HasAttachment, CreatedAt
+       Subject, BodyText, BodyHtml, ReceivedAt, FilePath, CreatedAt
 FROM Emails
 WHERE (:Alias = '' OR Alias = :Alias)
   AND (:Since IS NULL OR ReceivedAt >= :Since)
   AND (:Until IS NULL OR ReceivedAt <  :Until)
-ORDER BY ReceivedAt ASC, Id ASC;
+ORDER BY Id ASC;
 ```
 
 **No LIMIT.** The exporter MUST `defer rows.Close()` and MUST NOT buffer all rows — verified by AST scan in `97-acceptance-criteria.md`.
+
+**Why `ORDER BY Id ASC` (not `ReceivedAt`)** — `Emails.Id` is the rowid alias and gives a stable insertion-order traversal that the planner can serve straight off the table without a temp B-tree sort, even when `:Alias = ''`. `ReceivedAt` ordering would force a sort on the unfiltered case (no `(ReceivedAt)` index exists in production — see §1 drift notice and `internal/store/queries/no_phantom_index_test.go`). The export is consumed as a CSV stream where chronological-vs-insertion order is interchangeable for the user.
 
 ---
 
