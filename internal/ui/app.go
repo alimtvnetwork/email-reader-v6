@@ -271,8 +271,18 @@ func viewFor(item NavItem, state *AppState, services *Services, gotoNav func(Nav
 			OnRulesChanged: onAccountsChanged, // shared shell-rebuild trigger
 		})
 	case NavAccounts:
+		// Slice #112: feed per-row health badges. Reuses the same
+		// HealthSource the dashboard rollup uses (lazily attached on
+		// first NavDashboard render) so the two surfaces are
+		// guaranteed visually consistent. Lazy-attach here too so a
+		// user who opens NavAccounts before NavDashboard still gets
+		// badges instead of "— Unknown".
+		if rt := WatchRuntimeOrNil(); rt != nil && rt.Store != nil {
+			services.AttachHealthSource(rt.Store)
+		}
 		return views.BuildAccounts(views.AccountsOptions{
 			OnAccountsChanged: onAccountsChanged,
+			LoadHealth:        accountsHealthLoader(services),
 		})
 	case NavWatch:
 		rt := WatchRuntimeOrNil()
