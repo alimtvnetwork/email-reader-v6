@@ -17,6 +17,8 @@
 // factory always returns a usable Tools instance". Sub-tabs already
 // surface a degraded-path status when the factory errors.
 
+//go:build !nofyne
+
 package ui
 
 import "testing"
