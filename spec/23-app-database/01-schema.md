@@ -193,6 +193,9 @@ CREATE UNIQUE INDEX UX_OpenedUrls_Dedup
 
 ## 5. Table `WatchEvents`
 
+> **🔒 Naming lock (Phase 2.1, LOCKED 2026-04-26 — see `mem://design/schema-naming-convention`).**
+> Table name is **`WatchEvents`** (plural — entity collection). Go struct/event type is **`WatchEvent`** (singular — one row). **Do NOT rename** — both the migration `internal/store/migrate/m0008_add_watch_events.go`, the in-memory event type `core.WatchEvent`, and the bus `eventbus.Bus[WatchEvent]` depend on this exact pair. Any future rename attempt must (a) add a new numbered migration, (b) update the Go event type in lockstep, (c) bump this spec version. AI contributors: prefer additive evolution (new column, new index) over rename.
+
 Durable audit log of watcher events — one row per event. Mirrors the in-memory `core.WatchEvent` stream (which lives only on `eventbus.Bus[WatchEvent]` and is lost on restart) so the Watch view can render an activity feed across restarts and per-alias forensics ("why did poll #847 error?") become possible.
 
 > **Drift notice (Slice #166).** The DDL block below is the **canonical** shape — it matches `internal/store/migrate/m0008_add_watch_events.go` exactly (column names, types, defaults, index name `IxWatchEventsAliasOccurredAt`). No additive migrations have touched this table since m0008. Future evolution (e.g. a TEXT shadow `KindLabel` for non-Go readers) requires a new numbered migration.
