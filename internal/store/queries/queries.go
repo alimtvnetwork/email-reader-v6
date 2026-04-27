@@ -146,7 +146,9 @@ func EmailsList(in EmailsListInput) (string, []any) {
 }
 
 // emailExportColumns is the explicit PascalCase column list shared by
-// EmailExport and EmailExportCount. No `SELECT *` (AC-DB-D-04 spirit).
+// EmailExport and EmailExportCount. Explicit columns (no `SELECT *`)
+// per spec/23-app-database/04 §3 — keeps the projection stable when
+// the schema gains new columns.
 const emailExportColumns = `Id, Alias, MessageId, Uid, FromAddr, ToAddr, CcAddr,
                               Subject, BodyText, BodyHtml, ReceivedAt, FilePath, CreatedAt`
 
