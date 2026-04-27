@@ -330,7 +330,8 @@ var coverageGapAllowlist = map[string]struct{}{
 	//
 	// Remaining gaps (01-11, 14-15) are end-to-end integration scenarios
 	// requiring a multi-process harness, deferred to a future slice.
-	// AC-PROJ-36 is a placeholder ID, not a real row.
+	// AC-PROJ-36 is now filtered at scan time as a documented
+	// placeholder ID (see namedPlaceholderIDs above) — Slice #146.
 	"AC-PROJ-01": {},
 	"AC-PROJ-02": {},
 	"AC-PROJ-03": {},
@@ -348,7 +349,6 @@ var coverageGapAllowlist = map[string]struct{}{
 	// in project_no_open_oi_test.go scans every feature 99-consistency-report.md
 	// and asserts every OI-N table row carries ✅ and no in-flight marker.
 	// All 8 OI rows across Tools (OI-1..OI-6) and Watch (OI-1, OI-2) are ✅ Closed.
-	"AC-PROJ-36": {},
 	// Slice #126 closed AC-SB-01/02/11/15/16/17/19/22 by tagging the
 	// existing settings backend tests with their AC-SB IDs (no new
 	// test code — those rows were already covered by tests under
