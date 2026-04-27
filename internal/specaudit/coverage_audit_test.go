@@ -253,7 +253,9 @@ var coverageGapAllowlist = map[string]struct{}{
 	// need the deferred Slice #118e Fyne canvas harness).
 	"AC-DS-05": {},
 	"AC-DS-15": {},
-	"AC-DS-19": {},
+	// AC-DS-19 closed by Slice (this) — Test_AST_AnimImportLimit in
+	// ast_design_system_test.go pins the "only internal/ui/anim/ may
+	// use canvas.NewColorRGBAAnimation" rule (vacuously true today).
 	"AC-DS-30": {},
 	"AC-DS-31": {},
 	"AC-DS-32": {},
