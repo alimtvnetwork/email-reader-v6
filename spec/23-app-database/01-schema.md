@@ -136,7 +136,7 @@ CREATE TABLE WatchState (
 
 **Invariants:**
 - One row per alias. UPSERT on `Alias` (see `Q-WATCH-UPSERT`).
-- `LastUid` is monotonically non-decreasing. The runtime asserts the new value is `>= old` before writing; violations are `ER-WATCH-21503` (logged + skipped).
+- `LastUid` is monotonically non-decreasing. The runtime asserts the new value is `>= old` before writing; violations are `ER-WCH-21413` (logged + skipped). *(Slice #156: corrected from `ER-WATCH-21503` — the original prefix `ER-WATCH-` violates the canonical `ER-WCH-` allocation in `spec/21-app/04-coding-standards.md` §5.4, and the number `21503` falls in the Browser block `21500–21599`, not the Watcher block `21400–21499`. Allocated next-free slot `21413`; future const name `ErrWatcherLastUidRegression`.)*
 - `LastPolledAt` is updated on **every** poll completion, even on failure (heartbeat invariant in `05-logging-strategy.md`).
 
 ---
