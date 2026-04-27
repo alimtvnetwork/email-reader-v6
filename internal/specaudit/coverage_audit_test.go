@@ -229,7 +229,8 @@ var coverageGapAllowlist = map[string]struct{}{
 	"AC-DB-34": {},
 	"AC-DB-35": {},
 	"AC-DB-36": {},
-	"AC-DB-37": {},
+	// AC-DB-37 closed by Slice #127 — same Test_AST_MaintenanceOnly
+	// scan that already covered AC-PROJ-17 (DDL-only-in-migrate rule).
 	"AC-DB-41": {},
 	"AC-DB-46": {},
 	"AC-DBP-01":  {},
@@ -341,12 +342,16 @@ var coverageGapAllowlist = map[string]struct{}{
 	"AC-SP-03":   {},
 	"AC-SP-04":   {},
 	"AC-SP-05":   {},
-	"AC-SX-01":   {},
-	"AC-SX-02":   {},
-	"AC-SX-03":   {},
-	"AC-SX-04":   {},
-	"AC-SX-05":   {},
-	"AC-SX-06":   {},
+	// Slice #127 closed AC-SX-06 (backend half) via the existing
+	// TestSettings_ValidationMatrix forbidden-scheme cases. The
+	// frontend §5 half (cross-layer fixture) needs the canvas-bound
+	// Settings widget harness deferred to Slice #118e — kept honest
+	// by not citing AC-SX-06 from any frontend test.
+	"AC-SX-01": {},
+	"AC-SX-02": {},
+	"AC-SX-03": {},
+	"AC-SX-04": {},
+	"AC-SX-05": {},
 }
 
 // staleCodeRefAllowlist names every code-side AC ID that does NOT

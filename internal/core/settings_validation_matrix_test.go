@@ -206,6 +206,13 @@ var settingsValidationMatrix = []settingsValidationCase{
 
 // TestSettings_ValidationMatrix walks the T-SET-* matrix and pins
 // each row's `(error code, disk untouched)` contract.
+//
+// Satisfies AC-SX-06 (backend half) — the matrix's T-SET-SchemeJavaScript,
+// T-SET-SchemeFile, T-SET-SchemeData, and T-SET-SchemeMalformed cases
+// pin that the forbidden-scheme list (`file`, `javascript`, `data`,
+// `vbscript`) is rejected by the backend §6 layer. The frontend §5 half
+// (shared table-driven test fixture across both layers) requires the
+// canvas-bound Settings widget harness deferred to Slice #118e.
 func TestSettings_ValidationMatrix(t *testing.T) {
 	for _, tc := range settingsValidationMatrix {
 		tc := tc // capture for parallel safety inside t.Run
