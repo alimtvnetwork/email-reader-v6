@@ -117,9 +117,31 @@ Used by the `WatchDot` widget (see `04-components.md` §6). Animation behavior i
 | `ColorCodeLineHighlight` | `30  33  40` | `234 240 250` | hovered line in raw log |
 | `ColorCodeSelection` | `46  72 130` | `190 215 250` | text selection inside code |
 
-### 2.9 Token totals
+### 2.9 Tools — Diagnostics step dots (resolves OI-1, Tools 06)
 
-39 color tokens × 2 variants = 78 concrete values. Adding any token requires updating both variants AND `97-acceptance-criteria.md` parity table.
+Used by the diagnostics-step indicator in `internal/ui/views/tools_diagnose.go`. Mapped from `core.DiagnosticsStep*` enum values via the table in `spec/21-app/02-features/06-tools/02-frontend.md` §3.
+
+| Token | Dark | Light | Use |
+|---|---|---|---|
+| `ColorDiagStepPending` | `120 125 135` (grey 400) | `170 175 185` | step queued, not yet started |
+| `ColorDiagStepRunning` | `100 170 240` (blue 400) | `60  140 220` | spinner active; pulses 2 Hz |
+| `ColorDiagStepPass`    | `74  200 130` (green 500) | `34  160  90` | step succeeded |
+| `ColorDiagStepFail`    | `240  90 105` (red 500)   | `200  40  60` | step failed |
+| `ColorDiagStepSkipped` | `90  96  110` (grey 300)  | `190 195 205` | step skipped because a prior dependency failed |
+
+### 2.10 Tools — OpenUrl provenance badges (resolves OI-1, Tools 06)
+
+Used by the OpenUrl provenance chip in `internal/ui/views/tools_openurl.go` and the recent-opened-urls table. Selection is driven by `core.OpenedUrl.Origin`.
+
+| Token | Dark | Light | Use |
+|---|---|---|---|
+| `ColorOpenUrlSafe`    | `74  200 130` (green 500) | `34  160  90` | green chip — `OriginRule` (allow-listed by a saved rule) |
+| `ColorOpenUrlManual`  | `240 175  60` (amber 500) | `200 140  20` | amber chip — `OriginManual` (operator pasted/typed) |
+| `ColorOpenUrlDeduped` | `100 170 240` (blue 400)  | `60  140 220` | blue chip — request collapsed via `IxOpenedUrlsUnique` |
+
+### 2.11 Token totals
+
+47 color tokens × 2 variants = 94 concrete values. Adding any token requires updating both variants AND `97-acceptance-criteria.md` parity table.
 
 ---
 
