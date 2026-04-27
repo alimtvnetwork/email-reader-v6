@@ -93,10 +93,11 @@ const (
     ErrStoreReadOnly          Code = "ER-STO-21109"
     ErrStoreCorrupt           Code = "ER-STO-21110"
 
-    // ER-MAIL (IMAP)
-    ErrMailDial               Code = "ER-MAIL-21200"
-    ErrMailLoginFailed        Code = "ER-MAIL-21201"
-    ErrMailSelectMailbox      Code = "ER-MAIL-21202"
+    // ER-MAIL (IMAP) — aligned to internal/errtrace/codes.yaml (Slice #161).
+    // The impl registry is the operational source of truth for error codes;
+    // log lines and wrap sites use these exact strings.
+    ErrMailDial               Code = "ER-MAIL-21201"
+    ErrMailLogin              Code = "ER-MAIL-21202"
     ErrMailFetchUid           Code = "ER-MAIL-21203"
     ErrMailParseEnvelope      Code = "ER-MAIL-21204"
     ErrMailWriteEml           Code = "ER-MAIL-21205"
@@ -104,6 +105,7 @@ const (
     ErrMailTLSHandshake       Code = "ER-MAIL-21207"
     ErrMailTimeout            Code = "ER-MAIL-21208"
     ErrMailIdleUnsupported    Code = "ER-MAIL-21209"
+    ErrMailSelectMailbox      Code = "ER-MAIL-21210"
 
     // ER-RUL (Rules)
     ErrRulePatternInvalid     Code = "ER-RUL-21301"
