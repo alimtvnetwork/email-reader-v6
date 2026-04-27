@@ -87,12 +87,20 @@ func BuildDashboard(opts DashboardOptions) fyne.CanvasObject {
 	activityErr := widget.NewLabel("")
 	activityErr.Wrapping = fyne.TextWrapWord
 	activityErr.Hide()
-	// Wrap the virtualised list in a fixed-height slot so the parent
-	// VBox reserves `activityListMaxHeight` pixels for it regardless
-	// of how many rows it currently holds. Without this, `widget.List`
-	// reports a 1-row MinSize and the rows visually overlap whatever
-	// widget VBox places below the list (the live-counters tile row).
-	activityListSlot := container.New(fixedHeightLayout{Height: activityListMaxHeight}, activityList)
+	// Wrap the virtualised list in a fixed-height, CLIPPING scroll
+	// viewport. We learned the hard way (see screenshot in the
+	// "rows overlap live-counters row" bug) that a layout-only
+	// fixed-height slot is not enough: `widget.List` paints rows in
+	// its own coordinate space and, after `Refresh()`, can render
+	// rows past the slot's bounds because the slot doesn't clip.
+	// `container.NewVScroll` does clip — its viewport is the visible
+	// rectangle. We then pin its MinSize via the same fixed-height
+	// layout so the parent VBox always reserves the same vertical
+	// real estate, regardless of how many rows currently live in
+	// the list.
+	activityScroll := container.NewVScroll(activityList)
+	activityScroll.SetMinSize(fyne.NewSize(0, activityListMaxHeight))
+	activityListSlot := container.New(fixedHeightLayout{Height: activityListMaxHeight}, activityScroll)
 	activityBox := container.NewVBox(activityHeader, activityErr, activityListSlot)
 
 	autoStart := newAutoStartIndicator()
@@ -108,13 +116,24 @@ func BuildDashboard(opts DashboardOptions) fyne.CanvasObject {
 
 	actions := newDashboardActions(opts, combined)
 	live := newDashboardLiveRow(opts, combined)
+	// Vertical rhythm: separators between every major band so the
+	// activity list, live-counters row, and action buttons read as
+	// distinct sections instead of running together. Padded wraps
+	// give every block consistent inset breathing room.
 	return container.NewVBox(
-		heading, subtitle, widget.NewSeparator(),
-		cards.Row, widget.NewSeparator(),
-		health,
-		activityBox,
-		live, widget.NewSeparator(),
-		actions, autoStart, status,
+		container.NewPadded(heading),
+		container.NewPadded(subtitle),
+		widget.NewSeparator(),
+		container.NewPadded(cards.Row),
+		widget.NewSeparator(),
+		container.NewPadded(health),
+		container.NewPadded(activityBox),
+		widget.NewSeparator(),
+		container.NewPadded(live),
+		widget.NewSeparator(),
+		container.NewPadded(actions),
+		container.NewPadded(autoStart),
+		container.NewPadded(status),
 	)
 }
 
