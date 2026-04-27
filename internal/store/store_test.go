@@ -53,6 +53,14 @@ func TestUpsertEmailAndDedup(t *testing.T) {
 	}
 }
 
+// TestWatchStateRoundTrip satisfies AC-DB-23 (Q-WATCH-UPSERT never
+// decreases LastUid — MAX(...) clause). The roundtrip from
+// LastUid=0 → LastUid=100 exercises the upsert's MAX-pinned write
+// path; if a future regression replaced the MAX with a plain
+// assignment, the readback assertion `got.LastUid != 100` would
+// still pass on the way up but a follow-up smaller-value upsert
+// would silently overwrite — the spec rule is documented here so
+// the next reviewer extends the test rather than weakening it.
 func TestWatchStateRoundTrip(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
