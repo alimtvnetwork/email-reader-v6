@@ -44,6 +44,7 @@ Cross-references:
 - [ ] **F-20** Right-click row → Duplicate pre-fills form with copy named `"{Name} copy"`.
 - [ ] **F-21** First-match-wins by `Order` for `MarkRead` and `Tag`; verified by an integration test that runs two competing rules.
 - [ ] **F-22** `OpenUrl` matches across rules union the URL set; deduped via `IxOpenedUrlsUnique`.
+- [ ] **F-23** `RulesVM_TestRule_OpenUrl_OriginManualWithRuleName` — clicking the rule editor's "Test rule → open in browser" preview button routes through `core.Tools.OpenUrl(ctx, url, ToolsOpenUrlOptions{Origin: OriginManual, RuleName: <currentRuleName>})`. Cross-test pinned by Tools spec `06-tools/99-consistency-report.md` §13 (resolves OI-3 there).
 
 ## 2. Live-Update
 
