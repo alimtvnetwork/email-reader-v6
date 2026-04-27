@@ -402,3 +402,31 @@ fixture, avoiding a `chdir` dance and keeping `config` untouched.
 - created `internal/cli/errors_tail.go`
 - created `internal/cli/errors_tail_test.go`
 - edited `internal/cli/cli.go` (registered `newErrorsCmd()` on root)
+
+## Phase 4.4 — README "Reporting a bug" section (2026-04-27)
+
+Phase 4 closes with user-facing documentation that ties together every
+prior slice: errtrace stack traces (Phase 2), the in-app Error Log
+view + sidebar badge + first-error toast (Phase 3), on-disk
+`error-log.jsonl` with rotation (4.1), the "Open log file" button
+(4.2), and the `email-read errors tail [-f] [-n N]` command (4.3).
+
+### README changes
+- Added `email-read errors tail` row to the §4 Command Reference
+  table with a forward reference to §9.
+- Appended new **§9 Reporting a bug** section after Troubleshooting:
+  - "What gets captured": stack trace at wrap site, component +
+    summary + timestamp, ring buffer + disk persistence with
+    rotation policy.
+  - "Three ways to grab the log": (1) UI → Open log file button,
+    (2) `errors tail` one-shot with example output, (3) `errors
+    tail -f` for live reproduction.
+  - "What to include in a bug report": version, repro steps, log
+    entries from `data\error-log.jsonl`, redacted config.
+
+### Files changed
+- edited `README.md` (added `errors tail` to command table; added §9)
+
+**Phase 4 complete.** Disk persistence, "Open log file" button, CLI
+tail subcommand, and user-facing docs all shipped. Remaining work is
+spec/memory polish (Phase 5).
