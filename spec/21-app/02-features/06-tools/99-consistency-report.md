@@ -300,12 +300,20 @@ All six closed (2026-04-27). No open issues remain in the Tools spec.
 
 A merge into `main` for the Tools feature requires:
 
-- [ ] Every checkbox in §1–§13 is ✅ (none ⚠ except OI-1..OI-6 which are scheduled).
-- [ ] CI green for every test in `97-acceptance-criteria.md`.
-- [ ] OI-1..OI-6 closed when corresponding tasks merge.
+**Structural (auto-verifiable, flipped by Slice #140 2026-04-27):**
+
+- [x] Every checkbox in §1–§13 is ✅ — verified 2026-04-27: zero `⚠`/`🟡`/`TODO`/`FIXME` markers remain in §1–§13 (Slice #140 grep). The five forward-refs in §2 and the one in §3 were closed by OI-1/OI-2/OI-4/OI-5/OI-6.
+- [x] OI-1..OI-6 closed — all six rows show ✅ Closed in §14 (closed across Slices #133/#134/#135/#136; cross-test F-23 headless half pinned by Slice #139).
+- [x] Headless cross-test contract for `RulesVM_TestRule_OpenUrl_OriginManualWithRuleName` exists — `core.OpenUrlSpecForTestRulePreview` + 4 sub-tests in `internal/core/rules_preview_test.go` (Slice #139). The Fyne-bound button + click-handler assertion remains owned by Slice #118e canvas harness.
+
+**Operational (require live CI + named human reviewers, NOT auto-flippable):**
+
+- [ ] CI green for every test in `97-acceptance-criteria.md` on the merge-target SHA.
 - [ ] Code owner review by Tools lead.
 - [ ] Security lead sign-off on §10 + the OpenUrl block (acceptance §4).
 - [ ] Product lead sign-off on the single-browser-launch invariant 🔴 (since it is THE audit promise).
+
+**Slice #140 attestation:** all auto-verifiable preconditions met. The four operational boxes above are intentionally left for the merging human — flipping them in this commit would falsify the audit trail.
 
 **Reviewed by:** _________________________   **Date:** ____________
 
