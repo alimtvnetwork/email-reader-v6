@@ -5,6 +5,7 @@
 package core
 
 import (
+	"errors"
 	"time"
 
 	"github.com/lovable/email-read/internal/config"
@@ -50,14 +51,24 @@ func TestAccountConnection(in AccountInput, timeout time.Duration) errtrace.Resu
 }
 
 func wrapTestConnectionError(err error, in AccountInput, host string, port int, useTLS bool, cleanPassword string) error {
-	return errtrace.WrapCode(err, errtrace.ErrAccountTestFailed,
-		"test connection failed — IMAP server rejected the login; verify the same email/password in webmail or reset the mailbox password").
+	return errtrace.WrapCode(err, errtrace.ErrAccountTestFailed, testConnectionFailureMessage(err)).
 		WithContext("Alias", in.Alias).
 		WithContext("Email", in.Email).
 		WithContext("Host", host).
 		WithContext("Port", port).
 		WithContext("UseTLS", useTLS).
 		WithContext("PasswordSanitized", cleanPassword != in.PlainPassword)
+}
+
+func testConnectionFailureMessage(err error) string {
+	var coded *errtrace.Coded
+	if errors.As(err, &coded) && coded.Code == errtrace.ErrMailLogin {
+		return "test connection failed — IMAP server rejected the login; verify the same email/password in webmail or reset the mailbox password"
+	}
+	if errors.As(err, &coded) && (coded.Code == errtrace.ErrMailTimeout || coded.Code == errtrace.ErrMailDial) {
+		return "test connection failed — IMAP endpoint is unreachable; verify host, port, TLS, firewall, and mail-server availability"
+	}
+	return "test connection failed — IMAP test could not complete; inspect the wrapped mail error for the exact cause"
 }
 
 // TestConnectionResult reports the resolved endpoint that was successfully
