@@ -36,8 +36,8 @@ type ToastFn func(title, body string)
 type ErrLogNotifier struct {
 	toast ToastFn
 
-	mu       sync.Mutex
-	inStorm  bool // true once we've toasted; false again after Reset
+	mu      sync.Mutex
+	inStorm bool // true once we've toasted; false again after Reset
 }
 
 // NewErrLogNotifier wires a notifier to the given toast adapter and

@@ -16,7 +16,8 @@
 // (also tag-free) so this test compiles under `-tags nofyne`.
 //
 // Spec: spec/21-app/02-features/06-tools/99-consistency-report.md CF-T1,
-//       spec/21-app/02-features/05-watch/99-consistency-report.md CF-W3.
+//
+//	spec/21-app/02-features/05-watch/99-consistency-report.md CF-W3.
 package ui
 
 import (

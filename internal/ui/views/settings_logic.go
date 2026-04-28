@@ -125,10 +125,10 @@ func CoreDensityToThemeDensity(coreDensity int) int {
 // MaintenanceFields bundles the four §5 knobs to keep ProjectSettingsInput
 // readable and to give the Settings view a single value to thread through.
 type MaintenanceFields struct {
-	WeekdayLabel    string
-	HourLocal       uint8
-	WalHours        uint8
-	PruneBatchSize  uint32
+	WeekdayLabel   string
+	HourLocal      uint8
+	WalHours       uint8
+	PruneBatchSize uint32
 }
 
 // ProjectSettingsInput merges user-edited fields with the invariant slice

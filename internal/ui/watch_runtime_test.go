@@ -91,7 +91,7 @@ func TestWatchRuntime_Close_LogsButContinuesOnError(t *testing.T) {
 	t.Parallel()
 	ran := false
 	rt := &WatchRuntime{closers: []func() error{
-		func() error { ran = true; return nil },                  // older — runs LAST in LIFO
+		func() error { ran = true; return nil },                    // older — runs LAST in LIFO
 		func() error { return errors.New("simulated close fail") }, // newer — runs FIRST
 	}}
 	rt.Close()

@@ -115,4 +115,3 @@ func nonEmpty(s, fallback string) string {
 }
 
 // truncURL is shared with watch_events.go (same package).
-
