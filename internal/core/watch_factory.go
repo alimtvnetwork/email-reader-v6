@@ -13,6 +13,7 @@ package core
 import (
 	"context"
 	"log"
+	"time"
 
 	"github.com/lovable/email-read/internal/browser"
 	"github.com/lovable/email-read/internal/config"
@@ -91,6 +92,18 @@ func NewRealLoopFactory(deps RealLoopFactoryDeps) errtrace.Result[LoopFactory] {
 // WatchError event (matching the spec'd error-surfacing path).
 type realLoopFactory struct {
 	deps RealLoopFactoryDeps
+}
+
+// PublishWatcherLifecycle mirrors core.Watch lifecycle events onto the
+// low-level watcher.Bus that powers the desktop Raw log tab. watcher.Run
+// also publishes started/stopped once it enters/exits, but this immediate
+// mirror covers fast-fail paths and validates that the Raw-log subscriber is
+// alive the instant the user clicks Start.
+func (f *realLoopFactory) PublishWatcherLifecycle(kind string, alias string, at time.Time, err error) {
+	if f.deps.Bus == nil {
+		return
+	}
+	f.deps.Bus.Publish(watcherLifecycleEvent(kind, alias, at, err))
 }
 
 // New builds the per-runner Loop. We resolve the account here (cheap,
