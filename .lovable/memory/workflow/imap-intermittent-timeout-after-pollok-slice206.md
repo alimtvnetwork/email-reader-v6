@@ -4,7 +4,7 @@ description: If admin gets poll-ok lines then a 993/143 timeout later, credentia
 type: feature
 ---
 
-# IMAP intermittent timeout after successful poll-ok — Slice #206
+# IMAP intermittent timeout after successful poll-ok — Slice #206/#208
 
 ## Symptom
 
@@ -37,10 +37,11 @@ The STARTTLS fallback is not helping here: when 993 times out, trying 143 also t
 1. Respect the user's requested cadence. If they explicitly request 5s, do **not** force a 60s clamp in Settings or watcher runtime; 5s is the app default again as of Slice #207.
 2. Treat 5s as a product requirement but explain the trade-off honestly: a `dial tcp ... i/o timeout` is still a network/server reachability timeout, and frequent reconnects can amplify it on shared mail hosts.
 3. Stop using STARTTLS fallback automatically after a 993 timeout for this account/host, or make it opt-in/diagnostic, because it doubles the failed wait here.
-4. Add a circuit breaker/backoff for dial timeouts so after one network timeout the watcher waits longer before trying another brand-new connection, without changing the configured 5s cadence on successful polls.
+4. Do **not** add hidden runtime backoff when the user explicitly requires 5s. Slice #208 changed the loop to fixed-rate scheduling: a 5s cadence means each poll attempt starts about 5s after the previous attempt started. A 5s dial timeout therefore retries immediately/near-immediately instead of becoming `5s timeout + 5s sleep` or exponential backoff.
 5. Best long-term fix: reuse one IMAP session or implement IMAP IDLE so the app does not login/logout every few seconds.
 6. Keep the `poll ok` heartbeat visible so the user can distinguish healthy idle mailbox state from delivery problems.
+7. Preserve the real error class: live watcher dials must wrap network timeouts as `ER-MAIL-21208` (`imap dial timed out`, with Host/Port/Timeout context). Do not re-wrap timeout dials as generic `ER-MAIL-21201`, because that hides the RCA from the Error Log.
 
 ## Future debugging rule
 
-When logs contain both `poll ok` and later `i/o timeout`, treat it as intermittent network/server throttling caused or amplified by reconnect frequency. Do not blame credentials if there has been a `poll ok`; prefer backoff/session reuse/IDLE over forcing a slower user-visible cadence.
+When logs contain both `poll ok` and later `i/o timeout`, treat it as intermittent network/server reachability/throttling caused or amplified by reconnect frequency. Do not blame credentials if there has been a `poll ok`; keep the requested 5s visible cadence, make attempts fixed-rate, preserve timeout-specific error codes, and prefer session reuse/IDLE for a durable fix.

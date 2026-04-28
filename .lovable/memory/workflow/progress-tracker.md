@@ -5,5 +5,5 @@ type: feature
 ---
 # Implementation Progress Tracker — spec/21-app
 
-**Last updated:** 2026-04-28 (after **Slice #207 — restore requested 5s Watch cadence**: removed the forced 60s clamp from Settings projection/runtime reloads, set the app default cadence to 5s, and updated the IMAP timeout RCA so future fixes keep user-visible 5s cadence while addressing timeouts through backoff/session reuse/IDLE instead of password blame.)
-**Overall: 100% done · 0% remaining (original roadmap complete) · UX bugfix/RCA slices applied through #207.**
+**Last updated:** 2026-04-28 (after **Slice #208 — fixed-rate 5s Watch attempts + timeout-code preservation**: removed hidden runtime backoff from the watcher loop, changed scheduling so 5s means attempt-start-to-attempt-start cadence, aligned config fallback to the 5s default, and preserved live IMAP dial timeouts as `ER-MAIL-21208` with Host/Port/Timeout context instead of generic dial errors.)
+**Overall: 100% done · 0% remaining (original roadmap complete) · UX bugfix/RCA slices applied through #208.**

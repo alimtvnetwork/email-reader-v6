@@ -106,7 +106,15 @@ func dialAccountEndpoint(ctx context.Context, host string, port int, useTLS bool
 		if cerr := ctx.Err(); cerr != nil {
 			return nil, cerr
 		}
-		return nil, errtrace.Wrapf(err, "imap dial %s", addr)
+		if isNetTimeout(err) {
+			return nil, errtrace.WrapCode(err, errtrace.ErrMailTimeout, "imap dial timed out").
+				WithContext("Host", host).
+				WithContext("Port", fmt.Sprintf("%d", port)).
+				WithContext("Timeout", DefaultDialTimeout)
+		}
+		return nil, errtrace.WrapCode(err, errtrace.ErrMailDial, "imap dial failed").
+			WithContext("Host", host).
+			WithContext("Port", fmt.Sprintf("%d", port))
 	}
 	c.Timeout = DefaultDialTimeout
 	return c, nil

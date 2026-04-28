@@ -229,7 +229,7 @@ func Load() (*Config, error) {
 		}
 	}
 	if c.Watch.PollSeconds <= 0 {
-		c.Watch.PollSeconds = 3
+		c.Watch.PollSeconds = DefaultWatchPollSeconds
 	}
 	if c.Accounts == nil {
 		c.Accounts = []Account{}
