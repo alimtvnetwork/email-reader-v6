@@ -30,8 +30,8 @@ func TestSettings_GetReturnsDefaults(t *testing.T) {
 			t.Fatalf("Get: %v", r.Error())
 		}
 		snap := r.Value()
-		if snap.PollSeconds != 3 {
-			t.Errorf("PollSeconds = %d, want 3", snap.PollSeconds)
+		if snap.PollSeconds != config.MinWatchPollSeconds {
+			t.Errorf("PollSeconds = %d, want %d", snap.PollSeconds, config.MinWatchPollSeconds)
 		}
 		if snap.Theme != ThemeDark {
 			t.Errorf("Theme = %v, want ThemeDark", snap.Theme)
@@ -54,7 +54,7 @@ func TestSettings_SaveAndRoundTrip(t *testing.T) {
 	withIsolatedConfig(t, func() {
 		s := newTestSettings(t)
 		in := SettingsInput{
-			PollSeconds:           10,
+			PollSeconds:           config.MinWatchPollSeconds,
 			Theme:                 ThemeLight,
 			OpenUrlAllowedSchemes: []string{"HTTPS", "http", "https"}, // dup + uppercase
 			AllowLocalhostUrls:    true,
@@ -65,8 +65,8 @@ func TestSettings_SaveAndRoundTrip(t *testing.T) {
 			t.Fatalf("Save: %v", r.Error())
 		}
 		got := r.Value()
-		if got.PollSeconds != 10 {
-			t.Errorf("PollSeconds = %d, want 10", got.PollSeconds)
+		if got.PollSeconds != config.MinWatchPollSeconds {
+			t.Errorf("PollSeconds = %d, want %d", got.PollSeconds, config.MinWatchPollSeconds)
 		}
 		if got.Theme != ThemeLight {
 			t.Errorf("Theme = %v, want Light", got.Theme)
@@ -85,7 +85,7 @@ func TestSettings_SaveAndRoundTrip(t *testing.T) {
 		if again.HasError() {
 			t.Fatalf("Get after Save: %v", again.Error())
 		}
-		if again.Value().PollSeconds != 10 {
+		if again.Value().PollSeconds != config.MinWatchPollSeconds {
 			t.Errorf("persisted PollSeconds = %d", again.Value().PollSeconds)
 		}
 	})
