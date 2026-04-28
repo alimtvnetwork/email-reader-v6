@@ -236,7 +236,7 @@ func TestSettings_ResetToDefaults(t *testing.T) {
 		s := newTestSettings(t)
 		// Mutate first.
 		_ = s.Save(context.Background(), SettingsInput{
-			PollSeconds: 30, Theme: ThemeLight,
+			PollSeconds: config.MinWatchPollSeconds, Theme: ThemeLight,
 			OpenUrlAllowedSchemes: []string{"https"},
 			AutoStartWatch:        false,
 		})
@@ -245,7 +245,7 @@ func TestSettings_ResetToDefaults(t *testing.T) {
 			t.Fatalf("Reset: %v", r.Error())
 		}
 		snap := r.Value()
-		if snap.PollSeconds != 3 || snap.Theme != ThemeDark || !snap.AutoStartWatch {
+		if snap.PollSeconds != config.MinWatchPollSeconds || snap.Theme != ThemeDark || !snap.AutoStartWatch {
 			t.Errorf("reset did not apply defaults: %+v", snap)
 		}
 	})
@@ -305,7 +305,7 @@ func TestSettings_SubscribeCancelStopsDelivery(t *testing.T) {
 		}
 		// Saving must not panic.
 		_ = s.Save(context.Background(), SettingsInput{
-			PollSeconds: 7, Theme: ThemeDark,
+			PollSeconds: config.MinWatchPollSeconds, Theme: ThemeDark,
 			OpenUrlAllowedSchemes: []string{"https"},
 		})
 	})
