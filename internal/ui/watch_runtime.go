@@ -193,7 +193,7 @@ func forwardAccountRemovalEvents(ctx context.Context, events <-chan core.Account
 				continue
 			}
 			if w.IsRunning(ev.Alias) {
-				_ = w.Stop(ev.Alias, 5*time.Second)
+				_ = w.Stop(ev.Alias, 15*time.Second)
 				log.Printf("ui: stopped orphan watcher for removed alias %q", ev.Alias)
 			}
 		}
