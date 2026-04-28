@@ -91,7 +91,7 @@ func Default() *Config {
 	return &Config{
 		Accounts: []Account{},
 		Rules:    []Rule{},
-		Watch:    Watch{PollSeconds: MinWatchPollSeconds},
+		Watch:    Watch{PollSeconds: 3},
 		Browser:  Browser{},
 	}
 }
@@ -223,8 +223,8 @@ func Load() (*Config, error) {
 			return nil, errtrace.Wrapf(err, "parse config %s", p)
 		}
 	}
-	if c.Watch.PollSeconds < MinWatchPollSeconds {
-		c.Watch.PollSeconds = MinWatchPollSeconds
+	if c.Watch.PollSeconds <= 0 {
+		c.Watch.PollSeconds = 3
 	}
 	if c.Accounts == nil {
 		c.Accounts = []Account{}
