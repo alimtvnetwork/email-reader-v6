@@ -8,7 +8,6 @@ import (
 	"context"
 	"io"
 	"log"
-	"math/rand"
 	"strings"
 	"time"
 
