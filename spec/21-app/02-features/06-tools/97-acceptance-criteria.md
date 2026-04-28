@@ -103,7 +103,7 @@ A section may carry **two** tags when its rows split (e.g. `🟢 + 🔴`); pick 
 | F-41 | Two concurrent same-`(Alias,Url)` calls → exactly one launch; second sees `Deduped=true`.  | `OpenUrl_TwoConcurrentSameKey_OneLaunch_OneDeduped`   |
 | F-42 | Browser binary unavailable → `21766 OpenUrlBrowserUnavailable`.                            | `OpenUrl_BrowserUnavailable_Returns21766`             |
 | F-43 | Browser launch failure → `21767 OpenUrlLaunchFailed`; **audit row still written**.          | `OpenUrl_LaunchFails_Returns21767_AuditRowStillWritten` |
-| F-44 | Audit insert failure post-launch → `21768 OpenUrlAuditInsertFailed` wrapping `ER-STO-21103`. | `OpenUrl_AuditInsertFails_LaunchAlreadyHappened_Returns21768Wrap` |
+| F-44 | Audit insert failure post-launch → `21768 OpenUrlAuditInsertFailed` wrapping `ER-DB-21105`. | `OpenUrl_AuditInsertFails_LaunchAlreadyHappened_Returns21768Wrap` |
 | F-45 | `Incognito = true` in **every** `OpenUrlReport`. No code path produces `Incognito = false`. | `OpenUrl_AlwaysIncognito_NoOptOutPathExists` (lint + reflection) |
 | F-46 | `TraceId` present and identical in INFO log line + persisted `OpenedUrl.TraceId`.          | `OpenUrl_TraceIdPresentInLogAndAuditRow`              |
 | F-47 | `OriginRule` populates `RuleName`; `OriginCard` populates `EmailId`; `OriginCli`/`OriginManual` may have empty `Alias`. | `OpenUrl_From{Rule,Card,Cli,Manual}_FieldsPopulated` |
@@ -186,7 +186,7 @@ A section may carry **two** tags when its rows split (e.g. `🟢 + 🔴`); pick 
 | L-01 | One INFO `OpenUrlLaunched` per successful launch with all fields per `01-backend.md` §9.   | `Logging_OpenUrlLaunched_FullFields`              |
 | L-02 | One INFO `OpenUrlDeduped` per dedup-skip; no `OpenUrlLaunched` for dedup-skips.            | `Logging_OpenUrlDeduped_NoLaunchedLine`           |
 | L-03 | One WARN `OpenUrlUserinfoStripped` when userinfo present; no `Url` field in that line.     | F-38                                              |
-| L-04 | One WARN `OpenUrlAuditInsertFailed` per `21768`; carries `ErrCode=ER-STO-21103`.           | F-44                                              |
+| L-04 | One WARN `OpenUrlAuditInsertFailed` per `21768`; carries `ErrCode=ER-DB-21105`.           | F-44                                              |
 | L-05 | `TraceId` matches across log line and `OpenedUrl.TraceId` for the same operation.          | F-46                                              |
 | L-06 | `Diagnose` emits one INFO `ToolsDiagnoseStep` per step with `Detail` (Pass) or `ErrCode` (Fail). | `Logging_DiagnoseStep_PerStep`              |
 

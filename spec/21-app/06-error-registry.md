@@ -80,18 +80,24 @@ const (
     ErrConfigPasswordDecode   Code = "ER-CFG-21007"
     ErrConfigSchemaMigration  Code = "ER-CFG-21008"
 
-    // ER-STO (Storage)
-    ErrStoreOpen              Code = "ER-STO-21100"
-    ErrStoreMigrate           Code = "ER-STO-21101"
-    ErrStoreInsertEmail       Code = "ER-STO-21102"
-    ErrStoreInsertOpenedUrl   Code = "ER-STO-21103"
-    ErrStoreUpdateWatchState  Code = "ER-STO-21104"
-    ErrStoreSelect            Code = "ER-STO-21105"
-    ErrStoreUniqueViolation   Code = "ER-STO-21106"
-    ErrStoreFKViolation       Code = "ER-STO-21107"
-    ErrStoreBusy              Code = "ER-STO-21108"
-    ErrStoreReadOnly          Code = "ER-STO-21109"
-    ErrStoreCorrupt           Code = "ER-STO-21110"
+    // ER-DB (Storage / SQLite) — aligned to internal/errtrace/codes.yaml
+    // (Slice #196 A1-grow). The impl registry is the operational source of
+    // truth: prefix is `ER-DB-*`, consts are `ErrDb*`, block starts at
+    // 21101 (not 21100). The historical `ErrStoreSelect` slot is split in
+    // the impl into `ErrDbQueryEmail` (21104) + `ErrDbQueryUrl` (21106)
+    // so callers can attribute SELECT failures to the right table.
+    ErrDbOpen              Code = "ER-DB-21101"
+    ErrDbMigrate           Code = "ER-DB-21102"
+    ErrDbInsertEmail       Code = "ER-DB-21103"
+    ErrDbQueryEmail        Code = "ER-DB-21104"
+    ErrDbInsertUrl         Code = "ER-DB-21105"
+    ErrDbQueryUrl          Code = "ER-DB-21106"
+    ErrDbWatchState        Code = "ER-DB-21107"
+    ErrDbUniqueViolation   Code = "ER-DB-21108"
+    ErrDbFkViolation       Code = "ER-DB-21109"
+    ErrDbBusy              Code = "ER-DB-21110"
+    ErrDbReadOnly          Code = "ER-DB-21111"
+    ErrDbCorrupt           Code = "ER-DB-21112"
 
     // ER-MAIL (IMAP) — aligned to internal/errtrace/codes.yaml (Slice #161).
     // The impl registry is the operational source of truth for error codes;
@@ -262,139 +268,164 @@ const (
 
 ---
 
-## 4. ER-STO — Storage / SQLite
+## 4. ER-DB — Storage / SQLite
 
-### ER-STO-21100 — `ErrStoreOpen`
+> **Block ownership note (Slice #196 — A1-grow):** This section's code
+> numbers and const names are aligned with `internal/errtrace/codes.yaml`
+> (the operational source of truth). The historical `ER-STO-*` /
+> `ErrStore*` naming used in earlier drafts has been retired in favour
+> of the impl prefix `ER-DB-*` / `ErrDb*` to avoid spec ↔ impl drift.
+> Block range remains `21100–21199`; numbering starts at `21101` (not
+> `21100`) to match the registry's first slot.
+>
+> **Slot split note:** the historical `ErrStoreSelect` (single SELECT
+> code) has been split in the impl into `ErrDbQueryEmail` (21104) and
+> `ErrDbQueryUrl` (21106) so callers can attribute SELECT failures to
+> the right table. The two entries below replace the single old entry.
+
+### ER-DB-21101 — `ErrDbOpen`
 
 | Field | Value |
 |---|---|
 | Severity | `FATAL` |
 | Trigger | `sql.Open("sqlite", path)` or first ping fails |
 | Wrap site | `internal/store/store.go:Open()` |
-| Log line | `FATAL store.Open Path=<p> ErrCode=ER-STO-21100 ErrFrames=[…] db open failed` |
+| Log line | `FATAL store.Open Path=<p> ErrCode=ER-DB-21101 ErrFrames=[…] db open failed` |
 | User msg | `Cannot open database at <p>: <reason>` |
 | Recovery | Check file/dir permissions; ensure `modernc.org/sqlite` build (no CGO) |
 | Test ref | `TestStore_Open_NonexistentDirFails` |
 
-### ER-STO-21101 — `ErrStoreMigrate`
+### ER-DB-21102 — `ErrDbMigrate`
 
 | Field | Value |
 |---|---|
 | Severity | `FATAL` |
 | Trigger | A `CREATE TABLE` / `CREATE INDEX` statement during migration returns an error |
 | Wrap site | `internal/store/migrate.go:Migrate()` |
-| Log line | `FATAL store.Migrate Step=<n> ErrCode=ER-STO-21101 migration step <n> failed` |
+| Log line | `FATAL store.Migrate Step=<n> ErrCode=ER-DB-21102 migration step <n> failed` |
 | User msg | `Database migration failed at step <n>: <reason>. Backup at <path>.bak.` |
 | Recovery | Restore backup; report bug |
 | Test ref | `TestStore_Migrate_BadDDLFails` |
 
-### ER-STO-21102 — `ErrStoreInsertEmail`
+### ER-DB-21103 — `ErrDbInsertEmail`
 
 | Field | Value |
 |---|---|
 | Severity | `ERROR` |
 | Trigger | `INSERT INTO Email` returns error other than UNIQUE-violation |
 | Wrap site | `internal/store/emails.go:InsertEmail()` |
-| Log line | `ERROR store.InsertEmail Alias=<a> Uid=<u> ErrCode=ER-STO-21102 ErrFrames=[…] insert email failed` |
+| Log line | `ERROR store.InsertEmail Alias=<a> Uid=<u> ErrCode=ER-DB-21103 ErrFrames=[…] insert email failed` |
 | User msg | `Could not save email uid=<u> for '<alias>'.` |
 | Recovery | Inspect error frames; may indicate disk/perm issue |
 | Test ref | `TestStore_InsertEmail_PropagatesDBError` |
 
-### ER-STO-21103 — `ErrStoreInsertOpenedUrl`
+### ER-DB-21104 — `ErrDbQueryEmail`
+
+| Field | Value |
+|---|---|
+| Severity | `ERROR` |
+| Trigger | A `SELECT` against `Emails` returns a `Scan` or `Query` error |
+| Wrap site | `internal/store/emails.go:Find*()` |
+| Log line | `ERROR store.FindEmails ErrCode=ER-DB-21104 ErrFrames=[…] select failed` |
+| User msg | `Could not read emails from database.` |
+| Recovery | Check db file integrity |
+| Test ref | `TestStore_FindEmails_PropagatesScanError` |
+
+### ER-DB-21105 — `ErrDbInsertUrl`
 
 | Field | Value |
 |---|---|
 | Severity | `WARN` |
 | Trigger | `INSERT INTO OpenedUrl` fails (other than unique-violation, which is normal dedup) |
 | Wrap site | `internal/store/openedurl.go:Record()` |
-| Log line | `WARN store.RecordOpenedUrl Alias=<a> Url=<u> ErrCode=ER-STO-21103 record opened-url failed` |
+| Log line | `WARN store.RecordOpenedUrl Alias=<a> Url=<u> ErrCode=ER-DB-21105 record opened-url failed` |
 | User msg | (none — internal) |
 | Recovery | Will retry on next match |
 | Test ref | `TestStore_RecordOpenedUrl_DBErrorWarns` |
 
-### ER-STO-21104 — `ErrStoreUpdateWatchState`
+### ER-DB-21106 — `ErrDbQueryUrl`
+
+| Field | Value |
+|---|---|
+| Severity | `ERROR` |
+| Trigger | A `SELECT` against `OpenedUrls` returns a `Scan` or `Query` error |
+| Wrap site | `internal/store/openedurl.go:Find*()` |
+| Log line | `ERROR store.FindOpenedUrls ErrCode=ER-DB-21106 ErrFrames=[…] select failed` |
+| User msg | `Could not read opened-urls from database.` |
+| Recovery | Check db file integrity |
+| Test ref | `TestStore_FindOpenedUrls_PropagatesScanError` |
+
+### ER-DB-21107 — `ErrDbWatchState`
 
 | Field | Value |
 |---|---|
 | Severity | `ERROR` |
 | Trigger | `UPSERT INTO WatchState` returns error |
 | Wrap site | `internal/store/watchstate.go:Update()` |
-| Log line | `ERROR store.UpdateWatchState Alias=<a> LastUid=<u> ErrCode=ER-STO-21104 update watch state failed` |
+| Log line | `ERROR store.UpdateWatchState Alias=<a> LastUid=<u> ErrCode=ER-DB-21107 update watch state failed` |
 | User msg | `Could not save watch state for '<alias>'. Next run may re-fetch <n> messages.` |
 | Recovery | Watcher will resume from previous LastUid |
 | Test ref | `TestStore_UpdateWatchState_DBErrorReturns` |
 
-### ER-STO-21105 — `ErrStoreSelect`
-
-| Field | Value |
-|---|---|
-| Severity | `ERROR` |
-| Trigger | Any `SELECT` returns a `Scan` or `Query` error |
-| Wrap site | Any `internal/store/*.go:Find*()` |
-| Log line | `ERROR store.<Find> Table=<t> ErrCode=ER-STO-21105 ErrFrames=[…] select failed` |
-| User msg | `Could not read <table> from database.` |
-| Recovery | Check db file integrity |
-| Test ref | `TestStore_FindEmails_PropagatesScanError` |
-
-### ER-STO-21106 — `ErrStoreUniqueViolation`
+### ER-DB-21108 — `ErrDbUniqueViolation`
 
 | Field | Value |
 |---|---|
 | Severity | `WARN` |
 | Trigger | SQLite returns `SQLITE_CONSTRAINT_UNIQUE` |
-| Wrap site | Wrapped at `store.checkSqliteErr()` helper |
-| Log line | `WARN store.<Op> Table=<t> Constraint=UNIQUE ErrCode=ER-STO-21106 unique constraint hit` |
+| Wrap site | `store.checkSqliteErr()` helper *(reserved — Slice #196 added the const; not yet wired at any call site)* |
+| Log line | `WARN store.<Op> Table=<t> Constraint=UNIQUE ErrCode=ER-DB-21108 unique constraint hit` |
 | User msg | (none — usually benign dedup) |
 | Recovery | Skip insert (caller decides) |
-| Test ref | `TestStore_DuplicateInsertReportsUnique` |
+| Test ref | *(future)* `TestStore_DuplicateInsertReportsUnique` |
 
-### ER-STO-21107 — `ErrStoreFKViolation`
+### ER-DB-21109 — `ErrDbFkViolation`
 
 | Field | Value |
 |---|---|
 | Severity | `ERROR` |
 | Trigger | `SQLITE_CONSTRAINT_FOREIGNKEY` returned |
-| Wrap site | `store.checkSqliteErr()` |
-| Log line | `ERROR store.<Op> Table=<t> Constraint=FK ErrCode=ER-STO-21107 fk constraint hit` |
+| Wrap site | `store.checkSqliteErr()` *(reserved — Slice #196)* |
+| Log line | `ERROR store.<Op> Table=<t> Constraint=FK ErrCode=ER-DB-21109 fk constraint hit` |
 | User msg | `Internal data inconsistency in <table>.` |
 | Recovery | Report bug; usually a missing parent row |
-| Test ref | `TestStore_OrphanInsertReportsFK` |
+| Test ref | *(future)* `TestStore_OrphanInsertReportsFK` |
 
-### ER-STO-21108 — `ErrStoreBusy`
+### ER-DB-21110 — `ErrDbBusy`
 
 | Field | Value |
 |---|---|
 | Severity | `WARN` |
 | Trigger | `SQLITE_BUSY` after `busy_timeout` exhausted |
-| Wrap site | `store.checkSqliteErr()` |
-| Log line | `WARN store.<Op> ErrCode=ER-STO-21108 db busy after <ms>ms` |
+| Wrap site | `store.checkSqliteErr()` *(reserved — Slice #196)* |
+| Log line | `WARN store.<Op> ErrCode=ER-DB-21110 db busy after <ms>ms` |
 | User msg | `Database is busy; retrying.` |
 | Recovery | Caller retries with backoff |
-| Test ref | `TestStore_BusyAfterTimeoutWraps` |
+| Test ref | *(future)* `TestStore_BusyAfterTimeoutWraps` |
 
-### ER-STO-21109 — `ErrStoreReadOnly`
+### ER-DB-21111 — `ErrDbReadOnly`
 
 | Field | Value |
 |---|---|
 | Severity | `FATAL` |
 | Trigger | `SQLITE_READONLY` (filesystem read-only or WAL not writable) |
-| Wrap site | `store.checkSqliteErr()` |
-| Log line | `FATAL store.<Op> Path=<p> ErrCode=ER-STO-21109 db is read-only` |
+| Wrap site | `store.checkSqliteErr()` *(reserved — Slice #196)* |
+| Log line | `FATAL store.<Op> Path=<p> ErrCode=ER-DB-21111 db is read-only` |
 | User msg | `Database file is read-only at <p>. Check permissions.` |
 | Recovery | Fix permissions |
-| Test ref | `TestStore_ReadOnlyDBFailsFatal` |
+| Test ref | *(future)* `TestStore_ReadOnlyDBFailsFatal` |
 
-### ER-STO-21110 — `ErrStoreCorrupt`
+### ER-DB-21112 — `ErrDbCorrupt`
 
 | Field | Value |
 |---|---|
 | Severity | `FATAL` |
 | Trigger | `SQLITE_CORRUPT` returned |
-| Wrap site | `store.checkSqliteErr()` |
-| Log line | `FATAL store.<Op> Path=<p> ErrCode=ER-STO-21110 db file corrupt` |
+| Wrap site | `store.checkSqliteErr()` *(reserved — Slice #196)* |
+| Log line | `FATAL store.<Op> Path=<p> ErrCode=ER-DB-21112 db file corrupt` |
 | User msg | `Database is corrupt at <p>. Restore from backup.` |
 | Recovery | Restore backup or delete + re-fetch |
-| Test ref | `TestStore_CorruptFileFailsFatal` |
+| Test ref | *(future)* `TestStore_CorruptFileFailsFatal` |
 
 ---
 
@@ -964,7 +995,7 @@ const (
 | ErrCode prefix | Exit code (CLI only) |
 |---|---|
 | `ER-CFG-*` | `3` |
-| `ER-STO-*` | `4` |
+| `ER-DB-*` | `4` |
 | `ER-MAIL-*` | `5` |
 | `ER-CLI-21801`, `ER-CLI-21802`, `ER-CLI-21803` | `2` |
 | `ER-CLI-21804` | `130` |

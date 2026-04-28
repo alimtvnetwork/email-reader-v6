@@ -234,7 +234,15 @@ func Test_AllErrorRefsResolveInRegistry(t *testing.T) {
 	// rows are added) but report-only via t.Log, and AC-PROJ-31
 	// stays in the coverage allowlist with a defer note.
 	if len(missing) > 0 {
+		var keys []string
+		for k := range missing {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
 		t.Logf("AC-PROJ-31 (deferred): scanner found %d undefined ER code(s) — registry needs to grow before this can ratchet green.", len(missing))
+		for _, k := range keys {
+			t.Logf("  %s referenced in %v", k, missing[k])
+		}
 		t.Skip("AC-PROJ-31 deferred — see allowlist comment in coverage_audit_test.go")
 	}
 }

@@ -19,7 +19,7 @@ Cross-references:
 - Architecture: [`../../07-architecture.md`](../../07-architecture.md) §4.6
 - Coding standards: [`../../04-coding-standards.md`](../../04-coding-standards.md)
 - Logging: [`../../05-logging-strategy.md`](../../05-logging-strategy.md) §6.6 (Tools log lines)
-- Errors: [`../../06-error-registry.md`](../../06-error-registry.md) — codes `21600–21699` (exporter), `21750–21799` (Tools-core block, this feature claims `21750–21769`); wrapped `ER-STO-21103` (OpenedUrl insert), `ER-MAIL-21201..21210` (diagnose IMAP probes; aligned to impl in Slice #161)
+- Errors: [`../../06-error-registry.md`](../../06-error-registry.md) — codes `21600–21699` (exporter), `21750–21799` (Tools-core block, this feature claims `21750–21769`); wrapped `ER-DB-21105` (OpenedUrl insert), `ER-MAIL-21201..21210` (diagnose IMAP probes; aligned to impl in Slice #161)
 - Sibling consumers of `core.Tools.OpenUrl`: `02-features/03-rules` (rule action), `02-features/05-watch` (card hyperlinks)
 - Sibling consumer of `core.Tools.ExportCsv`: `02-features/02-emails` (Export selection menu)
 - Guidelines: `spec/12-consolidated-guidelines/13-app.md`, `16-app-design-system-and-ui.md`, `23-generic-cli.md`

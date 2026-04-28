@@ -365,7 +365,7 @@ Format (line-delimited JSON to stderr, human-readable to stdout):
 
 ```
 INFO  2026-04-25T10:14:03.221Z core.SaveEmail Alias=ab Uid=12345 DurationMs=42
-ERROR 2026-04-25T10:14:03.300Z core.SaveEmail Alias=ab Uid=12345 ErrCode=ER-STO-21101 File=internal/store/store.go:184 Msg="insert email: UNIQUE constraint failed"
+ERROR 2026-04-25T10:14:03.300Z core.SaveEmail Alias=ab Uid=12345 ErrCode=ER-DB-21108 File=internal/store/store.go:184 Msg="insert email: UNIQUE constraint failed"
 ```
 
 Full schema in [`05-logging-strategy.md`](./05-logging-strategy.md).
@@ -458,7 +458,7 @@ type Email struct {
 | `1` | General error |
 | `2` | Usage / invalid args |
 | `3` | Configuration error (`ER-CFG-*`) |
-| `4` | Database error (`ER-STO-*`) |
+| `4` | Database error (`ER-DB-*`) |
 | `5` | Network / IMAP error (`ER-MAIL-*`) |
 
 ### 9.3 Output
