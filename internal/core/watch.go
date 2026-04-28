@@ -121,6 +121,15 @@ type Watch struct {
 	runners map[string]*runner
 }
 
+// WatcherEventPublisher is the narrow bridge back into the low-level
+// watcher.Bus. core.Watch itself still owns lifecycle state, but the
+// desktop Raw log subscribes to watcher.Event, not WatchEvent; publishing
+// the immediate Start/Stop/Error mirrors there guarantees the user sees a
+// line even when the real IMAP loop has not reached its first tick yet.
+type WatcherEventPublisher interface {
+	PublishWatcherLifecycle(kind string, alias string, at time.Time, err error)
+}
+
 // NewWatch constructs a Watch. `now` is injectable for deterministic
 // timestamps in tests (production passes `time.Now`). `loop` and
 // `bus` are required; nil triggers ER-COR-21701.
@@ -144,7 +153,7 @@ func (w *Watch) Start(ctx context.Context, opts WatchOptions) errtrace.Result[st
 		return errtrace.Err[struct{}](err)
 	}
 	w.spawnRunner(ctx, opts)
-	w.publish(WatchEvent{Kind: WatchStart, Alias: opts.Alias, Message: "watch started"})
+	w.publishLifecycle(WatchStart, opts.Alias, nil, "watch started")
 	return errtrace.Ok(struct{}{})
 }
 
@@ -180,7 +189,7 @@ func (w *Watch) spawnRunner(parent context.Context, opts WatchOptions) {
 func (w *Watch) runLoop(ctx context.Context, alias string, loop Loop, done chan struct{}) {
 	defer close(done)
 	if err := loop.Run(ctx); err != nil && ctx.Err() == nil {
-		w.publish(WatchEvent{Kind: WatchError, Alias: alias, Err: err, Message: "loop exited with error"})
+		w.publishLifecycle(WatchError, alias, err, "loop exited with error")
 	}
 }
 
@@ -196,7 +205,7 @@ func (w *Watch) Stop(alias string, timeout time.Duration) errtrace.Result[struct
 	if err := waitOrTimeout(r.done, timeout); err != nil {
 		return errtrace.Err[struct{}](errtrace.WrapCode(err, errtrace.ErrWatcherShutdown, "Stop "+alias))
 	}
-	w.publish(WatchEvent{Kind: WatchStop, Alias: alias, Message: "watch stopped"})
+	w.publishLifecycle(WatchStop, alias, nil, "watch stopped")
 	return errtrace.Ok(struct{}{})
 }
 
