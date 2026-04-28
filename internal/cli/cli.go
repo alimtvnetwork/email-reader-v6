@@ -137,7 +137,7 @@ func runAddQuick(email, alias, password, host string, port int, useTLS bool, mai
 // and reports the byte/rune breakdown so users can confirm what's actually
 // being sent to the IMAP server.
 func newDoctorCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "doctor [alias]",
 		Short: "Inspect stored password for hidden / invisible characters.",
 		Args:  cobra.MaximumNArgs(1),
@@ -149,6 +149,46 @@ func newDoctorCmd() *cobra.Command {
 			return runDoctor(target)
 		},
 	}
+	cmd.AddCommand(newDoctorBrowserCmd())
+	return cmd
+}
+
+// newDoctorBrowserCmd renders the browser-launch diagnostic. With --probe
+// it ALSO spawns the resolved browser against the given URL so the user
+// can verify end-to-end without waiting for a rule to match.
+func newDoctorBrowserCmd() *cobra.Command {
+	var probe string
+	cmd := &cobra.Command{
+		Use:   "browser",
+		Short: "Show how the URL launcher would resolve a browser (and optionally probe it).",
+		Long: `Inspects every input the launcher consults — config override,
+EMAIL_READ_CHROME env var, OS-default candidate paths, PATH lookup —
+and prints which one would be picked, plus the exact argv that Open()
+would spawn. Use --probe <url> to actually launch the resolved browser.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.Load()
+			if err != nil {
+				return errtrace.Wrap(err, "doctor browser: load config")
+			}
+			rep := browser.Diagnose(cfg.Browser)
+			fmt.Print(browser.FormatReport(rep))
+			if probe == "" {
+				return nil
+			}
+			if rep.Error != "" {
+				return errtrace.New("cannot probe: " + rep.Error)
+			}
+			fmt.Printf("\nProbing: spawning resolved browser against %q ...\n", probe)
+			l := browser.New(cfg.Browser)
+			if err := l.Probe(probe); err != nil {
+				return errtrace.Wrap(err, "doctor browser: probe")
+			}
+			fmt.Println("Probe: ✓ spawn returned no error (window should be visible).")
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&probe, "probe", "", "URL to actually launch (default: inspect only, no spawn)")
+	return cmd
 }
 
 // runDoctor renders core.Doctor reports in the same step-numbered style
