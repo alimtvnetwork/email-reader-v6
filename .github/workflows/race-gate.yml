@@ -1,0 +1,35 @@
+name: Race gate (-race -count=2)
+
+# Canonical race-stress sweep promoted to a required PR gate per
+# .lovable/cicd-issues/04-no-race-gate-in-ci.md. The sweep itself was
+# verified green end-to-end in Slices #189-#192; this workflow only
+# wires it into CI.
+#
+# Build tag `nofyne` keeps the gate headless — Fyne canvas paths need
+# cgo+GL and live behind the deferred #118e workstation harness.
+#
+# Timing: race detector adds 5-10x runtime overhead; -count=2 doubles
+# it again to flush flaky races. Budget 30 min; trim if it runs faster.
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  race:
+    name: go test -race -count=2 (nofyne)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: true
+
+      - name: race sweep
+        run: go test -tags nofyne -race -count=2 ./...

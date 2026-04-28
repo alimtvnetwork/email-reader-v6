@@ -1,0 +1,34 @@
+name: Go test (-tags nofyne)
+
+# Fast PR gate: vet + non-race tests on the headless build (no cgo, no GL).
+# Pairs with race-gate.yml which adds the -race -count=2 sweep.
+#
+# Why a separate file: race-detector overhead is 5-10x; keeping the fast
+# gate fast lets developers iterate on PRs while the slower sweep runs
+# in parallel on the same trigger.
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    name: vet + test (nofyne)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: true
+
+      - name: go vet
+        run: go vet -tags nofyne ./...
+
+      - name: go test
+        run: go test -tags nofyne -count=1 ./...

@@ -33,3 +33,4 @@ Honest-scope principle: skipped tests with `t.Logf` + `t.Skip` are tripwires, no
 - [Archived: spec-21-app tasklist](mem://archive/02-spec-21-app-tasklist) — Closed 35-task authoring tasklist.
 - [Watch Raw log lifecycle mirror](mem://workflow/watch-raw-log-lifecycle-slice199) — Start/Stop/Error are mirrored from core.Watch to watcher.Bus so Raw log gets an immediate line even on fast-fail.
 - [Account Test Connection auth failure](mem://workflow/account-test-auth-failed-slice200) — Sanitized Test Connection password path and wrapped IMAP LOGIN rejects as ER-ACC-22201 with actionable RCA.
+- [Blockers 1/2/3/5 shipped (Slice #201)](mem://workflow/blockers-1-2-3-5-shipped-slice201) — `doctor browser` subcommand, GitHub Actions race-gate workflow, `internal/mockimap` (E.1 scope), `internal/benchgate` advisory harness; #4 canvas + #6 human-review remain deferred.

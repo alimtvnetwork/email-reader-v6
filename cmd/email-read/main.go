@@ -12,7 +12,7 @@ import (
 // internal/ui.AppVersion so both binaries advertise the same release.
 // 0.28.0 — Slice #40–#43: Edit Rule form, app boot smoke test, Density
 // preference persistence, Dashboard auto-refresh on EventUrlOpened.
-const Version = "0.29.0"
+const Version = "0.30.0"
 
 func main() {
 	root := cli.NewRoot(Version)
