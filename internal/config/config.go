@@ -41,6 +41,11 @@ type Watch struct {
 	PollSeconds int `json:"pollSeconds"`
 }
 
+// MinWatchPollSeconds is the safe production cadence for real IMAP hosts.
+// The watcher opens a fresh IMAP session per cycle today; polling faster can
+// trigger shared-host throttling and intermittent dial timeouts.
+const MinWatchPollSeconds = 60
+
 // Browser holds Chrome/Chromium launcher configuration.
 type Browser struct {
 	ChromePath   string `json:"chromePath"`
@@ -86,7 +91,7 @@ func Default() *Config {
 	return &Config{
 		Accounts: []Account{},
 		Rules:    []Rule{},
-		Watch:    Watch{PollSeconds: 3},
+		Watch:    Watch{PollSeconds: MinWatchPollSeconds},
 		Browser:  Browser{},
 	}
 }
@@ -218,8 +223,8 @@ func Load() (*Config, error) {
 			return nil, errtrace.Wrapf(err, "parse config %s", p)
 		}
 	}
-	if c.Watch.PollSeconds <= 0 {
-		c.Watch.PollSeconds = 3
+	if c.Watch.PollSeconds < MinWatchPollSeconds {
+		c.Watch.PollSeconds = MinWatchPollSeconds
 	}
 	if c.Accounts == nil {
 		c.Accounts = []Account{}
