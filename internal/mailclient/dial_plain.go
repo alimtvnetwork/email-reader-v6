@@ -9,7 +9,6 @@ package mailclient
 
 import (
 	"crypto/tls"
-	"errors"
 	"fmt"
 	"net"
 	"time"
@@ -54,7 +53,12 @@ func DialPlain(in PlainDialInput) error {
 
 	c, err := dialPlainConn(in.Host, in.Port, in.UseTLS, timeout)
 	if err != nil {
-		return wrapDialError(err, in.Host, in.Port)
+		if in.UseTLS && in.Port == 993 && isNetTimeout(err) {
+			c, err = dialPlainStartTLS(in.Host, timeout)
+		}
+		if err != nil {
+			return wrapDialError(err, in.Host, in.Port)
+		}
 	}
 	defer func() { _ = c.Logout() }()
 
@@ -65,6 +69,18 @@ func DialPlain(in PlainDialInput) error {
 			WithContext("Host", in.Host)
 	}
 	return nil
+}
+
+func dialPlainStartTLS(host string, timeout time.Duration) (*client.Client, error) {
+	c, err := dialPlainConn(host, 143, false, timeout)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.StartTLS(&tls.Config{ServerName: host}); err != nil {
+		_ = c.Logout()
+		return nil, err
+	}
+	return c, nil
 }
 
 // dialPlainConn performs the TCP (or TLS) dial with the supplied timeout.
@@ -79,8 +95,7 @@ func dialPlainConn(host string, port int, useTLS bool, timeout time.Duration) (*
 
 // wrapDialError tags timeouts vs generic dial failures with the right code.
 func wrapDialError(err error, host string, port int) error {
-	var ne net.Error
-	if errors.As(err, &ne) && ne.Timeout() {
+	if isNetTimeout(err) {
 		return errtrace.WrapCode(err, errtrace.ErrMailTimeout, "imap dial timed out").
 			WithContext("Host", host).
 			WithContext("Port", fmt.Sprintf("%d", port))
