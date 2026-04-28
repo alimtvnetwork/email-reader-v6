@@ -10,9 +10,8 @@ import (
 
 // Test_ApplyPollReload_ClampsAndLogs covers the live-reload helper that
 // receives PollSeconds updates from the Settings event channel. It must:
-//   - clamp values < 1 to 1 and > 60 to 60 (matches ER-SET-21771 server-side
-//     validation, but the watcher is defensive in case a buggy producer
-//     forwards an out-of-range value).
+//   - clamp any live update to the safe 60s IMAP cadence so a buggy producer
+//     cannot reintroduce high-frequency reconnect churn.
 //   - update the *time.Duration in place so the next tick.Reset picks it up.
 //   - log a single "poll cadence reloaded" line on actual change.
 //   - be a no-op (no log) when the new cadence equals the current one.
@@ -26,11 +25,11 @@ func Test_ApplyPollReload_ClampsAndLogs(t *testing.T) {
 		wantSecs     int
 		wantLogMatch string
 	}{
-		{"normal change", 3, 10, 10, "3s → 10s"},
-		{"clamp low", 5, 0, 1, "5s → 1s"},
-		{"clamp negative", 5, -100, 1, "5s → 1s"},
+		{"clamp fast value", 3, 10, 60, "3s → 1m0s"},
+		{"clamp low", 5, 0, 60, "5s → 1m0s"},
+		{"clamp negative", 5, -100, 60, "5s → 1m0s"},
 		{"clamp high", 5, 999, 60, "5s → 1m0s"},
-		{"no-op same value", 7, 7, 7, ""},
+		{"no-op same safe value", 60, 60, 60, ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
