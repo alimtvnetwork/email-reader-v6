@@ -995,7 +995,7 @@ const (
 | ErrCode prefix | Exit code (CLI only) |
 |---|---|
 | `ER-CFG-*` | `3` |
-| `ER-STO-*` | `4` |
+| `ER-DB-*` | `4` |
 | `ER-MAIL-*` | `5` |
 | `ER-CLI-21801`, `ER-CLI-21802`, `ER-CLI-21803` | `2` |
 | `ER-CLI-21804` | `130` |
