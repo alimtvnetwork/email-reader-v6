@@ -304,10 +304,7 @@ func BuildShell(aliases []string) fyne.CanvasObject {
 			OnErrorLogOpened: sidebarErrorLogReset,
 		})
 		rebuildDetail()
-		split := container.NewHSplit(sidebar, container.NewPadded(detail))
-		split.SetOffset(0.20)
-		root.Objects = []fyne.CanvasObject{split}
-		root.Refresh()
+		mountShellSplit(root, sidebar, detail, true)
 	}
 
 	// Re-render the active view if the alias changes so views always reflect
@@ -328,10 +325,23 @@ func BuildShell(aliases []string) fyne.CanvasObject {
 		OnErrorLogOpened: sidebarErrorLogReset,
 	})
 	rebuildDetail()
+	mountShellSplit(root, sidebar, detail, false)
+	return root
+}
+
+// mountShellSplit composes the sidebar+detail HSplit into the root stack.
+// Extracted from BuildShell to keep the outer function under the
+// 15-statement linter budget (AC-PROJ-20). The `refresh` flag is true only
+// for the rebuildShell path — the initial build returns root for the
+// caller to mount, so a Refresh would be redundant (and would fire before
+// the window is shown).
+func mountShellSplit(root *fyne.Container, sidebar, detail fyne.CanvasObject, refresh bool) {
 	split := container.NewHSplit(sidebar, container.NewPadded(detail))
 	split.SetOffset(0.20)
 	root.Objects = []fyne.CanvasObject{split}
-	return root
+	if refresh {
+		root.Refresh()
+	}
 }
 
 // viewFor returns the widget for a nav destination. Each case picks a real
