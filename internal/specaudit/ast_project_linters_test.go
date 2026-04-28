@@ -225,25 +225,26 @@ func Test_AllErrorRefsResolveInRegistry(t *testing.T) {
 			}
 		}
 	})
-	// Honest scope (Slice #131): the scanner currently surfaces a
-	// pre-existing gap of ~39 ER codes that specs reference but the
-	// registry hasn't formalised yet (most concentrated in the
-	// Settings 217xx and Migrations 218xx blocks). Closing AC-PROJ-31
-	// requires *registry* growth, not test work — that's a behaviour
-	// slice. We keep the scanner wired (so it ratchets the moment
-	// rows are added) but report-only via t.Log, and AC-PROJ-31
-	// stays in the coverage allowlist with a defer note.
+	// AC-PROJ-31 PROMOTED to fail-loud (Slice #197): every ER code
+	// referenced anywhere under spec/ MUST resolve to a `### ER-XXX`
+	// detail entry in spec/21-app/06-error-registry.md. Slice #196
+	// closed Cat A (ER-STO → ER-DB rename + 5 SQLite-class codes);
+	// Slice #197 added the 12 missing entries (ER-WCH-21412, ER-UI-21900,
+	// ER-SET-21770..21779). Scanner now reports 0 gaps. If a future
+	// spec edit references a new ER code without adding a detail entry,
+	// THIS TEST FAILS (no more silent skips).
 	if len(missing) > 0 {
 		var keys []string
 		for k := range missing {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
-		t.Logf("AC-PROJ-31 (deferred): scanner found %d undefined ER code(s) — registry needs to grow before this can ratchet green.", len(missing))
+		var lines []string
 		for _, k := range keys {
-			t.Logf("  %s referenced in %v", k, missing[k])
+			lines = append(lines, fmt.Sprintf("  %s referenced in %v", k, missing[k]))
 		}
-		t.Skip("AC-PROJ-31 deferred — see allowlist comment in coverage_audit_test.go")
+		t.Fatalf("AC-PROJ-31 violation: %d ER code(s) referenced in spec/ but not defined in spec/21-app/06-error-registry.md:\n%s",
+			len(missing), strings.Join(lines, "\n"))
 	}
 }
 
