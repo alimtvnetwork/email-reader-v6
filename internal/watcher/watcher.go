@@ -198,10 +198,7 @@ func runLoop(ctx context.Context, opts Options, logger *log.Logger, tick *time.T
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Printf("")
-			logger.Printf("%s  ■ stopped — ran %s, %d polls",
-				ts(), time.Since(st.startedAt).Round(time.Second), st.pollCount)
-			publishLifecycleEvent(opts, EventStopped, alias)
+			logStopped(logger, opts, st)
 			return nil
 		case secs, ok := <-opts.PollSecondsCh:
 			if ok {
@@ -211,6 +208,10 @@ func runLoop(ctx context.Context, opts Options, logger *log.Logger, tick *time.T
 			st.pollCount++
 			stats, err := pollOnce(ctx, opts, logger)
 			if err != nil {
+				if ctx.Err() != nil {
+					logStopped(logger, opts, st)
+					return nil
+				}
 				logPollError(logger, opts, st, err)
 				if berr := opts.Store.BumpConsecutiveFailures(ctx, alias); berr != nil {
 					// Best-effort: log but keep polling. The
@@ -226,6 +227,13 @@ func runLoop(ctx context.Context, opts Options, logger *log.Logger, tick *time.T
 			tick.Reset(nextDelay(*poll, st, logger, alias))
 		}
 	}
+}
+
+func logStopped(logger *log.Logger, opts Options, st *pollState) {
+	logger.Printf("")
+	logger.Printf("%s  ■ stopped — ran %s, %d polls",
+		ts(), time.Since(st.startedAt).Round(time.Second), st.pollCount)
+	publishLifecycleEvent(opts, EventStopped, opts.Account.Alias)
 }
 
 // nextDelay picks the wait until the next poll attempt. Happy path returns
@@ -299,15 +307,18 @@ func logErrLines(logger *log.Logger, leader string, err error) {
 
 // connectAndSelect dials IMAP and selects the inbox. The caller owns the
 // returned *mailclient.Client and must Close() it.
-func connectAndSelect(opts Options, logger *log.Logger, start time.Time) (*mailclient.Client, mailclient.MailboxStats, error) {
+func connectAndSelect(ctx context.Context, opts Options, logger *log.Logger, start time.Time) (*mailclient.Client, mailclient.MailboxStats, error) {
 	alias := opts.Account.Alias
 	v := opts.Verbose
 	if v {
 		logger.Printf("%s  · [%s] dial %s:%d (tls=%v) as %s",
 			ts(), alias, opts.Account.ImapHost, opts.Account.ImapPort, opts.Account.UseTLS, opts.Account.Email)
 	}
-	mc, err := mailclient.Dial(opts.Account)
+	mc, err := mailclient.DialContext(ctx, opts.Account)
 	if err != nil {
+		if cerr := ctx.Err(); cerr != nil {
+			return nil, mailclient.MailboxStats{}, cerr
+		}
 		return nil, mailclient.MailboxStats{}, errtrace.WrapCode(err, errtrace.ErrMailDial, "watcher.connectAndSelect: dial imap")
 	}
 	if v {
@@ -526,7 +537,7 @@ func pollOnce(ctx context.Context, opts Options, logger *log.Logger) (*mailclien
 	if err != nil {
 		return nil, err
 	}
-	mc, stats, err := connectAndSelect(opts, logger, start)
+	mc, stats, err := connectAndSelect(ctx, opts, logger, start)
 	if err != nil {
 		return nil, err
 	}
