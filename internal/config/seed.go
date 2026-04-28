@@ -33,9 +33,9 @@ const SeedPasswordEnvVar = "EMAIL_READ_SEED_PASSWORD"
 // fresh install.
 var DefaultSeedAccounts = []Account{
 	{
-		Alias:       "attobond-admin",
+		Alias:       "admin",
 		Email:       "lovable.admin@attobondcleaning.store",
-		DisplayName: "Attobond Admin (default)",
+		DisplayName: "Admin (default)",
 		// PasswordB64 intentionally empty — populated at seed time from
 		// SeedPasswordEnvVar via resolveSeedPassword.
 		PasswordB64: "",
