@@ -53,18 +53,34 @@ func NewSidebar(opts SidebarOptions) fyne.CanvasObject {
 	if len(opts.Aliases) == 0 {
 		picker = widget.NewSelect([]string{"No accounts — add one"}, nil)
 		picker.Disable()
+		// CF-A4 (Slice #198): clear any stale alias inherited from a
+		// previous shell render. Without this the detail pane (Watch,
+		// Emails, …) keeps reading `state.Alias()` and wires Start to
+		// an account that no longer exists, producing the "0 accounts
+		// but watcher logs `[Admin] poll error`" regression.
+		if opts.State != nil && opts.State.Alias() != "" {
+			opts.State.SetAlias("")
+		}
 	} else {
 		picker = widget.NewSelect(opts.Aliases, func(a string) {
 			if opts.State != nil {
 				opts.State.SetAlias(a)
 			}
 		})
-		// Pre-select either the previously chosen alias or the first one so
-		// the detail pane always has a useful default.
-		if opts.State != nil && opts.State.Alias() != "" {
-			picker.SetSelected(opts.State.Alias())
+		// If the previously-selected alias is no longer in the list
+		// (account was removed since last render), fall back to the
+		// first available alias rather than leaving stale state.
+		prev := ""
+		if opts.State != nil {
+			prev = opts.State.Alias()
+		}
+		if prev != "" && containsAlias(opts.Aliases, prev) {
+			picker.SetSelected(prev)
 		} else {
 			picker.SetSelected(opts.Aliases[0])
+			if opts.State != nil {
+				opts.State.SetAlias(opts.Aliases[0])
+			}
 		}
 	}
 
