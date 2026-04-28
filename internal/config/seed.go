@@ -16,9 +16,17 @@ import (
 	"github.com/lovable/email-read/internal/errtrace"
 )
 
+// SeedPasswordEnvVar is the environment variable consulted at seed time
+// for the default account's IMAP password. We deliberately do NOT ship a
+// plaintext password in the binary — operators must supply one via env
+// for the seed to be applied. If unset/empty, the seed entry is skipped
+// (the app simply starts with no pre-provisioned account).
+const SeedPasswordEnvVar = "EMAIL_READ_SEED_PASSWORD"
+
 // DefaultSeedAccounts is the list of accounts pre-provisioned for the
-// user. Plaintext passwords here are sanitized + base64-encoded before
-// being persisted, exactly like a manual Add Account flow.
+// user. Passwords are sourced at runtime from SeedPasswordEnvVar — see
+// resolveSeedPassword. Entries with an empty resolved password are
+// skipped by applySeedDefaults.
 //
 // Add new entries here to ship them with the build. Remove entries here
 // only when you also want existing installs to stop seeing them on a
@@ -28,14 +36,25 @@ var DefaultSeedAccounts = []Account{
 		Alias:       "attobond-admin",
 		Email:       "lovable.admin@attobondcleaning.store",
 		DisplayName: "Attobond Admin (default)",
-		// Sanitized at encode time; raw value contains U+2060 wrappers
-		// from chat copy-paste that SanitizePassword strips.
-		PasswordB64: EncodePassword("\u2060 ZPb*sz=d!cEE_Wgc \u2060"),
+		// PasswordB64 intentionally empty — populated at seed time from
+		// SeedPasswordEnvVar via resolveSeedPassword.
+		PasswordB64: "",
 		ImapHost:    "mail.attobondcleaning.store",
 		ImapPort:    993,
 		UseTLS:      true,
 		Mailbox:     "INBOX",
 	},
+}
+
+// resolveSeedPassword returns the EncodePassword'd value of the env-var
+// password, or "" if the env var is unset/empty. Sanitization (U+2060
+// wrappers etc.) is handled inside EncodePassword.
+func resolveSeedPassword() string {
+	raw := os.Getenv(SeedPasswordEnvVar)
+	if raw == "" {
+		return ""
+	}
+	return EncodePassword(raw)
 }
 
 // tombstonePath returns the absolute path of the seeded-deleted tombstone
@@ -146,6 +165,15 @@ func applySeedDefaults(c *Config) bool {
 		}
 		if c.FindAccount(seed.Alias) != nil {
 			continue
+		}
+		if seed.PasswordB64 == "" {
+			pw := resolveSeedPassword()
+			if pw == "" {
+				// No env-supplied password ⇒ skip seeding this entry
+				// rather than persist an unusable account.
+				continue
+			}
+			seed.PasswordB64 = pw
 		}
 		c.Accounts = append(c.Accounts, seed)
 		mutated = true
