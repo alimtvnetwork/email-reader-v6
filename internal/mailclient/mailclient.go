@@ -108,6 +108,7 @@ type contextDialer struct {
 	timeout time.Duration
 	mu      sync.Mutex
 	conn    net.Conn
+	aborted bool
 }
 
 func (d *contextDialer) Dial(network, addr string) (net.Conn, error) {
@@ -122,8 +123,13 @@ func (d *contextDialer) Dial(network, addr string) (net.Conn, error) {
 		}
 	}
 	d.mu.Lock()
+	aborted := d.aborted
 	d.conn = conn
 	d.mu.Unlock()
+	if aborted || d.ctx.Err() != nil {
+		_ = conn.Close()
+		return nil, d.ctx.Err()
+	}
 	return conn, nil
 }
 
@@ -141,6 +147,7 @@ func (d *contextDialer) abortOnCancel() func() {
 
 func (d *contextDialer) closeConn() {
 	d.mu.Lock()
+	d.aborted = true
 	conn := d.conn
 	d.mu.Unlock()
 	if conn != nil {
