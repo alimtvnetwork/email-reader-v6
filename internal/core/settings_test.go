@@ -30,8 +30,8 @@ func TestSettings_GetReturnsDefaults(t *testing.T) {
 			t.Fatalf("Get: %v", r.Error())
 		}
 		snap := r.Value()
-		if snap.PollSeconds != config.MinWatchPollSeconds {
-			t.Errorf("PollSeconds = %d, want %d", snap.PollSeconds, config.MinWatchPollSeconds)
+		if snap.PollSeconds != config.DefaultWatchPollSeconds {
+			t.Errorf("PollSeconds = %d, want %d", snap.PollSeconds, config.DefaultWatchPollSeconds)
 		}
 		if snap.Theme != ThemeDark {
 			t.Errorf("Theme = %v, want ThemeDark", snap.Theme)
@@ -54,7 +54,7 @@ func TestSettings_SaveAndRoundTrip(t *testing.T) {
 	withIsolatedConfig(t, func() {
 		s := newTestSettings(t)
 		in := SettingsInput{
-			PollSeconds:           config.MinWatchPollSeconds,
+			PollSeconds:           config.DefaultWatchPollSeconds,
 			Theme:                 ThemeLight,
 			OpenUrlAllowedSchemes: []string{"HTTPS", "http", "https"}, // dup + uppercase
 			AllowLocalhostUrls:    true,
@@ -65,8 +65,8 @@ func TestSettings_SaveAndRoundTrip(t *testing.T) {
 			t.Fatalf("Save: %v", r.Error())
 		}
 		got := r.Value()
-		if got.PollSeconds != config.MinWatchPollSeconds {
-			t.Errorf("PollSeconds = %d, want %d", got.PollSeconds, config.MinWatchPollSeconds)
+		if got.PollSeconds != config.DefaultWatchPollSeconds {
+			t.Errorf("PollSeconds = %d, want %d", got.PollSeconds, config.DefaultWatchPollSeconds)
 		}
 		if got.Theme != ThemeLight {
 			t.Errorf("Theme = %v, want Light", got.Theme)
@@ -85,7 +85,7 @@ func TestSettings_SaveAndRoundTrip(t *testing.T) {
 		if again.HasError() {
 			t.Fatalf("Get after Save: %v", again.Error())
 		}
-		if again.Value().PollSeconds != config.MinWatchPollSeconds {
+		if again.Value().PollSeconds != config.DefaultWatchPollSeconds {
 			t.Errorf("persisted PollSeconds = %d", again.Value().PollSeconds)
 		}
 	})
@@ -150,18 +150,18 @@ func TestSettings_ValidationErrors(t *testing.T) {
 			},
 			{
 				name: "bad theme",
-				in:   SettingsInput{PollSeconds: config.MinWatchPollSeconds, Theme: ThemeMode(99), OpenUrlAllowedSchemes: []string{"https"}},
+				in:   SettingsInput{PollSeconds: config.DefaultWatchPollSeconds, Theme: ThemeMode(99), OpenUrlAllowedSchemes: []string{"https"}},
 				code: errtrace.ErrSettingsTheme,
 			},
 			{
 				name: "javascript scheme",
-				in:   SettingsInput{PollSeconds: config.MinWatchPollSeconds, Theme: ThemeDark, OpenUrlAllowedSchemes: []string{"javascript"}},
+				in:   SettingsInput{PollSeconds: config.DefaultWatchPollSeconds, Theme: ThemeDark, OpenUrlAllowedSchemes: []string{"javascript"}},
 				code: errtrace.ErrSettingsUrlScheme,
 			},
 			{
 				name: "bad incognito arg",
 				in: SettingsInput{
-					PollSeconds: config.MinWatchPollSeconds, Theme: ThemeDark,
+					PollSeconds: config.DefaultWatchPollSeconds, Theme: ThemeDark,
 					OpenUrlAllowedSchemes: []string{"https"},
 					BrowserOverride:       BrowserOverride{IncognitoArg: "rm -rf /"},
 				},
@@ -170,7 +170,7 @@ func TestSettings_ValidationErrors(t *testing.T) {
 			{
 				name: "localhost without http",
 				in: SettingsInput{
-					PollSeconds: config.MinWatchPollSeconds, Theme: ThemeDark,
+					PollSeconds: config.DefaultWatchPollSeconds, Theme: ThemeDark,
 					OpenUrlAllowedSchemes: []string{"https"},
 					AllowLocalhostUrls:    true,
 				},
@@ -183,7 +183,7 @@ func TestSettings_ValidationErrors(t *testing.T) {
 				// > 0 except for the dedicated case.
 				in := tc.in
 				if tc.name != "poll too small" && in.PollSeconds == 0 {
-					in.PollSeconds = config.MinWatchPollSeconds
+					in.PollSeconds = config.DefaultWatchPollSeconds
 				}
 				r := s.Save(context.Background(), in)
 				if !r.HasError() {
@@ -236,7 +236,7 @@ func TestSettings_ResetToDefaults(t *testing.T) {
 		s := newTestSettings(t)
 		// Mutate first.
 		_ = s.Save(context.Background(), SettingsInput{
-			PollSeconds: config.MinWatchPollSeconds, Theme: ThemeLight,
+			PollSeconds: config.DefaultWatchPollSeconds, Theme: ThemeLight,
 			OpenUrlAllowedSchemes: []string{"https"},
 			AutoStartWatch:        false,
 		})
@@ -245,7 +245,7 @@ func TestSettings_ResetToDefaults(t *testing.T) {
 			t.Fatalf("Reset: %v", r.Error())
 		}
 		snap := r.Value()
-		if snap.PollSeconds != config.MinWatchPollSeconds || snap.Theme != ThemeDark || !snap.AutoStartWatch {
+		if snap.PollSeconds != config.DefaultWatchPollSeconds || snap.Theme != ThemeDark || !snap.AutoStartWatch {
 			t.Errorf("reset did not apply defaults: %+v", snap)
 		}
 	})
@@ -305,7 +305,7 @@ func TestSettings_SubscribeCancelStopsDelivery(t *testing.T) {
 		}
 		// Saving must not panic.
 		_ = s.Save(context.Background(), SettingsInput{
-			PollSeconds: config.MinWatchPollSeconds, Theme: ThemeDark,
+			PollSeconds: config.DefaultWatchPollSeconds, Theme: ThemeDark,
 			OpenUrlAllowedSchemes: []string{"https"},
 		})
 	})

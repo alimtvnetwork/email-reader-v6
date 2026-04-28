@@ -8,16 +8,16 @@ import (
 	"time"
 )
 
-// Test_ApplyPollReload_ClampsAndLogs covers the live-reload helper that
+// Test_ApplyPollReload_ClampsToSupportedRangeAndLogs covers the live-reload helper that
 // receives PollSeconds updates from the Settings event channel. It must:
-//   - clamp any live update to the safe 60s IMAP cadence so a buggy producer
-//     cannot reintroduce high-frequency reconnect churn.
+//   - clamp invalid live updates to the supported Settings range without
+//     forcing valid fast cadences such as 5s back to 60s.
 //   - update the *time.Duration in place so the next tick.Reset picks it up.
 //   - log a single "poll cadence reloaded" line on actual change.
 //   - be a no-op (no log) when the new cadence equals the current one.
 //
 // Spec: spec/21-app/02-features/07-settings/01-backend.md §8 (CF-W1).
-func Test_ApplyPollReload_ClampsAndLogs(t *testing.T) {
+func Test_ApplyPollReload_ClampsToSupportedRangeAndLogs(t *testing.T) {
 	cases := []struct {
 		name         string
 		startSecs    int
@@ -25,11 +25,11 @@ func Test_ApplyPollReload_ClampsAndLogs(t *testing.T) {
 		wantSecs     int
 		wantLogMatch string
 	}{
-		{"clamp fast value", 3, 10, 60, "3s → 1m0s"},
-		{"clamp low", 5, 0, 60, "5s → 1m0s"},
-		{"clamp negative", 5, -100, 60, "5s → 1m0s"},
+		{"keep fast valid value", 3, 10, 10, "3s → 10s"},
+		{"default zero", 5, 0, 5, ""},
+		{"default negative", 3, -100, 5, "3s → 5s"},
 		{"clamp high", 5, 999, 60, "5s → 1m0s"},
-		{"no-op same safe value", 60, 60, 60, ""},
+		{"no-op same fast value", 5, 5, 5, ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
