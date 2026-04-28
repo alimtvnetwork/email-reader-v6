@@ -515,7 +515,6 @@ func accountsHealthLoader(services *Services) func(ctx context.Context) map[stri
 	}
 }
 
-
 // openLogFileWithFyne hands `path` to the OS default handler via
 // `fyne.CurrentApp().OpenURL(file://…)`. Pulled out as its own
 // function so the NavErrorLog wiring stays a one-liner and the

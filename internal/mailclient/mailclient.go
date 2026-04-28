@@ -53,9 +53,9 @@ type Client struct {
 // dials. Without this, a silently-dropping IMAP host (firewall,
 // routing blackhole, port closed) makes the watcher block on the OS
 // default (~75s on Linux) before reporting `[ER-MAIL-21201]`.
-// Keep this generous: some shared-hosting mail servers and home networks
-// can take longer than a few seconds even when the endpoint is healthy.
-const DefaultDialTimeout = 30 * time.Second
+// Keep this aligned with the user-visible 5s watch cadence so a dead IMAP
+// dial does not block the next retry for 30s and make cadence look broken.
+const DefaultDialTimeout = 5 * time.Second
 
 // Dial opens an IMAP connection and logs in.
 func Dial(acct config.Account) (*Client, error) {

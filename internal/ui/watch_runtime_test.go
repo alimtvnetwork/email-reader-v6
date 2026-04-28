@@ -44,8 +44,8 @@ func TestWatchRuntime_PollSeconds_FallsBackToConfig(t *testing.T) {
 func TestWatchRuntime_PollSeconds_DefaultsWhenEverythingNil(t *testing.T) {
 	t.Parallel()
 	rt := &WatchRuntime{}
-	if got := rt.PollSeconds(); got != 3 {
-		t.Fatalf("PollSeconds: got %d, want 3 (default)", got)
+	if got := rt.PollSeconds(); got != config.DefaultWatchPollSeconds {
+		t.Fatalf("PollSeconds: got %d, want default", got)
 	}
 }
 
@@ -91,7 +91,7 @@ func TestWatchRuntime_Close_LogsButContinuesOnError(t *testing.T) {
 	t.Parallel()
 	ran := false
 	rt := &WatchRuntime{closers: []func() error{
-		func() error { ran = true; return nil },                  // older — runs LAST in LIFO
+		func() error { ran = true; return nil },                    // older — runs LAST in LIFO
 		func() error { return errors.New("simulated close fail") }, // newer — runs FIRST
 	}}
 	rt.Close()

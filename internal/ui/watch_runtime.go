@@ -36,12 +36,12 @@ import (
 // must outlive any single view. Held by a package-level pointer
 // (watchRuntimeSingleton) and built once via sync.Once.
 type WatchRuntime struct {
-	Watch        *core.Watch
-	Bus          *watcher.Bus
-	Store        *store.Store
-	Settings     *core.Settings
-	PollChans    *core.PollChanRegistry
-	Maintenance  *core.Maintenance
+	Watch       *core.Watch
+	Bus         *watcher.Bus
+	Store       *store.Store
+	Settings    *core.Settings
+	PollChans   *core.PollChanRegistry
+	Maintenance *core.Maintenance
 	// Refresher is the alias-indexed one-shot poll registry that
 	// satisfies `core.Refresher` (P4.4 seam). Built once at
 	// bootstrap and populated with every configured account so the
@@ -66,7 +66,7 @@ func (rt *WatchRuntime) PollSeconds() int {
 	rt.cfgMu.RLock()
 	defer rt.cfgMu.RUnlock()
 	if rt.cfg == nil {
-		return config.MinWatchPollSeconds
+		return config.DefaultWatchPollSeconds
 	}
 	return rt.cfg.Watch.PollSeconds
 }

@@ -180,7 +180,7 @@ const (
 // because OpenedUrls v1 has no Decision column to split on yet).
 func DefaultSettingsInput() SettingsInput {
 	return SettingsInput{
-		PollSeconds:           3,
+		PollSeconds:           5,
 		Theme:                 ThemeDark,
 		Density:               DensityComfortable,
 		OpenUrlAllowedSchemes: []string{"https"},

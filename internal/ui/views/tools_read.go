@@ -126,9 +126,7 @@ func parseLimit(s string) int {
 	return 0
 }
 
-
 // Slice #116c removed `buildReadTools` — replaced by the injected
 // `ToolsFactory` (see `BuildOpenUrlTab` for the contract and
 // `internal/ui/services.go::defaultToolsFactory` for the production
 // implementation).
-

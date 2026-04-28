@@ -48,13 +48,13 @@ func Regress_Issue01_TestConnectionSurfacesEr21430(t *testing.T) {
 func Regress_Issue03_SanitizePasswordStripsCfRunes(t *testing.T) {
 	want := "ZPb*sz=d!cEE_Wgc"
 	dirties := []string{
-		"\u2060" + want + "\u2060",         // WORD JOINER both sides
-		"\u200B" + want,                    // ZERO-WIDTH SPACE leading
-		want + "\u200B",                    // ZERO-WIDTH SPACE trailing
-		"\uFEFF" + want,                    // BOM leading
-		"\u00A0" + want + "\u00A0",         // NBSP both sides
-		" \t" + want + "\n",                // ASCII whitespace
-		"\u2060 " + want + " \u2060",       // WORD JOINER + ASCII space (the original issue)
+		"\u2060" + want + "\u2060",   // WORD JOINER both sides
+		"\u200B" + want,              // ZERO-WIDTH SPACE leading
+		want + "\u200B",              // ZERO-WIDTH SPACE trailing
+		"\uFEFF" + want,              // BOM leading
+		"\u00A0" + want + "\u00A0",   // NBSP both sides
+		" \t" + want + "\n",          // ASCII whitespace
+		"\u2060 " + want + " \u2060", // WORD JOINER + ASCII space (the original issue)
 	}
 	for _, dirty := range dirties {
 		got := SanitizePassword(dirty)

@@ -32,7 +32,7 @@ type Options struct {
 	Bus                     *Bus        // optional; structured event stream for the UI. CLI leaves nil.
 	SuppressLifecycleEvents bool        // core.Watch may mirror Start/Stop itself for UI raw-log continuity.
 	// PollSecondsCh, when non-nil, lets a Settings consumer push live
-	// PollSeconds updates. Values are clamped to the safe IMAP cadence and applied on the
+	// PollSeconds updates. Values are clamped to the supported Settings range and applied on the
 	// NEXT loop iteration (in-flight polls are not interrupted). Per
 	// spec/21-app/02-features/07-settings/01-backend.md §8 (CF-W1).
 	PollSecondsCh <-chan int
@@ -170,11 +170,7 @@ func Run(ctx context.Context, opts Options) error {
 	if logger == nil {
 		logger = log.New(io.Discard, "", 0)
 	}
-	poll := time.Duration(opts.PollSeconds) * time.Second
-	minPoll := time.Duration(config.MinWatchPollSeconds) * time.Second
-	if poll < minPoll {
-		poll = minPoll
-	}
+	poll := pollDuration(opts.PollSeconds)
 	alias := opts.Account.Alias
 	logStartupBanner(logger, opts, poll)
 	publishLifecycleEvent(opts, EventStarted, alias)
@@ -256,19 +252,23 @@ func nextDelay(base time.Duration, st *pollState, logger *log.Logger, alias stri
 // change. The new cadence takes effect on the next tick (in-flight polls
 // are NOT interrupted) per spec CF-W1.
 func applyPollReload(logger *log.Logger, alias string, poll *time.Duration, secs int) {
-	if secs < config.MinWatchPollSeconds {
-		secs = config.MinWatchPollSeconds
-	}
-	if secs > config.MinWatchPollSeconds {
-		secs = config.MinWatchPollSeconds
-	}
-	next := time.Duration(secs) * time.Second
+	next := pollDuration(secs)
 	if next == *poll {
 		return
 	}
 	logger.Printf("%s  ⚙ [%s] poll cadence reloaded: %s → %s (applies next tick)",
 		ts(), alias, *poll, next)
 	*poll = next
+}
+
+func pollDuration(secs int) time.Duration {
+	if secs < config.MinWatchPollSeconds {
+		secs = config.DefaultWatchPollSeconds
+	}
+	if secs > config.MaxWatchPollSeconds {
+		secs = config.MaxWatchPollSeconds
+	}
+	return time.Duration(secs) * time.Second
 }
 
 // shortPath strips a long /Applications/.../Google Chrome path to just the

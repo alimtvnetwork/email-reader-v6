@@ -214,7 +214,6 @@ func (w *Watch) Stop(alias string, timeout time.Duration) errtrace.Result[struct
 	return errtrace.Ok(struct{}{})
 }
 
-
 // takeRunner removes and returns the runner under mu.Lock. Releases
 // the lock before any blocking wait so Start/Stop on other aliases
 // stay responsive.

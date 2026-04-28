@@ -27,8 +27,8 @@ const (
 // uint16 value or a friendly error suitable for the status line.
 func ParsePollSeconds(raw string) (uint16, error) {
 	n, err := strconv.Atoi(raw)
-	if err != nil || n != config.MinWatchPollSeconds {
-		return 0, errtrace.New("poll interval must be 60 seconds")
+	if err != nil || n < config.MinWatchPollSeconds || n > config.MaxWatchPollSeconds {
+		return 0, errtrace.New("poll interval must be 1–60 seconds")
 	}
 	return uint16(n), nil
 }
@@ -125,10 +125,10 @@ func CoreDensityToThemeDensity(coreDensity int) int {
 // MaintenanceFields bundles the four §5 knobs to keep ProjectSettingsInput
 // readable and to give the Settings view a single value to thread through.
 type MaintenanceFields struct {
-	WeekdayLabel    string
-	HourLocal       uint8
-	WalHours        uint8
-	PruneBatchSize  uint32
+	WeekdayLabel   string
+	HourLocal      uint8
+	WalHours       uint8
+	PruneBatchSize uint32
 }
 
 // ProjectSettingsInput merges user-edited fields with the invariant slice

@@ -96,7 +96,6 @@ func BuildAccounts(opts AccountsOptions) fyne.CanvasObject {
 		header := container.NewBorder(nil, nil, nil, actionsHeaderCell, dataHeader)
 		rows := []fyne.CanvasObject{header, widget.NewSeparator()}
 
-
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 

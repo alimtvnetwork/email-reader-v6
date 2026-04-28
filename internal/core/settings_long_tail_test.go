@@ -205,8 +205,8 @@ func TestSettings_Reset_EventEmitted(t *testing.T) {
 			if ev.Kind != SettingsResetApplied {
 				t.Errorf("Kind = %v, want SettingsResetApplied", ev.Kind)
 			}
-			if ev.Snapshot.PollSeconds != 3 {
-				t.Errorf("event PollSeconds = %d, want 3", ev.Snapshot.PollSeconds)
+			if ev.Snapshot.PollSeconds != config.DefaultWatchPollSeconds {
+				t.Errorf("event PollSeconds = %d, want 5", ev.Snapshot.PollSeconds)
 			}
 		case <-time.After(time.Second):
 			t.Fatal("no reset event delivered within 1s")

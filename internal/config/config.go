@@ -41,10 +41,15 @@ type Watch struct {
 	PollSeconds int `json:"pollSeconds"`
 }
 
-// MinWatchPollSeconds is the safe production cadence for real IMAP hosts.
-// The watcher opens a fresh IMAP session per cycle today; polling faster can
-// trigger shared-host throttling and intermittent dial timeouts.
-const MinWatchPollSeconds = 60
+// DefaultWatchPollSeconds is the user-requested default Watch cadence.
+const DefaultWatchPollSeconds = 5
+
+// Watch poll bounds keep Settings validation and runtime fallbacks from
+// accepting zero/negative tight loops while still allowing fast 5s polling.
+const (
+	MinWatchPollSeconds = 1
+	MaxWatchPollSeconds = 60
+)
 
 // Browser holds Chrome/Chromium launcher configuration.
 type Browser struct {
@@ -91,7 +96,7 @@ func Default() *Config {
 	return &Config{
 		Accounts: []Account{},
 		Rules:    []Rule{},
-		Watch:    Watch{PollSeconds: 3},
+		Watch:    Watch{PollSeconds: DefaultWatchPollSeconds},
 		Browser:  Browser{},
 	}
 }
