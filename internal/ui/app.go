@@ -244,11 +244,10 @@ func BuildShell(aliases []string) fyne.CanvasObject {
 	// buildEmailsService / buildRulesService helpers from P2.3/P2.5/P2.7.
 	services := BuildServices()
 
-	// rebuildSidebar rebuilds the entire shell with a fresh aliases list —
+	// rebuildShell rebuilds the entire shell with a fresh aliases list —
 	// used after the Add Account form saves so the picker reflects truth.
-	var rebuildShell func()
 	// rebuildDetail swaps the detail pane to match the current state.Nav().
-	var rebuildDetail func()
+	var rebuildShell, rebuildDetail func()
 	gotoNav := func(k NavKind) {
 		state.SetNav(k)
 		rebuildDetail()
