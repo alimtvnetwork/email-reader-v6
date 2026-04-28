@@ -22,6 +22,7 @@ Honest-scope principle: skipped tests with `t.Logf` + `t.Skip` are tripwires, no
 - [Architecture decisions](mem://decisions/01-architecture) — Core architectural choices.
 - [Build and deploy](mem://decisions/02-build-and-deploy) — Build pipeline + run.ps1/run.sh.
 - [IMAP auth failed root causes](mem://decisions/03-imap-auth-debugging) — Wrong password OR hidden Unicode; check doctor first.
+- [Watch Raw log empty RCA](mem://decisions/07-watch-raw-log-empty-rca) — "● Watching" but Raw log empty: alias-filter mismatch, watcher exited fast (auth fail), seed-password env unset, or stale singleton after config edit. Diagnose via Error Log first.
 - [spec/21-app folder rename](mem://decisions/04-spec-21-app-rename) — 2026-04-25 merge of 21-golang-email-reader + 22-fyne-ui.
 - [Error stack traces preference](mem://preferences/01-error-stack-traces) — Always use `internal/errtrace`.
 - [Error-trace migration rollout](mem://features/02-error-trace-rollout) — Phase 1 baseline (46 production sites still bypass errtrace); update after each Phase-2 slice. Lint scripts wired into run.sh / run.ps1 (warn-only).
