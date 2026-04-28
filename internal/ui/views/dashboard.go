@@ -507,8 +507,8 @@ type dashboardCards struct {
 }
 
 // newDashboardCards builds the four stat tiles in a single row.
-func newDashboardCards() dashboardCards {
-	c := dashboardCards{
+func newDashboardCards() *dashboardCards {
+	c := &dashboardCards{
 		Accounts: newStatCard("Accounts", "—"),
 		Rules:    newStatCard("Rules enabled", "—"),
 		Emails:   newStatCard("Emails stored", "—"),
@@ -521,7 +521,7 @@ func newDashboardCards() dashboardCards {
 }
 
 // makeDashboardRefresh returns a closure that reloads stats and updates the cards.
-func makeDashboardRefresh(opts DashboardOptions, cards dashboardCards, status *widget.Label) func() {
+func makeDashboardRefresh(opts DashboardOptions, cards *dashboardCards, status *widget.Label) func() {
 	return func() {
 		if opts.Summary == nil {
 			// Degraded path: bootstrap didn't wire a *DashboardService
