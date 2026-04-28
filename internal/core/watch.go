@@ -258,6 +258,14 @@ func (w *Watch) publish(ev WatchEvent) {
 	w.bus.Publish(ev)
 }
 
+func (w *Watch) publishLifecycle(kind WatchEventKind, alias string, err error, msg string) {
+	ev := WatchEvent{Kind: kind, Alias: alias, Err: err, Message: msg}
+	w.publish(ev)
+	if p, ok := w.loop.(WatcherEventPublisher); ok {
+		p.PublishWatcherLifecycle(kind.String(), alias, ev.At, err)
+	}
+}
+
 // waitOrTimeout blocks until `done` closes or `timeout` elapses. A
 // zero/negative timeout means "wait forever".
 func waitOrTimeout(done <-chan struct{}, timeout time.Duration) error {
