@@ -186,3 +186,16 @@ func defaultBadgeFor(k NavKind) int64 {
 	}
 	return 0
 }
+
+// containsAlias reports whether `a` is present in `aliases`. Local
+// helper kept tiny so we avoid importing slices just for this lookup.
+// Slice #198 — supports the "previously-selected alias still valid?"
+// guard added in NewSidebar's account-picker setup.
+func containsAlias(aliases []string, a string) bool {
+	for _, x := range aliases {
+		if x == a {
+			return true
+		}
+	}
+	return false
+}
