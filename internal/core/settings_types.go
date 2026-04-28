@@ -8,11 +8,7 @@
 // Delta #1 (table rename) and will be done as a coordinated config migration.
 package core
 
-import (
-	"time"
-
-	"github.com/lovable/email-read/internal/config"
-)
+import "time"
 
 // SettingsSnapshot is the read-side projection returned by Get / Save / Reset.
 // All path fields are absolute and read-only (populated from the config layer
@@ -184,7 +180,7 @@ const (
 // because OpenedUrls v1 has no Decision column to split on yet).
 func DefaultSettingsInput() SettingsInput {
 	return SettingsInput{
-		PollSeconds:           config.MinWatchPollSeconds,
+		PollSeconds:           3,
 		Theme:                 ThemeDark,
 		Density:               DensityComfortable,
 		OpenUrlAllowedSchemes: []string{"https"},
