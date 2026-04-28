@@ -297,12 +297,7 @@ func BuildShell(aliases []string) fyne.CanvasObject {
 	rebuildShell = func() {
 		freshAliases := LoadAliases()
 		invalidateViewCache()
-		sidebar := NewSidebar(SidebarOptions{
-			State:            state,
-			Aliases:          freshAliases,
-			OnSelectNav:      func(item NavItem) { rebuildDetail() },
-			OnErrorLogOpened: sidebarErrorLogReset,
-		})
+		sidebar := buildShellSidebar(state, freshAliases, rebuildDetail)
 		rebuildDetail()
 		mountShellSplit(root, sidebar, detail, true)
 	}
@@ -318,15 +313,23 @@ func BuildShell(aliases []string) fyne.CanvasObject {
 	})
 
 	// Initial build using the aliases passed in (avoids double-loading).
-	sidebar := NewSidebar(SidebarOptions{
+	sidebar := buildShellSidebar(state, aliases, rebuildDetail)
+	rebuildDetail()
+	mountShellSplit(root, sidebar, detail, false)
+	return root
+}
+
+// buildShellSidebar wraps the NewSidebar(SidebarOptions{...}) literal so
+// BuildShell stays under the 15-statement linter budget (AC-PROJ-20). The
+// nav-click closure is inlined here because it captures the parent's
+// rebuildDetail func.
+func buildShellSidebar(state *AppState, aliases []string, rebuildDetail func()) fyne.CanvasObject {
+	return NewSidebar(SidebarOptions{
 		State:            state,
 		Aliases:          aliases,
 		OnSelectNav:      func(item NavItem) { rebuildDetail() },
 		OnErrorLogOpened: sidebarErrorLogReset,
 	})
-	rebuildDetail()
-	mountShellSplit(root, sidebar, detail, false)
-	return root
 }
 
 // mountShellSplit composes the sidebar+detail HSplit into the root stack.
