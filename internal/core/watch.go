@@ -195,19 +195,25 @@ func (w *Watch) runLoop(ctx context.Context, alias string, loop Loop, done chan 
 
 // Stop cancels the runner for `alias` and waits up to `timeout` for
 // graceful shutdown. Returns ErrWatchNotRunning if no runner exists.
-// Publishes WatchStop on success.
+// Always publishes WatchStop after cancel — even if waitOrTimeout
+// exceeds the budget — because the cancel signal is already sent and
+// the runner will exit imminently. Without this guarantee the UI's
+// Subscribe loop never sees the lifecycle event when a poll happens
+// to be mid-dial at Stop time, leaving the header stuck on "Watching".
 func (w *Watch) Stop(alias string, timeout time.Duration) errtrace.Result[struct{}] {
 	r, err := w.takeRunner(alias)
 	if err != nil {
 		return errtrace.Err[struct{}](err)
 	}
 	r.cancel()
-	if err := waitOrTimeout(r.done, timeout); err != nil {
-		return errtrace.Err[struct{}](errtrace.WrapCode(err, errtrace.ErrWatcherShutdown, "Stop "+alias))
-	}
+	waitErr := waitOrTimeout(r.done, timeout)
 	w.publishLifecycle(WatchStop, alias, nil, "watch stopped")
+	if waitErr != nil {
+		return errtrace.Err[struct{}](errtrace.WrapCode(waitErr, errtrace.ErrWatcherShutdown, "Stop "+alias))
+	}
 	return errtrace.Ok(struct{}{})
 }
+
 
 // takeRunner removes and returns the runner under mu.Lock. Releases
 // the lock before any blocking wait so Start/Stop on other aliases
