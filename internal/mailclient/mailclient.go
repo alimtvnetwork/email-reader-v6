@@ -375,7 +375,9 @@ func (c *Client) FetchSince(lastUid uint32) ([]*Message, error) {
 }
 
 // SaveRaw writes the raw .eml file under
-//   email/<alias>/<YYYY-MM-DD>/HH.MM.SS__<from>__<subject>__uid<N>.eml
+//
+//	email/<alias>/<YYYY-MM-DD>/HH.MM.SS__<from>__<subject>__uid<N>.eml
+//
 // and returns the absolute path written.
 //
 // The filename format is human-readable and time-ordered:
