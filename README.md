@@ -1,5 +1,7 @@
 # email-read
 
+**Version:** 0.28.0
+
 A small Windows-first Go CLI that watches IMAP inboxes, persists every email to SQLite + disk, and auto-opens URLs from matching emails in **Chrome incognito** based on regex rules.
 
 - Multi-account support (Gmail, Outlook, Yahoo, iCloud, Fastmail, custom domains)
