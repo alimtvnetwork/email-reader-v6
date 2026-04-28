@@ -5,5 +5,5 @@ type: feature
 ---
 # Implementation Progress Tracker — spec/21-app
 
-**Last updated:** 2026-04-28 (after **Slice #206 — RCA documented for IMAP timeout after successful poll-ok**: `poll ok` proves credentials/config/server path worked; later 993/143 `i/o timeout` is intermittent connection throttling/churn from fresh IMAP reconnects every few seconds. Solution plan recorded in `mem://workflow/imap-intermittent-timeout-after-pollok-slice206`; next implementation should reduce cadence/backoff and make STARTTLS fallback opt-in/diagnostic.)
-**Overall: 100% done · 0% remaining (original roadmap complete) · UX bugfix/RCA slices applied through #206.**
+**Last updated:** 2026-04-28 (after **Slice #207 — restore requested 5s Watch cadence**: removed the forced 60s clamp from Settings projection/runtime reloads, set the app default cadence to 5s, and updated the IMAP timeout RCA so future fixes keep user-visible 5s cadence while addressing timeouts through backoff/session reuse/IDLE instead of password blame.)
+**Overall: 100% done · 0% remaining (original roadmap complete) · UX bugfix/RCA slices applied through #207.**
