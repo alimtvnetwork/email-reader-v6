@@ -29,13 +29,23 @@ const (
 	ErrConfigSchemaMigration Code = "ER-CFG-21008"
 
 	// ER-DB (Store / SQLite) — block 21100–21199
-	ErrDbOpen        Code = "ER-DB-21101"
-	ErrDbMigrate     Code = "ER-DB-21102"
-	ErrDbInsertEmail Code = "ER-DB-21103"
-	ErrDbQueryEmail  Code = "ER-DB-21104"
-	ErrDbInsertUrl   Code = "ER-DB-21105"
-	ErrDbQueryUrl    Code = "ER-DB-21106"
-	ErrDbWatchState  Code = "ER-DB-21107"
+	ErrDbOpen             Code = "ER-DB-21101"
+	ErrDbMigrate          Code = "ER-DB-21102"
+	ErrDbInsertEmail      Code = "ER-DB-21103"
+	ErrDbQueryEmail       Code = "ER-DB-21104"
+	ErrDbInsertUrl        Code = "ER-DB-21105"
+	ErrDbQueryUrl         Code = "ER-DB-21106"
+	ErrDbWatchState       Code = "ER-DB-21107"
+	// SQLite error-class codes (Slice #196 — A1-grow): reserved for the
+	// store layer to surface SQLite-specific failure modes that the spec
+	// declares but the impl has not yet wrapped at any call site. Adding
+	// them keeps the registry semantically complete; future store work
+	// can wire them without another spec change.
+	ErrDbUniqueViolation  Code = "ER-DB-21108"
+	ErrDbFkViolation      Code = "ER-DB-21109"
+	ErrDbBusy             Code = "ER-DB-21110"
+	ErrDbReadOnly         Code = "ER-DB-21111"
+	ErrDbCorrupt          Code = "ER-DB-21112"
 
 	// ER-MAIL (IMAP) — block 21200–21299
 	ErrMailDial            Code = "ER-MAIL-21201"
