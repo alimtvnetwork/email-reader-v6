@@ -46,21 +46,31 @@ type Client struct {
 	c    *client.Client
 }
 
+// DefaultDialTimeout caps the TCP/TLS handshake for live watcher
+// dials. Without this, a silently-dropping IMAP host (firewall,
+// routing blackhole, port closed) makes the watcher block on the OS
+// default (~75s on Linux) before reporting `[ER-MAIL-21201]`. 8s
+// matches DialPlain so Test Connection and the runtime watcher fail
+// at the same speed.
+const DefaultDialTimeout = 8 * time.Second
+
 // Dial opens an IMAP connection and logs in.
 func Dial(acct config.Account) (*Client, error) {
 	addr := net.JoinHostPort(acct.ImapHost, fmt.Sprintf("%d", acct.ImapPort))
+	dialer := &net.Dialer{Timeout: DefaultDialTimeout}
 	var (
 		c   *client.Client
 		err error
 	)
 	if acct.UseTLS {
-		c, err = client.DialTLS(addr, &tls.Config{ServerName: acct.ImapHost})
+		c, err = client.DialWithDialerTLS(dialer, addr, &tls.Config{ServerName: acct.ImapHost})
 	} else {
-		c, err = client.Dial(addr)
+		c, err = client.DialWithDialer(dialer, addr)
 	}
 	if err != nil {
 		return nil, errtrace.Wrapf(err, "imap dial %s", addr)
 	}
+	c.Timeout = DefaultDialTimeout
 	pwd, err := config.DecodePassword(acct.PasswordB64)
 	if err != nil {
 		_ = c.Logout()
