@@ -169,6 +169,7 @@ func (l *realLoop) Run(ctx context.Context) error {
 		Logger:        l.deps.Logger,
 		Verbose:       l.deps.Verbose,
 		Bus:           l.deps.Bus,
+		SuppressLifecycleEvents: l.deps.Bus != nil,
 		PollSecondsCh: pollCh,
 	})
 }
