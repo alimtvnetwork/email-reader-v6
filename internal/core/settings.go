@@ -399,11 +399,11 @@ type projectedExtension struct {
 	batchSize uint32
 }
 
-// projectExtension layers DefaultSettingsInput defaults over an extension
-// block read from disk. Missing values (empty Theme, nil schemes, fresh
-// file with empty UpdatedAt) fall back to the documented defaults.
-func projectExtension(ext settingsExtension) projectedExtension {
-	defaults := DefaultSettingsInput()
+// projectThemeDensitySchemes resolves the §-presentation fields (theme,
+// density, allowed URL schemes) with documented fallbacks. Extracted from
+// projectExtension to keep that function under the 15-statement linter
+// budget (AC-PROJ-20).
+func projectThemeDensitySchemes(ext settingsExtension, defaults SettingsInput) (ThemeMode, Density, []string) {
 	theme, _ := ParseThemeMode(ext.Theme)
 	if ext.Theme == "" {
 		theme = defaults.Theme
@@ -416,6 +416,13 @@ func projectExtension(ext settingsExtension) projectedExtension {
 	if len(schemes) == 0 {
 		schemes = defaults.OpenUrlAllowedSchemes
 	}
+	return theme, density, schemes
+}
+
+// projectMaintenanceFields resolves the maintenance/retention fields. A
+// fresh-on-disk file (empty UpdatedAt) re-defaults all bookkeeping fields
+// so partially-written extensions don't leak zero-valued retention.
+func projectMaintenanceFields(ext settingsExtension, defaults SettingsInput) (bool, uint16, time.Weekday, uint8, uint8, uint32) {
 	autoStart := ext.AutoStartWatch
 	retention := ext.OpenUrlsRetentionDays
 	if ext.UpdatedAt == "" {
@@ -438,6 +445,16 @@ func projectExtension(ext settingsExtension) projectedExtension {
 	if ext.UpdatedAt == "" || batchSize == 0 {
 		batchSize = defaults.PruneBatchSize
 	}
+	return autoStart, retention, weekday, vacHour, walHours, batchSize
+}
+
+// projectExtension layers DefaultSettingsInput defaults over an extension
+// block read from disk. Missing values (empty Theme, nil schemes, fresh
+// file with empty UpdatedAt) fall back to the documented defaults.
+func projectExtension(ext settingsExtension) projectedExtension {
+	defaults := DefaultSettingsInput()
+	theme, density, schemes := projectThemeDensitySchemes(ext, defaults)
+	autoStart, retention, weekday, vacHour, walHours, batchSize := projectMaintenanceFields(ext, defaults)
 	return projectedExtension{
 		theme: theme, density: density, schemes: schemes, autoStart: autoStart, retention: retention,
 		weekday: weekday, vacHour: vacHour, walHours: walHours, batchSize: batchSize,
