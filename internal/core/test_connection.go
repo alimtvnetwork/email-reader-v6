@@ -7,12 +7,15 @@ package core
 import (
 	"time"
 
+	"github.com/lovable/email-read/internal/config"
 	"github.com/lovable/email-read/internal/errtrace"
 	"github.com/lovable/email-read/internal/mailclient"
 )
 
 // DefaultTestConnectionTimeout caps a single probe attempt.
 const DefaultTestConnectionTimeout = 8 * time.Second
+
+var testAccountConnectionDial = mailclient.DialPlain
 
 // TestAccountConnection resolves missing host/port/TLS from imapdef (so
 // the user can leave host blank and still test) and dials + logs in via
@@ -36,13 +39,25 @@ func TestAccountConnection(in AccountInput, timeout time.Duration) errtrace.Resu
 	if timeout <= 0 {
 		timeout = DefaultTestConnectionTimeout
 	}
-	if err := mailclient.DialPlain(mailclient.PlainDialInput{
+	cleanPassword := config.SanitizePassword(in.PlainPassword)
+	if err := testAccountConnectionDial(mailclient.PlainDialInput{
 		Host: host, Port: port, UseTLS: useTLS,
-		Email: in.Email, Password: in.PlainPassword, Timeout: timeout,
+		Email: in.Email, Password: cleanPassword, Timeout: timeout,
 	}); err != nil {
-		return errtrace.Err[TestConnectionResult](err)
+		return errtrace.Err[TestConnectionResult](wrapTestConnectionError(err, in, host, port, useTLS, cleanPassword))
 	}
 	return errtrace.Ok(TestConnectionResult{Host: host, Port: port, UseTLS: useTLS})
+}
+
+func wrapTestConnectionError(err error, in AccountInput, host string, port int, useTLS bool, cleanPassword string) error {
+	return errtrace.WrapCode(err, errtrace.ErrAccountTestFailed,
+		"test connection failed — IMAP server rejected the login; verify the same email/password in webmail or reset the mailbox password").
+		WithContext("Alias", in.Alias).
+		WithContext("Email", in.Email).
+		WithContext("Host", host).
+		WithContext("Port", port).
+		WithContext("UseTLS", useTLS).
+		WithContext("PasswordSanitized", cleanPassword != in.PlainPassword)
 }
 
 // TestConnectionResult reports the resolved endpoint that was successfully
