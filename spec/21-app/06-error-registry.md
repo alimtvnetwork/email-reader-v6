@@ -1162,7 +1162,7 @@ Implemented in `internal/cli/cli.go:exitCodeFor(err error) int`.
 
 ---
 
-## 14. Adding a New Error Code (Procedure)
+## 15. Adding a New Error Code (Procedure)
 
 1. Pick the lowest unused integer in the appropriate `21XYY` range.
 2. Add a row to this file with all 10 columns filled.
