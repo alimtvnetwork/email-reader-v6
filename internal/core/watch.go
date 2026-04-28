@@ -152,8 +152,8 @@ func (w *Watch) Start(ctx context.Context, opts WatchOptions) errtrace.Result[st
 	if err := w.reserveRunner(opts.Alias); err != nil {
 		return errtrace.Err[struct{}](err)
 	}
-	w.spawnRunner(ctx, opts)
 	w.publishLifecycle(WatchStart, opts.Alias, nil, "watch started")
+	w.spawnRunner(ctx, opts)
 	return errtrace.Ok(struct{}{})
 }
 
