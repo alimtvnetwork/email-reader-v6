@@ -150,18 +150,18 @@ func TestSettings_ValidationErrors(t *testing.T) {
 			},
 			{
 				name: "bad theme",
-				in:   SettingsInput{PollSeconds: 3, Theme: ThemeMode(99), OpenUrlAllowedSchemes: []string{"https"}},
+				in:   SettingsInput{PollSeconds: config.MinWatchPollSeconds, Theme: ThemeMode(99), OpenUrlAllowedSchemes: []string{"https"}},
 				code: errtrace.ErrSettingsTheme,
 			},
 			{
 				name: "javascript scheme",
-				in:   SettingsInput{PollSeconds: 3, Theme: ThemeDark, OpenUrlAllowedSchemes: []string{"javascript"}},
+				in:   SettingsInput{PollSeconds: config.MinWatchPollSeconds, Theme: ThemeDark, OpenUrlAllowedSchemes: []string{"javascript"}},
 				code: errtrace.ErrSettingsUrlScheme,
 			},
 			{
 				name: "bad incognito arg",
 				in: SettingsInput{
-					PollSeconds: 3, Theme: ThemeDark,
+					PollSeconds: config.MinWatchPollSeconds, Theme: ThemeDark,
 					OpenUrlAllowedSchemes: []string{"https"},
 					BrowserOverride:       BrowserOverride{IncognitoArg: "rm -rf /"},
 				},
@@ -170,7 +170,7 @@ func TestSettings_ValidationErrors(t *testing.T) {
 			{
 				name: "localhost without http",
 				in: SettingsInput{
-					PollSeconds: 3, Theme: ThemeDark,
+					PollSeconds: config.MinWatchPollSeconds, Theme: ThemeDark,
 					OpenUrlAllowedSchemes: []string{"https"},
 					AllowLocalhostUrls:    true,
 				},
@@ -183,7 +183,7 @@ func TestSettings_ValidationErrors(t *testing.T) {
 				// > 0 except for the dedicated case.
 				in := tc.in
 				if tc.name != "poll too small" && in.PollSeconds == 0 {
-					in.PollSeconds = 3
+					in.PollSeconds = config.MinWatchPollSeconds
 				}
 				r := s.Save(context.Background(), in)
 				if !r.HasError() {
