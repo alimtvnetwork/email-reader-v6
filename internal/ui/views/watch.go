@@ -111,7 +111,11 @@ func wireWatchHeaderControls(opts WatchOptions, statusLabel *widget.Label, btn *
 // if the runner exits on its own (error, ctx cancel, etc.).
 func handleWatchToggle(opts WatchOptions, statusLabel *widget.Label, btn *widget.Button) {
 	if opts.Watch.IsRunning(opts.Alias) {
-		_ = opts.Watch.Stop(opts.Alias, 5*time.Second)
+		// 15s comfortably covers an 8s in-flight DialTimeout + login
+		// round-trip + a small slack. With the previous 5s budget, a
+		// Stop tap during a hung dial returned a timeout error and the
+		// UI never observed WatchStop — header stayed on "Watching".
+		_ = opts.Watch.Stop(opts.Alias, 15*time.Second)
 	} else {
 		_ = opts.Watch.Start(context.Background(), core.WatchOptions{
 			Alias:       opts.Alias,
