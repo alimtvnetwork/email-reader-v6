@@ -162,7 +162,15 @@ func ruleRow(r config.Rule, index int, orderedNames []string, opts RulesOptions,
 	urlLbl := widget.NewLabel(r.UrlRegex)
 	urlLbl.Wrapping = fyne.TextWrapBreak
 	filters := widget.NewLabel(RuleFilters(r))
+	checkCell := buildRuleEnabledCheck(r, opts, status, reload)
+	actions := buildRuleActions(r, index, orderedNames, opts, status, reload)
+	return container.NewGridWithColumns(5, name, urlLbl, filters, checkCell, actions)
+}
 
+// buildRuleEnabledCheck wires the enable/disable checkbox with rollback
+// on Toggle failure. Extracted from ruleRow to keep that function under
+// the 15-statement linter budget (AC-PROJ-20).
+func buildRuleEnabledCheck(r config.Rule, opts RulesOptions, status *widget.Label, reload func()) fyne.CanvasObject {
 	check := widget.NewCheck("", nil)
 	check.SetChecked(r.Enabled)
 	check.OnChanged = func(on bool) {
@@ -180,23 +188,22 @@ func ruleRow(r config.Rule, index int, orderedNames []string, opts RulesOptions,
 		status.SetText(fmt.Sprintf("Rule %q %s.", r.Name, state))
 		reload()
 	}
-	checkCell := container.NewHBox(widget.NewLabel(""), check)
+	return container.NewHBox(widget.NewLabel(""), check)
+}
 
+// buildRuleActions assembles the per-row action HBox: optional drag
+// handle (Slice #114) + optional Rename + Edit + Delete. Conditional
+// widgets are *omitted* rather than rendered-disabled so users don't
+// chase phantom buttons. Extracted from ruleRow for the 15-statement
+// linter budget (AC-PROJ-20).
+func buildRuleActions(r config.Rule, index int, orderedNames []string, opts RulesOptions, status *widget.Label, reload func()) fyne.CanvasObject {
 	actionWidgets := []fyne.CanvasObject{}
-	// Slice #114: drag-handle reorder. Replaces the previous ↑/↓
-	// button pair with a single "⋮⋮" handle that implements
-	// `fyne.Draggable`. The handle owns no table state — it just
-	// reports the target index back into `moveRule`, which then
-	// builds the permutation and calls `opts.Reorder`. Single-row
-	// tables omit the handle entirely (no-op gesture wastes screen
-	// real estate).
 	if opts.Reorder != nil && len(orderedNames) > 1 {
 		handle := newDragHandle(index, len(orderedNames), 0, func(target int) {
 			moveRule(orderedNames, index, target, opts, status, reload)
 		})
 		actionWidgets = append(actionWidgets, handle)
 	}
-	// Rename button — only rendered when Rename is wired.
 	if opts.Rename != nil {
 		renameBtn := widget.NewButton("Rename", func() {
 			openRenameRuleDialog(r, opts, status, reload)
@@ -207,9 +214,7 @@ func ruleRow(r config.Rule, index int, orderedNames []string, opts RulesOptions,
 	delBtn := widget.NewButton("Delete", func() { confirmDeleteRule(r, opts, status, reload) })
 	delBtn.Importance = widget.DangerImportance
 	actionWidgets = append(actionWidgets, editBtn, delBtn)
-	actions := container.NewHBox(actionWidgets...)
-
-	return container.NewGridWithColumns(5, name, urlLbl, filters, checkCell, actions)
+	return container.NewHBox(actionWidgets...)
 }
 
 // moveRule swaps two positions in the ordered name list and pushes
