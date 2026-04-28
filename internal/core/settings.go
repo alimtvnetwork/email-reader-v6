@@ -465,10 +465,10 @@ func projectExtension(ext settingsExtension) projectedExtension {
 // range expected by SettingsSnapshot, applying the documented default.
 func clampPollSeconds(v int) uint16 {
 	if v < config.MinWatchPollSeconds {
-		return config.MinWatchPollSeconds
+		return config.DefaultWatchPollSeconds
 	}
-	if v > config.MinWatchPollSeconds {
-		return config.MinWatchPollSeconds
+	if v > config.MaxWatchPollSeconds {
+		return config.MaxWatchPollSeconds
 	}
 	return uint16(v)
 }
