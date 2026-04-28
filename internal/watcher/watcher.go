@@ -113,7 +113,8 @@ type pollState struct {
 	havePrev                                   bool
 	lastError                                  string
 	// consecutiveErrors counts EventPollError in a row. Reset to 0 on any
-	// successful poll. Drives exponential backoff with jitter (CF-W-BACKOFF).
+	// successful poll. Kept for diagnostics/counters; runtime cadence stays
+	// fixed-rate so a configured 5s poll remains 5s between attempt starts.
 	consecutiveErrors int
 }
 
