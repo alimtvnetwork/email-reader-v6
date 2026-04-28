@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lovable/email-read/internal/config"
 	"github.com/lovable/email-read/internal/errtrace"
 )
 
