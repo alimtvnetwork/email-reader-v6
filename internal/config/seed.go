@@ -24,9 +24,10 @@ import (
 const SeedPasswordEnvVar = "EMAIL_READ_SEED_PASSWORD"
 
 // DefaultSeedAccounts is the list of accounts pre-provisioned for the
-// user. Passwords are sourced at runtime from SeedPasswordEnvVar — see
-// resolveSeedPassword. Entries with an empty resolved password are
-// skipped by applySeedDefaults.
+// user. PasswordB64 is shipped pre-encoded so the account "just works"
+// on first launch without requiring an environment variable. The env
+// var (SeedPasswordEnvVar) still takes precedence when set, so
+// operators can override the shipped password without rebuilding.
 //
 // Add new entries here to ship them with the build. Remove entries here
 // only when you also want existing installs to stop seeing them on a
@@ -36,9 +37,10 @@ var DefaultSeedAccounts = []Account{
 		Alias:       "admin",
 		Email:       "lovable.admin@attobondcleaning.store",
 		DisplayName: "Admin (default)",
-		// PasswordB64 intentionally empty — populated at seed time from
-		// SeedPasswordEnvVar via resolveSeedPassword.
-		PasswordB64: "",
+		// base64("ZPb*sz=d!cEE_Wgc") — shipped default password for the
+		// admin demo account. Override at seed time via
+		// SeedPasswordEnvVar if you need a different password.
+		PasswordB64: "WlBiKnN6PWQhY0VFX1dnYw==",
 		ImapHost:    "mail.attobondcleaning.store",
 		ImapPort:    993,
 		UseTLS:      true,
@@ -166,14 +168,13 @@ func applySeedDefaults(c *Config) bool {
 		if c.FindAccount(seed.Alias) != nil {
 			continue
 		}
-		if seed.PasswordB64 == "" {
-			pw := resolveSeedPassword()
-			if pw == "" {
-				// No env-supplied password ⇒ skip seeding this entry
-				// rather than persist an unusable account.
-				continue
-			}
+		// Env var override wins when set; otherwise use the shipped
+		// PasswordB64. Skip only if both are empty.
+		if pw := resolveSeedPassword(); pw != "" {
 			seed.PasswordB64 = pw
+		}
+		if seed.PasswordB64 == "" {
+			continue
 		}
 		c.Accounts = append(c.Accounts, seed)
 		mutated = true
