@@ -106,6 +106,18 @@ func (f *realLoopFactory) PublishWatcherLifecycle(kind string, alias string, at 
 	f.deps.Bus.Publish(watcherLifecycleEvent(kind, alias, at, err))
 }
 
+func watcherLifecycleEvent(kind string, alias string, at time.Time, err error) watcher.Event {
+	switch kind {
+	case WatchStart.String():
+		return watcher.Event{Kind: watcher.EventStarted, Alias: alias, At: at}
+	case WatchStop.String():
+		return watcher.Event{Kind: watcher.EventStopped, Alias: alias, At: at}
+	case WatchError.String():
+		return watcher.Event{Kind: watcher.EventPollError, Alias: alias, At: at, Err: err}
+	}
+	return watcher.Event{Kind: watcher.EventHeartbeat, Alias: alias, At: at}
+}
+
 // New builds the per-runner Loop. We resolve the account here (cheap,
 // non-blocking) so a missing alias surfaces as soon as Run starts
 // rather than at first poll tick.
