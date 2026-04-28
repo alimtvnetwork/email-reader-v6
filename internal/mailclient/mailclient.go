@@ -69,7 +69,7 @@ func DialContext(ctx context.Context, acct config.Account) (*Client, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	c, err := dialAccountWithFallback(ctx, acct)
+	c, err := dialAccountEndpoint(ctx, acct.ImapHost, acct.ImapPort, acct.UseTLS)
 	if err != nil {
 		return nil, err
 	}
@@ -86,27 +86,6 @@ func DialContext(ctx context.Context, acct config.Account) (*Client, error) {
 		return nil, errtrace.Wrapf(err, "imap login %s", acct.Email)
 	}
 	return &Client{acct: acct, c: c}, nil
-}
-
-func dialAccountWithFallback(ctx context.Context, acct config.Account) (*client.Client, error) {
-	c, err := dialAccountEndpoint(ctx, acct.ImapHost, acct.ImapPort, acct.UseTLS)
-	if err == nil {
-		return c, nil
-	}
-	if cerr := ctx.Err(); cerr != nil {
-		return nil, cerr
-	}
-	if !shouldTryStartTLSFallback(acct, err) {
-		return nil, err
-	}
-	fallback, fallbackErr := dialAccountStartTLS(ctx, acct.ImapHost, 143)
-	if fallbackErr == nil {
-		return fallback, nil
-	}
-	if cerr := ctx.Err(); cerr != nil {
-		return nil, cerr
-	}
-	return nil, errtrace.Wrapf(fallbackErr, "imap STARTTLS fallback after %s timed out", imapAddr(acct.ImapHost, acct.ImapPort))
 }
 
 func dialAccountEndpoint(ctx context.Context, host string, port int, useTLS bool) (*client.Client, error) {
@@ -131,22 +110,6 @@ func dialAccountEndpoint(ctx context.Context, host string, port int, useTLS bool
 	}
 	c.Timeout = DefaultDialTimeout
 	return c, nil
-}
-
-func dialAccountStartTLS(ctx context.Context, host string, port int) (*client.Client, error) {
-	c, err := dialAccountEndpoint(ctx, host, port, false)
-	if err != nil {
-		return nil, err
-	}
-	if err := c.StartTLS(&tls.Config{ServerName: host}); err != nil {
-		_ = c.Logout()
-		return nil, errtrace.Wrapf(err, "imap starttls %s", imapAddr(host, port))
-	}
-	return c, nil
-}
-
-func shouldTryStartTLSFallback(acct config.Account, err error) bool {
-	return acct.UseTLS && acct.ImapPort == 993 && isNetTimeout(err)
 }
 
 func imapAddr(host string, port int) string {
