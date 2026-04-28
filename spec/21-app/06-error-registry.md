@@ -690,6 +690,18 @@ const (
 | Recovery | Force-exit acceptable |
 | Test ref | `TestWatcher_Stop_PartialCleanupWarns` |
 
+### ER-WCH-21412 — `ErrWatchAccountNotFound`
+
+| Field | Value |
+|---|---|
+| Severity | `ERROR` |
+| Trigger | `watch <alias>` invoked with an alias not present in `config.json` |
+| Wrap site | `internal/watcher/watcher.go` (`Start` lookup) |
+| Log line | `ERROR watcher.Start Alias=<a> ErrCode=ER-WCH-21412 account not found` |
+| User msg | `No account found with alias '<alias>'. Run 'email-read accounts' to list configured aliases.` |
+| Recovery | User adds the account or corrects the alias |
+| Test ref | `TestWatcher_Start_UnknownAliasReturnsCode` |
+
 ---
 
 ## 8. ER-BRW — Browser Launcher
