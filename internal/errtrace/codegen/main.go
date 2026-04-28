@@ -135,55 +135,62 @@ func main() {
 	}
 }
 
-// run is the testable entry-point. main() is a thin shell so an
-// external test (or `go run`) can exercise the same logic.
-func run() error {
-	// Resolve paths relative to this source file so the generator
-	// works from any working directory (e.g. `go generate` invoked
-	// from a sibling package).
+// loadCodesYAML resolves the YAML SoT path and parses it. Extracted from
+// run() to keep the outer function under the 15-statement linter budget
+// (AC-PROJ-20).
+func loadCodesYAML() (codesYAML, string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("getwd: %w", err)
+		return codesYAML{}, "", fmt.Errorf("getwd: %w", err)
 	}
 	yamlPath := findYAML(cwd)
 	if yamlPath == "" {
-		return fmt.Errorf("could not locate internal/errtrace/codes.yaml from cwd=%s", cwd)
+		return codesYAML{}, "", fmt.Errorf("could not locate internal/errtrace/codes.yaml from cwd=%s", cwd)
 	}
-	outPath := filepath.Join(filepath.Dir(yamlPath), "codes_gen.go")
-
 	raw, err := os.ReadFile(yamlPath)
 	if err != nil {
-		return fmt.Errorf("read %s: %w", yamlPath, err)
+		return codesYAML{}, "", fmt.Errorf("read %s: %w", yamlPath, err)
 	}
 	var doc codesYAML
 	if err := yaml.Unmarshal(raw, &doc); err != nil {
-		return fmt.Errorf("parse yaml: %w", err)
+		return codesYAML{}, "", fmt.Errorf("parse yaml: %w", err)
 	}
+	outPath := filepath.Join(filepath.Dir(yamlPath), "codes_gen.go")
+	return doc, outPath, nil
+}
 
+// writeFormattedSource gofmt's the rendered template and writes it to
+// outPath. On gofmt failure the unformatted source is dumped to stderr so
+// the real bug stays debuggable in CI (rather than silently masked).
+func writeFormattedSource(outPath string, src []byte, count int) error {
+	formatted, err := format.Source(src)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "--- raw output ---\n%s\n--- end raw ---\n", src)
+		return fmt.Errorf("gofmt generated source: %w", err)
+	}
+	if err := os.WriteFile(outPath, formatted, 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", outPath, err)
+	}
+	fmt.Printf("wrote %s (%d codes)\n", outPath, count)
+	return nil
+}
+
+// run is the testable entry-point. main() is a thin shell so an
+// external test (or `go run`) can exercise the same logic.
+func run() error {
+	doc, outPath, err := loadCodesYAML()
+	if err != nil {
+		return err
+	}
 	emitted, err := flatten(doc)
 	if err != nil {
 		return err
 	}
-
 	src, err := render(emitted)
 	if err != nil {
 		return fmt.Errorf("render template: %w", err)
 	}
-
-	formatted, err := format.Source(src)
-	if err != nil {
-		// Falling through with the unformatted source would mask the
-		// real bug — emit it to stderr alongside the parse error so
-		// the failure is debuggable in CI.
-		fmt.Fprintf(os.Stderr, "--- raw output ---\n%s\n--- end raw ---\n", src)
-		return fmt.Errorf("gofmt generated source: %w", err)
-	}
-
-	if err := os.WriteFile(outPath, formatted, 0o644); err != nil {
-		return fmt.Errorf("write %s: %w", outPath, err)
-	}
-	fmt.Printf("wrote %s (%d codes)\n", outPath, len(emitted))
-	return nil
+	return writeFormattedSource(outPath, src, len(emitted))
 }
 
 // findYAML walks up from `start` looking for `internal/errtrace/codes.yaml`.

@@ -244,11 +244,10 @@ func BuildShell(aliases []string) fyne.CanvasObject {
 	// buildEmailsService / buildRulesService helpers from P2.3/P2.5/P2.7.
 	services := BuildServices()
 
-	// rebuildSidebar rebuilds the entire shell with a fresh aliases list —
+	// rebuildShell rebuilds the entire shell with a fresh aliases list —
 	// used after the Add Account form saves so the picker reflects truth.
-	var rebuildShell func()
 	// rebuildDetail swaps the detail pane to match the current state.Nav().
-	var rebuildDetail func()
+	var rebuildShell, rebuildDetail func()
 	gotoNav := func(k NavKind) {
 		state.SetNav(k)
 		rebuildDetail()
@@ -297,41 +296,59 @@ func BuildShell(aliases []string) fyne.CanvasObject {
 	rebuildShell = func() {
 		freshAliases := LoadAliases()
 		invalidateViewCache()
-		sidebar := NewSidebar(SidebarOptions{
-			State:            state,
-			Aliases:          freshAliases,
-			OnSelectNav:      func(item NavItem) { rebuildDetail() },
-			OnErrorLogOpened: sidebarErrorLogReset,
-		})
+		sidebar := buildShellSidebar(state, freshAliases, rebuildDetail)
 		rebuildDetail()
-		split := container.NewHSplit(sidebar, container.NewPadded(detail))
-		split.SetOffset(0.20)
-		root.Objects = []fyne.CanvasObject{split}
-		root.Refresh()
+		mountShellSplit(root, sidebar, detail, true)
 	}
+	wireAliasInvalidation(state, invalidateViewCache, rebuildDetail)
 
-	// Re-render the active view if the alias changes so views always reflect
-	// the currently selected account. Cache is dropped because alias is an
-	// implicit dependency of every viewFor arm.
+	// Initial build using the aliases passed in (avoids double-loading).
+	sidebar := buildShellSidebar(state, aliases, rebuildDetail)
+	rebuildDetail()
+	mountShellSplit(root, sidebar, detail, false)
+	return root
+}
+
+// wireAliasInvalidation subscribes to AppState changes and drops the
+// memoised view cache whenever the active alias changes — alias is an
+// implicit dependency of every viewFor arm. Extracted from BuildShell to
+// keep the outer function under the 15-statement linter budget
+// (AC-PROJ-20).
+func wireAliasInvalidation(state *AppState, invalidate func(), rebuildDetail func()) {
 	state.Subscribe(func(ev AppStateEvent) {
 		if ev.PrevAlias != ev.Alias {
-			invalidateViewCache()
+			invalidate()
 			rebuildDetail()
 		}
 	})
+}
 
-	// Initial build using the aliases passed in (avoids double-loading).
-	sidebar := NewSidebar(SidebarOptions{
+// buildShellSidebar wraps the NewSidebar(SidebarOptions{...}) literal so
+// BuildShell stays under the 15-statement linter budget (AC-PROJ-20). The
+// nav-click closure is inlined here because it captures the parent's
+// rebuildDetail func.
+func buildShellSidebar(state *AppState, aliases []string, rebuildDetail func()) fyne.CanvasObject {
+	return NewSidebar(SidebarOptions{
 		State:            state,
 		Aliases:          aliases,
 		OnSelectNav:      func(item NavItem) { rebuildDetail() },
 		OnErrorLogOpened: sidebarErrorLogReset,
 	})
-	rebuildDetail()
+}
+
+// mountShellSplit composes the sidebar+detail HSplit into the root stack.
+// Extracted from BuildShell to keep the outer function under the
+// 15-statement linter budget (AC-PROJ-20). The `refresh` flag is true only
+// for the rebuildShell path — the initial build returns root for the
+// caller to mount, so a Refresh would be redundant (and would fire before
+// the window is shown).
+func mountShellSplit(root *fyne.Container, sidebar, detail fyne.CanvasObject, refresh bool) {
 	split := container.NewHSplit(sidebar, container.NewPadded(detail))
 	split.SetOffset(0.20)
 	root.Objects = []fyne.CanvasObject{split}
-	return root
+	if refresh {
+		root.Refresh()
+	}
 }
 
 // viewFor returns the widget for a nav destination. Each case picks a real
