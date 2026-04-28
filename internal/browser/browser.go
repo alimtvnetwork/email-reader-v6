@@ -96,7 +96,11 @@ func (l *Launcher) Open(url string) error {
 
 	cmd := exec.Command(path, args...)
 	if err := cmd.Start(); err != nil {
-		return errtrace.Wrapf(err, "launch %s", path)
+		// Include the full argv (minus URL) so the next failure is self-diagnosing.
+		// `doctor browser` renders the same info structurally; this keeps
+		// inline errors useful even when nobody runs the doctor.
+		return errtrace.Wrapf(err, "launch %s %s (run `email-read doctor browser` for full trace)",
+			path, strings.Join(args[:len(args)-1], " "))
 	}
 	// Detach: don't wait. Reap in background to avoid zombies on *nix.
 	go func() { _ = cmd.Wait() }()
