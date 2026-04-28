@@ -65,6 +65,34 @@ type ErrorLogOptions struct {
 // Copy actions. Calling BuildErrorLog also marks the unread counter
 // as read so the sidebar badge clears the moment the user opens it.
 func BuildErrorLog(opts ErrorLogOptions) fyne.CanvasObject {
+	opts = applyErrorLogDefaults(opts)
+	header := buildErrorLogHeader()
+	entries := loadEntriesNewestFirst(opts.Snapshot)
+	traceLabel, traceScroll := newErrorLogTracePane()
+	selected := &errorLogSelection{}
+	list := newErrorLogList(&entries, traceLabel, traceScroll, selected)
+	footer := newErrorLogFooter(opts, &entries, list, traceLabel, selected)
+	opts.MarkRead() // sidebar badge clears on open
+	startErrorLogRefresher(opts, &entries, list)
+	body := container.NewHSplit(list, container.NewBorder(nil, nil, nil, nil, traceScroll))
+	body.SetOffset(0.40)
+	return container.NewBorder(header, footer, nil, nil, body)
+}
+
+// errorLogSelection is the mutable holder for the currently-selected
+// trace string. Lives behind a pointer so the list-select closure and
+// the Copy/Clear button closures share one source of truth without
+// closing over a bare local that BuildErrorLog can't easily pass to
+// extracted helpers.
+type errorLogSelection struct {
+	trace string
+}
+
+// applyErrorLogDefaults binds the package-level errlog singleton into
+// any nil seam — production callers leave them nil; tests pre-populate
+// to inject deterministic data. Extracted from BuildErrorLog to keep it
+// under the 15-statement linter budget (AC-PROJ-20).
+func applyErrorLogDefaults(opts ErrorLogOptions) ErrorLogOptions {
 	if opts.Snapshot == nil {
 		opts.Snapshot = errlog.Snapshot
 	}
@@ -77,105 +105,118 @@ func BuildErrorLog(opts ErrorLogOptions) fyne.CanvasObject {
 	if opts.MarkRead == nil {
 		opts.MarkRead = errlog.MarkRead
 	}
+	return opts
+}
 
+// buildErrorLogHeader composes the heading + word-wrapped subtitle +
+// separator that sits above the split body.
+func buildErrorLogHeader() fyne.CanvasObject {
 	heading := widget.NewLabelWithStyle("Error Log", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	subtitle := widget.NewLabel(
 		"Every failure surfaced in the UI lands here with its full file:line trace. " +
 			"Click a row to see the chain; copy & paste it into a bug report.",
 	)
 	subtitle.Wrapping = fyne.TextWrapWord
+	return container.NewVBox(heading, subtitle, widget.NewSeparator())
+}
 
-	// entries holds the current snapshot in **newest-first** order so
-	// the most recent failure is row 0. The list rebinds via Refresh
-	// after every Subscribe tick.
-	entries := loadEntriesNewestFirst(opts.Snapshot)
-
-	// Detail pane bits — populated on row select.
+// newErrorLogTracePane returns the monospaced trace label wrapped in a
+// vertical scroller — the right-hand pane of the split body.
+func newErrorLogTracePane() (*widget.Label, *container.Scroll) {
 	traceLabel := widget.NewLabel("Select an entry to see its trace.")
 	traceLabel.Wrapping = fyne.TextWrapWord
 	traceLabel.TextStyle = fyne.TextStyle{Monospace: true}
 	traceScroll := container.NewVScroll(traceLabel)
+	return traceLabel, traceScroll
+}
 
-	var selectedTrace string
-
+// newErrorLogList builds the virtualised entries list and wires the
+// row-select handler so picking a row repaints the trace pane.
+func newErrorLogList(
+	entries *[]errlog.Entry,
+	traceLabel *widget.Label,
+	traceScroll *container.Scroll,
+	selected *errorLogSelection,
+) *widget.List {
 	list := widget.NewList(
-		func() int { return len(entries) },
+		func() int { return len(*entries) },
 		func() fyne.CanvasObject { return widget.NewLabel("template") },
 		func(i widget.ListItemID, o fyne.CanvasObject) {
-			if i < 0 || i >= len(entries) {
+			if i < 0 || i >= len(*entries) {
 				return
 			}
-			o.(*widget.Label).SetText(formatRow(entries[i]))
+			o.(*widget.Label).SetText(formatRow((*entries)[i]))
 		},
 	)
 	list.OnSelected = func(i widget.ListItemID) {
-		if i < 0 || i >= len(entries) {
+		if i < 0 || i >= len(*entries) {
 			return
 		}
-		e := entries[i]
-		selectedTrace = e.Trace
+		e := (*entries)[i]
+		selected.trace = e.Trace
 		traceLabel.SetText(formatTraceDetail(e))
 		traceScroll.Refresh()
 	}
+	return list
+}
 
+// newErrorLogFooter composes the Copy / Clear / Open-log-file buttons
+// plus the inline status label. The "Open log file" button is disabled
+// when persistence is unavailable (boot fallback).
+func newErrorLogFooter(
+	opts ErrorLogOptions,
+	entries *[]errlog.Entry,
+	list *widget.List,
+	traceLabel *widget.Label,
+	selected *errorLogSelection,
+) fyne.CanvasObject {
 	copyBtn := widget.NewButton("Copy trace", func() {
-		if selectedTrace == "" || opts.Clipboard == nil {
+		if selected.trace == "" || opts.Clipboard == nil {
 			return
 		}
-		opts.Clipboard.SetContent(selectedTrace)
+		opts.Clipboard.SetContent(selected.trace)
 	})
 	clearBtn := widget.NewButton("Clear all", func() {
 		opts.Clear()
-		entries = nil
+		*entries = nil
 		list.Refresh()
 		traceLabel.SetText("Select an entry to see its trace.")
-		selectedTrace = ""
+		selected.trace = ""
 	})
+	openBtn, openStatus := newOpenLogButton(opts)
+	return container.NewHBox(copyBtn, clearBtn, openBtn, openStatus)
+}
 
-	// Status line for the "Open log file" action — empty by default,
-	// flips to "Opened {path}" or the error string after a click.
-	// Lives in the footer (next to the buttons) so the user gets
-	// inline feedback without a popup dialog.
+// newOpenLogButton builds the "Open log file" button + its sibling
+// status label. Disabled with a "Disk log unavailable." caption when
+// LogPath is empty (errlog persistence failed at boot).
+func newOpenLogButton(opts ErrorLogOptions) (*widget.Button, *widget.Label) {
 	openStatus := widget.NewLabel("")
 	openStatus.Importance = widget.LowImportance
-
 	openBtn := widget.NewButton("Open log file", func() {
 		msg := openLogFile(opts.LogPath, opts.OpenPath)
 		openStatus.SetText(msg)
 	})
 	if opts.LogPath == "" {
-		// Persistence is disabled (boot fallback) → no file to open.
 		openBtn.Disable()
 		openStatus.SetText("Disk log unavailable.")
 	}
+	return openBtn, openStatus
+}
 
-	footer := container.NewHBox(copyBtn, clearBtn, openBtn, openStatus)
-
-	// Mark unread → read on open so the sidebar badge clears.
-	opts.MarkRead()
-
-	// Live updates: spin a goroutine that drains the subscribe
-	// channel and refreshes the list. Caller leaks one goroutine per
-	// open which is fine — the shell rebuilds detail panes via Stack
-	// swap, so the previous goroutine's channel goes idle (no
-	// further sends) once the singleton drops it. (Future cleanup:
-	// have errlog.Subscribe return an Unsubscribe func; tracked in
-	// .lovable/plan.md Phase 4.)
+// startErrorLogRefresher spins the goroutine that drains the subscribe
+// channel and reloads the snapshot on every tick. Caller leaks one
+// goroutine per open which is fine — the shell rebuilds detail panes
+// via Stack swap, so the previous goroutine's channel goes idle once
+// the singleton drops it. (Future cleanup: have errlog.Subscribe
+// return an Unsubscribe func; tracked in `.lovable/plan.md` Phase 4.)
+func startErrorLogRefresher(opts ErrorLogOptions, entries *[]errlog.Entry, list *widget.List) {
 	go func() {
 		for range opts.Subscribe() {
-			entries = loadEntriesNewestFirst(opts.Snapshot)
+			*entries = loadEntriesNewestFirst(opts.Snapshot)
 			list.Refresh()
 		}
 	}()
-
-	body := container.NewHSplit(list, container.NewBorder(nil, nil, nil, nil, traceScroll))
-	body.SetOffset(0.40)
-
-	return container.NewBorder(
-		container.NewVBox(heading, subtitle, widget.NewSeparator()),
-		footer, nil, nil,
-		body,
-	)
 }
 
 // loadEntriesNewestFirst snapshots the store and reverses to put the
