@@ -85,6 +85,24 @@ blocks:
       - const: ErrDbWatchState
         code: "ER-DB-21107"
         description: WatchState read/write failed.
+      # Slice #196 (A1-grow): SQLite error-class codes added to mirror
+      # spec/21-app/06-error-registry.md §3 ER-STO declarations. Not yet
+      # wrapped at any call site; reserved for future store-layer work.
+      - const: ErrDbUniqueViolation
+        code: "ER-DB-21108"
+        description: SQLite UNIQUE constraint violation surfaced from a write.
+      - const: ErrDbFkViolation
+        code: "ER-DB-21109"
+        description: SQLite FOREIGN KEY constraint violation surfaced from a write.
+      - const: ErrDbBusy
+        code: "ER-DB-21110"
+        description: SQLite SQLITE_BUSY returned after the busy_timeout window.
+      - const: ErrDbReadOnly
+        code: "ER-DB-21111"
+        description: Write attempted against a database opened read-only.
+      - const: ErrDbCorrupt
+        code: "ER-DB-21112"
+        description: SQLite SQLITE_CORRUPT — file integrity check failed.
 
   - name: Mail
     prefix: ER-MAIL
