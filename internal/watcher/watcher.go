@@ -202,6 +202,7 @@ func runLoop(ctx context.Context, opts Options, logger *log.Logger, tick *time.T
 				applyPollReload(logger, alias, poll, secs)
 			}
 		case <-tick.C:
+			pollStarted := time.Now()
 			st.pollCount++
 			stats, err := pollOnce(ctx, opts, logger)
 			if err != nil {
@@ -221,7 +222,7 @@ func runLoop(ctx context.Context, opts Options, logger *log.Logger, tick *time.T
 					logger.Printf("%s  ! [%s] reset consecutive failures: %v", ts(), alias, rerr)
 				}
 			}
-			tick.Reset(nextDelay(*poll, st, logger, alias))
+			tick.Reset(nextDelay(*poll, pollStarted))
 		}
 	}
 }
@@ -233,19 +234,19 @@ func logStopped(logger *log.Logger, opts Options, st *pollState) {
 	publishLifecycleEvent(opts, EventStopped, opts.Account.Alias)
 }
 
-// nextDelay picks the wait until the next poll attempt. Happy path returns
-// the configured cadence; on a streak of errors it returns
-// NextPollDelay(base, streak, jitter) and logs the chosen back-off so an
-// operator can tell why polls slowed down. Splitting this off keeps
-// runLoop ≤15 statements and the math testable without a fake clock.
-func nextDelay(base time.Duration, st *pollState, logger *log.Logger, alias string) time.Duration {
-	if st.consecutiveErrors == 0 {
-		return base
+// nextDelay returns the wait until the next poll start. It preserves the
+// user-visible cadence as a fixed-rate schedule: a 5s poll means attempts
+// start roughly every 5s, not "after the previous attempt finished + 5s".
+// If a dial consumes the full cadence window, retry immediately.
+func nextDelay(base time.Duration, pollStarted time.Time) time.Duration {
+	if base <= 0 {
+		base = time.Second
 	}
-	d := NextPollDelay(base, st.consecutiveErrors, rand.Float64())
-	logger.Printf("%s  ⏳ [%s] backing off after %d consecutive error(s): next poll in %s",
-		ts(), alias, st.consecutiveErrors, d.Round(100*time.Millisecond))
-	return d
+	remaining := base - time.Since(pollStarted)
+	if remaining <= 0 {
+		return 0
+	}
+	return remaining
 }
 
 // applyPollReload clamps and applies a new PollSeconds value, logging the
