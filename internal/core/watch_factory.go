@@ -13,6 +13,7 @@ package core
 import (
 	"context"
 	"log"
+	"time"
 
 	"github.com/lovable/email-read/internal/browser"
 	"github.com/lovable/email-read/internal/config"
@@ -93,6 +94,30 @@ type realLoopFactory struct {
 	deps RealLoopFactoryDeps
 }
 
+// PublishWatcherLifecycle mirrors core.Watch lifecycle events onto the
+// low-level watcher.Bus that powers the desktop Raw log tab. watcher.Run
+// also publishes started/stopped once it enters/exits, but this immediate
+// mirror covers fast-fail paths and validates that the Raw-log subscriber is
+// alive the instant the user clicks Start.
+func (f *realLoopFactory) PublishWatcherLifecycle(kind string, alias string, at time.Time, err error) {
+	if f.deps.Bus == nil {
+		return
+	}
+	f.deps.Bus.Publish(watcherLifecycleEvent(kind, alias, at, err))
+}
+
+func watcherLifecycleEvent(kind string, alias string, at time.Time, err error) watcher.Event {
+	switch kind {
+	case WatchStart.String():
+		return watcher.Event{Kind: watcher.EventStarted, Alias: alias, At: at}
+	case WatchStop.String():
+		return watcher.Event{Kind: watcher.EventStopped, Alias: alias, At: at}
+	case WatchError.String():
+		return watcher.Event{Kind: watcher.EventPollError, Alias: alias, At: at, Err: err}
+	}
+	return watcher.Event{Kind: watcher.EventHeartbeat, Alias: alias, At: at}
+}
+
 // New builds the per-runner Loop. We resolve the account here (cheap,
 // non-blocking) so a missing alias surfaces as soon as Run starts
 // rather than at first poll tick.
@@ -136,14 +161,15 @@ func (l *realLoop) Run(ctx context.Context) error {
 		defer l.deps.PollChans.Release(l.opts.Alias)
 	}
 	return watcher.Run(ctx, watcher.Options{
-		Account:       *l.acct,
-		PollSeconds:   l.opts.PollSeconds,
-		Engine:        l.deps.Engine,
-		Launcher:      l.deps.Launcher,
-		Store:         l.deps.Store,
-		Logger:        l.deps.Logger,
-		Verbose:       l.deps.Verbose,
-		Bus:           l.deps.Bus,
-		PollSecondsCh: pollCh,
+		Account:                 *l.acct,
+		PollSeconds:             l.opts.PollSeconds,
+		Engine:                  l.deps.Engine,
+		Launcher:                l.deps.Launcher,
+		Store:                   l.deps.Store,
+		Logger:                  l.deps.Logger,
+		Verbose:                 l.deps.Verbose,
+		Bus:                     l.deps.Bus,
+		SuppressLifecycleEvents: l.deps.Bus != nil,
+		PollSecondsCh:           pollCh,
 	})
 }

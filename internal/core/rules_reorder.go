@@ -55,11 +55,11 @@ import (
 //   - nil names slice on a non-empty config → ErrRuleReorderMismatch
 //     (interpreted as "you forgot to pass the names")
 //   - len(names) != len(cfg.Rules)          → ErrRuleReorderMismatch
-//                                             + counts in context
+//   - counts in context
 //   - duplicate name in `names`             → ErrRuleReorderMismatch
-//                                             + duplicateName ctx
+//   - duplicateName ctx
 //   - name in `names` not in current rules  → ErrRuleReorderMismatch
-//                                             + missingName ctx
+//   - missingName ctx
 //   - load/save IO failure                  → ErrConfigOpen / ErrConfigEncode
 //
 // Empty `names` against an empty rules slice is a valid no-op success

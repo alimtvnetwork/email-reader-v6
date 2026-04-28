@@ -3,8 +3,8 @@
 //
 // Same harness as `rules_bench_test.go` / `emails_list_bench_test.go`:
 //
-//   1. `BenchmarkAccounts_List_50Accounts` — ns/op trend probe.
-//   2. `TestAccounts_List_50Accounts_PerfGate` — wall-clock p95 gate.
+//  1. `BenchmarkAccounts_List_50Accounts` — ns/op trend probe.
+//  2. `TestAccounts_List_50Accounts_PerfGate` — wall-clock p95 gate.
 //
 // **Workload**: 50 accounts. The Accounts screen targets <10 in
 // practice; 50 is a deliberate over-provision so a regression in

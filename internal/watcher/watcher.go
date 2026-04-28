@@ -22,14 +22,15 @@ import (
 
 // Options bundles everything the watcher needs to run.
 type Options struct {
-	Account     config.Account
-	PollSeconds int
-	Engine      *rules.Engine
-	Launcher    *browser.Launcher
-	Store       *store.Store
-	Logger      *log.Logger // optional; defaults to stdout
-	Verbose     bool        // if true, log every poll step. Default: only state changes.
-	Bus         *Bus        // optional; structured event stream for the UI. CLI leaves nil.
+	Account                 config.Account
+	PollSeconds             int
+	Engine                  *rules.Engine
+	Launcher                *browser.Launcher
+	Store                   *store.Store
+	Logger                  *log.Logger // optional; defaults to stdout
+	Verbose                 bool        // if true, log every poll step. Default: only state changes.
+	Bus                     *Bus        // optional; structured event stream for the UI. CLI leaves nil.
+	SuppressLifecycleEvents bool        // core.Watch may mirror Start/Stop itself for UI raw-log continuity.
 	// PollSecondsCh, when non-nil, lets a Settings consumer push live
 	// PollSeconds updates. Values are clamped to 1..60 and applied on the
 	// NEXT loop iteration (in-flight polls are not interrupted). Per
@@ -58,6 +59,7 @@ func truncURL(u string) string {
 //   - Quiet (default): only startup banner, baseline, new-mail events,
 //     errors, and a periodic heartbeat. Idle polls are silent.
 //   - Verbose (--verbose): every poll step is logged.
+//
 // logStartupBanner prints the multi-line startup card describing the account,
 // server, poll interval, rules, browser launcher, and verbosity mode.
 func logStartupBanner(logger *log.Logger, opts Options, poll time.Duration) {
@@ -174,11 +176,18 @@ func Run(ctx context.Context, opts Options) error {
 	}
 	alias := opts.Account.Alias
 	logStartupBanner(logger, opts, poll)
-	opts.Bus.Publish(Event{Kind: EventStarted, Alias: alias})
+	publishLifecycleEvent(opts, EventStarted, alias)
 	tick := time.NewTimer(0)
 	defer tick.Stop()
 	st := &pollState{startedAt: time.Now()}
 	return runLoop(ctx, opts, logger, tick, st, &poll)
+}
+
+func publishLifecycleEvent(opts Options, kind EventKind, alias string) {
+	if opts.SuppressLifecycleEvents {
+		return
+	}
+	opts.Bus.Publish(Event{Kind: kind, Alias: alias})
 }
 
 // runLoop owns the main select loop. Extracted so Run stays ≤15 statements.
@@ -192,7 +201,7 @@ func runLoop(ctx context.Context, opts Options, logger *log.Logger, tick *time.T
 			logger.Printf("")
 			logger.Printf("%s  ■ stopped — ran %s, %d polls",
 				ts(), time.Since(st.startedAt).Round(time.Second), st.pollCount)
-			opts.Bus.Publish(Event{Kind: EventStopped, Alias: alias})
+			publishLifecycleEvent(opts, EventStopped, alias)
 			return nil
 		case secs, ok := <-opts.PollSecondsCh:
 			if ok {

@@ -46,11 +46,11 @@ type ActivitySource = activitySource
 //
 //   - 1 (WatchStart)        → ActivityPollStarted
 //   - 2 (WatchStop)         → DROPPED (no spec ActivityKind for clean
-//                             shutdown; Stop is a watcher-internal
-//                             lifecycle event, not user-visible activity)
+//     shutdown; Stop is a watcher-internal
+//     lifecycle event, not user-visible activity)
 //   - 3 (WatchError)        → ActivityPollFailed
 //   - 4 (WatchHeartbeat)    → ActivityPollSucceeded (each heartbeat means
-//                             one successful poll completed)
+//     one successful poll completed)
 //   - 5 (WatchEmailStored)  → ActivityEmailStored (Slice #107)
 //   - 6 (WatchRuleMatched)  → ActivityRuleMatched (Slice #107)
 //

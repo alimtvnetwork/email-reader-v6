@@ -114,8 +114,8 @@ type storeOpener func() (s emailsStore, close func() error, err error)
 //   - refresher — optional, P4.4 (powers `Refresh`)
 //   - rules     — optional, P4.8 placeholder for P5 wire-up
 //   - clock     — defaults to time.Now; P4.8 forward-infra for the
-//                 P4.3 `DeletedAt` timestamps and any future
-//                 wall-clock-stamped audit field.
+//     P4.3 `DeletedAt` timestamps and any future
+//     wall-clock-stamped audit field.
 type EmailsService struct {
 	openStore storeOpener
 	refresher Refresher   // optional; set via WithRefresher (P4.4)

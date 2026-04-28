@@ -13,10 +13,13 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/lovable/email-read/internal/config"
 	"github.com/lovable/email-read/internal/errtrace"
+	"github.com/lovable/email-read/internal/eventbus"
 	"github.com/lovable/email-read/internal/store"
+	"github.com/lovable/email-read/internal/watcher"
 )
 
 // hasCode is a small test helper: the project does not expose a
@@ -86,6 +89,44 @@ func TestRealLoopFactory_New_DeferredAliasMiss(t *testing.T) {
 	}
 	if !hasCode(err, errtrace.ErrWatchAccountNotFound) {
 		t.Fatalf("want ER-WCH-21412, got %v", err)
+	}
+}
+
+// TestWatch_Start_MirrorsLifecycleToWatcherBus locks the desktop Raw log
+// contract: clicking Start must produce an immediate watcher.EventStarted
+// line even if the real loop fails before its first IMAP poll.
+func TestWatch_Start_MirrorsLifecycleToWatcherBus(t *testing.T) {
+	t.Parallel()
+	lowBus := watcher.NewBus(8)
+	sub, cancel := lowBus.Subscribe()
+	defer cancel()
+	fres := NewRealLoopFactory(RealLoopFactoryDeps{
+		Resolver: func(string) *config.Account { return nil },
+		Store:    &store.Store{},
+		Bus:      lowBus,
+	})
+	if fres.HasError() {
+		t.Fatalf("factory build: %v", fres.Error())
+	}
+	wres := NewWatch(fres.Value(), eventbus.New[WatchEvent](8), time.Now)
+	if wres.HasError() {
+		t.Fatalf("watch build: %v", wres.Error())
+	}
+	if r := wres.Value().Start(context.Background(), WatchOptions{Alias: "ghost"}); r.HasError() {
+		t.Fatalf("Start: %v", r.Error())
+	}
+	assertWatcherEventKind(t, sub, watcher.EventStarted)
+}
+
+func assertWatcherEventKind(t *testing.T, ch <-chan watcher.Event, want watcher.EventKind) {
+	t.Helper()
+	select {
+	case ev := <-ch:
+		if ev.Kind != want || ev.Alias != "ghost" {
+			t.Fatalf("watcher event = %+v, want kind=%s alias=ghost", ev, want)
+		}
+	case <-time.After(time.Second):
+		t.Fatalf("timeout waiting for watcher event %s", want)
 	}
 }
 

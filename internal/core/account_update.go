@@ -1,10 +1,10 @@
 // account_update.go — UpdateAccount mutates an EXISTING account by alias.
 // Distinct from AddAccount in three ways:
-//   1. Alias must already exist; otherwise ErrConfigAccountMissing.
-//   2. PlainPassword may be blank — meaning "keep the current PasswordB64
-//      unchanged". This lets the Edit form show the password field as
-//      empty without forcing the user to re-type it.
-//   3. Publishes AccountUpdated (never AccountAdded).
+//  1. Alias must already exist; otherwise ErrConfigAccountMissing.
+//  2. PlainPassword may be blank — meaning "keep the current PasswordB64
+//     unchanged". This lets the Edit form show the password field as
+//     empty without forcing the user to re-type it.
+//  3. Publishes AccountUpdated (never AccountAdded).
 //
 // Like AddAccount this function is the source of truth for write-lock
 // atomicity (CF-A2): Load + Upsert + Save run inside config.WithWriteLock.

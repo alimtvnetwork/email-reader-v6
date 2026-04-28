@@ -4,6 +4,7 @@
 // spec/21-app/02-features/01-dashboard/01-backend.md §6:
 //   - #3 RecentActivity_LimitClampedTo200 (limit=999 → src receives 200)
 //   - #4 RecentActivity_NegativeLimit_ReturnsErr (caller bug)
+//
 // plus: nil-source guard, valid-limit forwarded verbatim, source error
 // is wrapped (not silently swallowed).
 package core

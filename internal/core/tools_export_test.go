@@ -146,7 +146,7 @@ func TestExportCsv_FilteredStreaming(t *testing.T) {
 	}
 	insert("alpha", "<m1@x>", 1, t0)
 	insert("alpha", "<m2@x>", 2, t0.Add(48*time.Hour)) // outside Until
-	insert("beta", "<m3@x>", 3, t0.Add(time.Hour))    // wrong alias
+	insert("beta", "<m3@x>", 3, t0.Add(time.Hour))     // wrong alias
 
 	out := filepath.Join(dir, "filtered.csv")
 	progress := make(chan ExportProgress, 16)

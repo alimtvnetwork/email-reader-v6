@@ -10,16 +10,16 @@
 // land in shipped log files.
 //
 // Strategy:
-//   1. Install a buffering `slog.Handler` as the process default for
-//      the duration of the test (restored on cleanup).
-//   2. Also redirect the legacy `log` package writer into the same
-//      buffer so a stray `log.Printf` would still be caught.
-//   3. Drive `Tools.OpenUrl` with a URL whose original form contains
-//      both userinfo (`user:pw`) and a sensitive query value (`otp=123456`).
-//      Both must be stripped/masked by `redactUrl` before any log call.
-//   4. Walk every captured `slog.Record` whose `Level >= LevelInfo`,
-//      plus every legacy log line, and assert none contain the
-//      sensitive substrings.
+//  1. Install a buffering `slog.Handler` as the process default for
+//     the duration of the test (restored on cleanup).
+//  2. Also redirect the legacy `log` package writer into the same
+//     buffer so a stray `log.Printf` would still be caught.
+//  3. Drive `Tools.OpenUrl` with a URL whose original form contains
+//     both userinfo (`user:pw`) and a sensitive query value (`otp=123456`).
+//     Both must be stripped/masked by `redactUrl` before any log call.
+//  4. Walk every captured `slog.Record` whose `Level >= LevelInfo`,
+//     plus every legacy log line, and assert none contain the
+//     sensitive substrings.
 //
 // The test deliberately exercises *both* the launch-success path and
 // the dedup-hit path (which has its own `recordAuditExt` branch), so

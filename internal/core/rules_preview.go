@@ -4,33 +4,33 @@
 // Why a dedicated helper (vs. building `OpenUrlSpec` inline at the
 // future button's click handler):
 //
-//   1. **Calling-convention pin.** The Tools spec
-//      (`spec/21-app/02-features/06-tools/99-consistency-report.md`
-//      §13, OI-3) requires that previews fired from the rule editor
-//      route through `core.Tools.OpenUrl(ctx, OpenUrlSpec{
-//      Origin: OriginManual, RuleName: <currentRuleName>})` — i.e.
-//      the launch reads as "manual" in audit logs (the user clicked
-//      a preview button, not an automated rule match) yet still
-//      carries the rule name so `OpenedUrls.RuleName` is populated.
-//      The combination is non-obvious — `Origin: OriginRule` would
-//      be the natural reading — so encoding it in a helper with a
-//      single test is cheaper than re-deriving it at every future
-//      callsite.
+//  1. **Calling-convention pin.** The Tools spec
+//     (`spec/21-app/02-features/06-tools/99-consistency-report.md`
+//     §13, OI-3) requires that previews fired from the rule editor
+//     route through `core.Tools.OpenUrl(ctx, OpenUrlSpec{
+//     Origin: OriginManual, RuleName: <currentRuleName>})` — i.e.
+//     the launch reads as "manual" in audit logs (the user clicked
+//     a preview button, not an automated rule match) yet still
+//     carries the rule name so `OpenedUrls.RuleName` is populated.
+//     The combination is non-obvious — `Origin: OriginRule` would
+//     be the natural reading — so encoding it in a helper with a
+//     single test is cheaper than re-deriving it at every future
+//     callsite.
 //
-//   2. **Headless-testable.** The button itself is Fyne-canvas
-//      bound (deferred to Slice #118e per the Phase 1 plan), but
-//      the *shape* of the spec it must build is a pure data
-//      contract with zero UI dependency. Pulling the contract into
-//      `internal/core/` lets us pin it today with a 🟢 sandbox-
-//      safe test (`rules_preview_test.go`) instead of waiting for
-//      the canvas harness.
+//  2. **Headless-testable.** The button itself is Fyne-canvas
+//     bound (deferred to Slice #118e per the Phase 1 plan), but
+//     the *shape* of the spec it must build is a pure data
+//     contract with zero UI dependency. Pulling the contract into
+//     `internal/core/` lets us pin it today with a 🟢 sandbox-
+//     safe test (`rules_preview_test.go`) instead of waiting for
+//     the canvas harness.
 //
-//   3. **Audit-trail invariant.** A future refactor that "tidies
-//      up" the manual-with-rule-name combination — e.g. by
-//      collapsing it into a new `OriginManualRule` enum value, or
-//      by stripping the rule name when origin is manual — must
-//      change this helper, which forces an explicit diff to the
-//      Tools spec instead of silent drift.
+//  3. **Audit-trail invariant.** A future refactor that "tidies
+//     up" the manual-with-rule-name combination — e.g. by
+//     collapsing it into a new `OriginManualRule` enum value, or
+//     by stripping the rule name when origin is manual — must
+//     change this helper, which forces an explicit diff to the
+//     Tools spec instead of silent drift.
 //
 // Spec:
 //   - spec/21-app/02-features/03-rules/97-acceptance-criteria.md (F-23)

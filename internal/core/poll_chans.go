@@ -16,10 +16,11 @@
 //     Acquire was skipped).
 //
 // Why buffered cap=1 (not unbuffered):
-//   An unbuffered chan would force Broadcast to block on each
-//   subscriber, which would couple Settings save latency to whatever
-//   the slowest watcher's tick interval is. cap=1 + drop-on-full keeps
-//   Settings publishes O(N runners) and bounded.
+//
+//	An unbuffered chan would force Broadcast to block on each
+//	subscriber, which would couple Settings save latency to whatever
+//	the slowest watcher's tick interval is. cap=1 + drop-on-full keeps
+//	Settings publishes O(N runners) and bounded.
 package core
 
 import (

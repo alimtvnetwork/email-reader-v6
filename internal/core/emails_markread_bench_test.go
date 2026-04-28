@@ -5,7 +5,7 @@
 //
 // Spec `spec/21-app/02-features/02-emails/01-backend.md` §2.3:
 //
-//   "Budget: ≤ 150 ms for 500 UIDs."
+//	"Budget: ≤ 150 ms for 500 UIDs."
 //
 // The original `TestEmailsService_MarkRead_500Uids_Under150ms` proves
 // the *service-layer overhead* is under budget by routing through a
@@ -19,12 +19,12 @@
 // This file plugs that gap by mirroring the proven harness from
 // `emails_list_bench_test.go` (P4.7):
 //
-//   1. `BenchmarkEmails_MarkRead_500Uids` — bench-only ns/op probe
-//      so regressions show up in `go test -bench`. Not a CI gate.
-//   2. `TestEmails_MarkRead_500Uids_RealStore_PerfGate` — wall-clock
-//      p95 budget against a seeded `*store.Store` (10 aliases × 1000
-//      rows each = 10 000 emails; we mark 500 UIDs of one alias).
-//      Skipped under `-short` to keep unit-test runs snappy.
+//  1. `BenchmarkEmails_MarkRead_500Uids` — bench-only ns/op probe
+//     so regressions show up in `go test -bench`. Not a CI gate.
+//  2. `TestEmails_MarkRead_500Uids_RealStore_PerfGate` — wall-clock
+//     p95 budget against a seeded `*store.Store` (10 aliases × 1000
+//     rows each = 10 000 emails; we mark 500 UIDs of one alias).
+//     Skipped under `-short` to keep unit-test runs snappy.
 //
 // Reuses `openGoldenStore` from `dashboard_golden_test.go` so we get
 // a real SQLite file with full migrations applied (M0010 indexes

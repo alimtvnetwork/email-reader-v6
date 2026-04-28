@@ -3,10 +3,10 @@
 // The UI Run() entrypoint (internal/ui/app.go) walks a fixed bootstrap
 // sequence on every cold start:
 //
-//   1. Construct app + apply theme        (loadInitialThemeMode)
-//   2. Subscribe to Settings              (startThemeLiveConsumer)
-//   3. Load aliases for the sidebar       (LoadAliases → core.ListAccounts)
-//   4. Build views as the user navigates  (core.ListRules, etc.)
+//  1. Construct app + apply theme        (loadInitialThemeMode)
+//  2. Subscribe to Settings              (startThemeLiveConsumer)
+//  3. Load aliases for the sidebar       (LoadAliases → core.ListAccounts)
+//  4. Build views as the user navigates  (core.ListRules, etc.)
 //
 // internal/ui/app.go itself is `//go:build !nofyne` so we cannot drive it
 // directly under the project's standard `-tags nofyne` verification path.
@@ -16,9 +16,9 @@
 // for a snappy first paint.
 //
 // The previous slice could break this in three concrete ways:
-//   • a new required Settings field with no default → NewSettings errors
-//   • a panic in ListRules/ListAccounts when config.json is missing
-//   • an O(n) regression that makes cold start visibly slow
+//   - a new required Settings field with no default → NewSettings errors
+//   - a panic in ListRules/ListAccounts when config.json is missing
+//   - an O(n) regression that makes cold start visibly slow
 //
 // This test pins all three.
 package core

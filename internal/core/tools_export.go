@@ -217,7 +217,6 @@ func writeFilteredRows(rows store.RowsScanner, w *csv.Writer, total int, progres
 	return written, nil
 }
 
-
 func preflightExport(spec ExportSpec) error {
 	if !spec.Since.IsZero() && !spec.Until.IsZero() && !spec.Until.After(spec.Since) {
 		return errtrace.NewCoded(errtrace.ErrToolsInvalidArgument, "Until must be after Since")

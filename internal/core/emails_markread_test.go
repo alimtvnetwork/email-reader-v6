@@ -3,18 +3,18 @@
 // `spec/21-app/02-features/02-emails/01-backend.md` §2.3 lists these
 // required cases:
 //
-//   1. MarkRead_500Uids_Under150ms        — perf gate (skipped under -short)
-//   2. MarkRead_EmptyUids_NoSql            — assert zero `Exec` calls via fake
-//   3. MarkRead_Idempotent                 — re-issuing same op leaves
-//                                            state stable (behavioral)
+//  1. MarkRead_500Uids_Under150ms        — perf gate (skipped under -short)
+//  2. MarkRead_EmptyUids_NoSql            — assert zero `Exec` calls via fake
+//  3. MarkRead_Idempotent                 — re-issuing same op leaves
+//     state stable (behavioral)
 //
 // Plus boundary / error coverage that the spec implies but doesn't
 // enumerate:
 //
-//   4. MarkRead_TooManyUids_Returns21221   — caller-bug guard (>1000)
-//   5. MarkRead_OpenError_PropagatesErrDbOpen
-//   6. MarkRead_StoreError_PropagatesErrDbInsertEmail (with alias ctx)
-//   7. MarkRead_HappyPath_ForwardsAliasUidsAndReadFlag
+//  4. MarkRead_TooManyUids_Returns21221   — caller-bug guard (>1000)
+//  5. MarkRead_OpenError_PropagatesErrDbOpen
+//  6. MarkRead_StoreError_PropagatesErrDbInsertEmail (with alias ctx)
+//  7. MarkRead_HappyPath_ForwardsAliasUidsAndReadFlag
 //
 // All tests use the existing `fakeEmailsStore` + `makeOpener` helpers
 // from `emails_service_test.go`.

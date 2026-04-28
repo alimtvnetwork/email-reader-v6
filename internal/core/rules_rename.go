@@ -46,12 +46,12 @@ import (
 //
 //   - empty oldName / newName    → ErrCoreInvalidArgument
 //   - oldName == newName (after trim) → ErrRuleRenameNoop
-//                                       (caller bug — UI should diff
-//                                       before submitting)
+//     (caller bug — UI should diff
+//     before submitting)
 //   - no rule with oldName       → ErrRuleNotFound + name context
 //   - newName already taken      → ErrRuleDuplicate + both names ctx
 //   - load/save IO failure       → ErrConfigOpen / ErrConfigEncode
-//                                  (existing pattern from Add/Remove)
+//     (existing pattern from Add/Remove)
 //
 // On success returns Unit{}; the rule's other fields (Enabled,
 // FromRegex, SubjectRegex, BodyRegex, UrlRegex) and its position in

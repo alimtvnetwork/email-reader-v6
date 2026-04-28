@@ -12,11 +12,11 @@ import (
 
 func TestParseDensity(t *testing.T) {
 	cases := []struct {
-		in    string
-		want  Density
+		in     string
+		want   Density
 		wantOK bool
 	}{
-		{"", DensityComfortable, true},        // empty → default
+		{"", DensityComfortable, true}, // empty → default
 		{"Comfortable", DensityComfortable, true},
 		{"Compact", DensityCompact, true},
 		{"compact", DensityComfortable, false}, // case-sensitive per ParseThemeMode contract

@@ -42,10 +42,10 @@ func (f *fakeBrowser) Path() (string, error) {
 }
 
 type fakeStore struct {
-	mu          sync.Mutex
-	hasHits     map[string]bool
-	records     []string
-	extInserts  []store.OpenedUrlInsert
+	mu         sync.Mutex
+	hasHits    map[string]bool
+	records    []string
+	extInserts []store.OpenedUrlInsert
 }
 
 func newFakeStore() *fakeStore { return &fakeStore{hasHits: map[string]bool{}} }

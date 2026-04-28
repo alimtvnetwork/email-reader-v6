@@ -1,7 +1,8 @@
 // dashboard_health.go — P3.3 AccountHealth core (pure-Go).
 //
 // Spec: spec/21-app/02-features/01-dashboard/01-backend.md §2.3, §3.3
-//       spec/21-app/02-features/01-dashboard/00-overview.md (struct shapes)
+//
+//	spec/21-app/02-features/01-dashboard/00-overview.md (struct shapes)
 //
 // This slice lands the **pure-Go core** of AccountHealth:
 //

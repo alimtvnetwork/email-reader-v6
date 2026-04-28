@@ -19,7 +19,8 @@
 //     intended ratchet.
 //
 // Spec ref: spec/21-app/02-features/01-dashboard/01-backend.md §3.1
-//           ("Q1 Email totals" + Q3/Q4 in-memory config).
+//
+//	("Q1 Email totals" + Q3/Q4 in-memory config).
 package core
 
 import (

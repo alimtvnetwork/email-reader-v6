@@ -4,11 +4,11 @@
 // onto the two long-lived goroutines we shipped in the Phase-3
 // dashboard production wire-up:
 //
-//   1. `BridgeWatcherBus` (watcher.Bus → eventbus.Bus[WatchEvent]
-//      pump goroutine in `watch_bridge.go`).
-//   2. `StartWatchEventPersistor` (eventbus.Bus[WatchEvent] →
-//      SQLite WatchEvents pump goroutine in
-//      `dashboard_activity_persistor.go`).
+//  1. `BridgeWatcherBus` (watcher.Bus → eventbus.Bus[WatchEvent]
+//     pump goroutine in `watch_bridge.go`).
+//  2. `StartWatchEventPersistor` (eventbus.Bus[WatchEvent] →
+//     SQLite WatchEvents pump goroutine in
+//     `dashboard_activity_persistor.go`).
 //
 // Each test starts the goroutine, drives a real workload through it,
 // calls the returned `stop()` func, then waits up to 1 s for the

@@ -2,18 +2,18 @@
 // `(*EmailsService).List` per spec
 // `spec/21-app/02-features/02-emails/01-backend.md` §2.1:
 //
-//   "p95 ≤ 60 ms with 100 000 rows + 3-char Search."
+//	"p95 ≤ 60 ms with 100 000 rows + 3-char Search."
 //
 // Two sibling probes for the same code path (mirrors the proven
 // Phase 3.8 harness in `dashboard_summary_bench_test.go`):
 //
-//   1. `BenchmarkEmails_List_100kRows_3CharSearch` — reports ns/op
-//      so we can track regression trends in `go test -bench`.
-//      Bench-only, not a CI gate.
-//   2. `TestEmails_List_100kRows_PerfGate` — runs the same workload
-//      N times under a wall-clock budget and fails the build if the
-//      p95 exceeds 60 ms. Skipped under `testing.Short` so unit-test
-//      runs stay snappy.
+//  1. `BenchmarkEmails_List_100kRows_3CharSearch` — reports ns/op
+//     so we can track regression trends in `go test -bench`.
+//     Bench-only, not a CI gate.
+//  2. `TestEmails_List_100kRows_PerfGate` — runs the same workload
+//     N times under a wall-clock budget and fails the build if the
+//     p95 exceeds 60 ms. Skipped under `testing.Short` so unit-test
+//     runs stay snappy.
 //
 // Reuses `openGoldenStore` from `dashboard_golden_test.go` — that
 // helper already returns a real `*store.Store` over a `t.TempDir()`
