@@ -23,6 +23,7 @@
 package specaudit
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
