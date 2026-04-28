@@ -464,11 +464,11 @@ func projectExtension(ext settingsExtension) projectedExtension {
 // clampPollSeconds projects an int from the legacy schema into the uint16
 // range expected by SettingsSnapshot, applying the documented default.
 func clampPollSeconds(v int) uint16 {
-	if v < 1 {
-		return 3
+	if v < config.MinWatchPollSeconds {
+		return config.MinWatchPollSeconds
 	}
-	if v > 60 {
-		return 60
+	if v > config.MinWatchPollSeconds {
+		return config.MinWatchPollSeconds
 	}
 	return uint16(v)
 }
