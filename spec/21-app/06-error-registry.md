@@ -1186,7 +1186,7 @@ Implemented in `internal/cli/cli.go:exitCodeFor(err error) int`.
 
 ---
 
-## 16. Cross-References
+## 17. Cross-References
 
 | Reference | Location |
 |---|---|
