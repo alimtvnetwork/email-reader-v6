@@ -80,18 +80,24 @@ const (
     ErrConfigPasswordDecode   Code = "ER-CFG-21007"
     ErrConfigSchemaMigration  Code = "ER-CFG-21008"
 
-    // ER-STO (Storage)
-    ErrStoreOpen              Code = "ER-STO-21100"
-    ErrStoreMigrate           Code = "ER-STO-21101"
-    ErrStoreInsertEmail       Code = "ER-STO-21102"
-    ErrStoreInsertOpenedUrl   Code = "ER-STO-21103"
-    ErrStoreUpdateWatchState  Code = "ER-STO-21104"
-    ErrStoreSelect            Code = "ER-STO-21105"
-    ErrStoreUniqueViolation   Code = "ER-STO-21106"
-    ErrStoreFKViolation       Code = "ER-STO-21107"
-    ErrStoreBusy              Code = "ER-STO-21108"
-    ErrStoreReadOnly          Code = "ER-STO-21109"
-    ErrStoreCorrupt           Code = "ER-STO-21110"
+    // ER-DB (Storage / SQLite) — aligned to internal/errtrace/codes.yaml
+    // (Slice #196 A1-grow). The impl registry is the operational source of
+    // truth: prefix is `ER-DB-*`, consts are `ErrDb*`, block starts at
+    // 21101 (not 21100). The historical `ErrStoreSelect` slot is split in
+    // the impl into `ErrDbQueryEmail` (21104) + `ErrDbQueryUrl` (21106)
+    // so callers can attribute SELECT failures to the right table.
+    ErrDbOpen              Code = "ER-DB-21101"
+    ErrDbMigrate           Code = "ER-DB-21102"
+    ErrDbInsertEmail       Code = "ER-DB-21103"
+    ErrDbQueryEmail        Code = "ER-DB-21104"
+    ErrDbInsertUrl         Code = "ER-DB-21105"
+    ErrDbQueryUrl          Code = "ER-DB-21106"
+    ErrDbWatchState        Code = "ER-DB-21107"
+    ErrDbUniqueViolation   Code = "ER-DB-21108"
+    ErrDbFkViolation       Code = "ER-DB-21109"
+    ErrDbBusy              Code = "ER-DB-21110"
+    ErrDbReadOnly          Code = "ER-DB-21111"
+    ErrDbCorrupt           Code = "ER-DB-21112"
 
     // ER-MAIL (IMAP) — aligned to internal/errtrace/codes.yaml (Slice #161).
     // The impl registry is the operational source of truth for error codes;
