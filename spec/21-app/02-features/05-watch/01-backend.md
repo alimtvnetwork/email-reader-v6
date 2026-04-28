@@ -491,7 +491,7 @@ Wrapped underlying errors (surfaced inside the envelope, not as the top-level co
 | `ER-MAIL-21206 ErrMailLogout`       | mailclient | LOGOUT during Stop fails → `21405`              |
 | `ER-MAIL-21208 ErrMailTimeout`      | mailclient | Any IMAP op exceeds deadline                     |
 | `ER-MAIL-21209 ErrMailIdleUnsupported` | mailclient | IDLE start fails → auto-fallback (`21414` INFO) |
-| `ER-STO-21104 ErrStoreUpdateWatchState` | store  | Cursor update fails → `21417`                    |
+| `ER-DB-21107 ErrDbWatchState` | store  | Cursor update fails → `21417`                    |
 
 Every error wrapped with `errtrace.Wrap(err, "Watch.<Method>")` or `errtrace.Wrap(err, "watcher.<Phase>")`.
 

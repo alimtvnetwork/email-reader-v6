@@ -112,7 +112,7 @@ Watcher error codes (registry `21400–21499`):
 | 21422 | WatcherShutdownSlow           | ✅         | (backend WARN; force-cancel)               | A-03       |
 | 21423 | WatcherHeartbeatMissed        | ✅         | (defensive; ERROR + auto-restart)          | H-05       |
 
-Wrapped errors: `ER-MAIL-21201..21210`, `ER-STO-21104` — owned by `mailclient` / `store` features; only **referenced** here.
+Wrapped errors: `ER-MAIL-21201..21210`, `ER-DB-21107` — owned by `mailclient` / `store` features; only **referenced** here.
 
 **Result:** ✅ 20/20 watcher codes registered, 19 either surfaced (10) or correctly hidden (10) per the table. Code 21410/21412/21413 intentionally never surfaced (caller bugs).
 

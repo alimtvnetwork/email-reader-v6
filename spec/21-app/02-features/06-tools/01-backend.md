@@ -17,7 +17,7 @@ Cross-references:
 - Architecture: [`../../07-architecture.md`](../../07-architecture.md) §4.6
 - Coding standards: [`../../04-coding-standards.md`](../../04-coding-standards.md)
 - Logging: [`../../05-logging-strategy.md`](../../05-logging-strategy.md) §6.6
-- Errors: [`../../06-error-registry.md`](../../06-error-registry.md) — codes `21750–21769` (Tools) + wrapped `21600–21604` (exporter), `ER-STO-21103` (OpenedUrl insert), `ER-MAIL-21201..21210` (diagnose probes; aligned to impl in Slice #161), `ER-COR-21704` (path escape)
+- Errors: [`../../06-error-registry.md`](../../06-error-registry.md) — codes `21750–21769` (Tools) + wrapped `21600–21604` (exporter), `ER-DB-21105` (OpenedUrl insert), `ER-MAIL-21201..21210` (diagnose probes; aligned to impl in Slice #161), `ER-COR-21704` (path escape)
 - Database: `spec/12-consolidated-guidelines/18-database-conventions.md`; canonical `OpenedUrl` schema in `00-overview.md` §4.2
 
 ---
@@ -186,12 +186,12 @@ Contract — the **only** authorised browser-launch path:
    - If miss: continue.
 5. **Resolve browser binary**: `cfg.BrowserOverride` if set, else `t.browser.DefaultBinary()`. Error = `21766 OpenUrlBrowserUnavailable`.
 6. **Launch incognito**: `t.browser.LaunchIncognito(ctx, binary, canonicalUrl)`. Always incognito; no opt-out. Error = `21767 OpenUrlLaunchFailed`.
-7. **Audit insert**: one `INSERT INTO OpenedUrl` row with `IsDeduped = 0`, `IsIncognito = 1`, `BrowserBinary = resolved`, `Url = canonical`, `OriginalUrl = original`, populated `Alias/RuleName/EmailId/Origin/TraceId`. Wrapped error → `ER-STO-21103`.
+7. **Audit insert**: one `INSERT INTO OpenedUrl` row with `IsDeduped = 0`, `IsIncognito = 1`, `BrowserBinary = resolved`, `Url = canonical`, `OriginalUrl = original`, populated `Alias/RuleName/EmailId/Origin/TraceId`. Wrapped error → `ER-DB-21105`.
 8. **Return** `OpenUrlReport`.
 
-Errors: `21760..21767`, wrapped `ER-STO-21103`.
+Errors: `21760..21767`, wrapped `ER-DB-21105`.
 
-**Atomicity note**: the launch (step 6) and audit insert (step 7) are NOT in a single transaction (the OS process spawn is not transactional). Order matters: launch FIRST, then audit. If audit insert fails after a successful launch, the WARN log + `ER-STO-21103` is the audit trail (operator can grep logs). This trade-off is documented in §7.
+**Atomicity note**: the launch (step 6) and audit insert (step 7) are NOT in a single transaction (the OS process spawn is not transactional). Order matters: launch FIRST, then audit. If audit insert fails after a successful launch, the WARN log + `ER-DB-21105` is the audit trail (operator can grep logs). This trade-off is documented in §7.
 
 ### 2.5 `RecentOpenedUrls` (read-only audit accessor)
 
@@ -457,7 +457,7 @@ ORDER BY ReceivedAt ASC, Id ASC;
 
 | Concern                                   | Decision |
 |-------------------------------------------|----------|
-| Browser launch + audit insert in one tx?  | **No** — OS process spawn is not transactional. Order = launch first, audit second. If audit fails post-launch, log `ER-STO-21103` WARN; the WARN itself is the audit trail (greppable). Accepted trade-off; alternative (audit-first, launch-second) would orphan rows on launch failure, which is **worse** for forensic completeness. |
+| Browser launch + audit insert in one tx?  | **No** — OS process spawn is not transactional. Order = launch first, audit second. If audit fails post-launch, log `ER-DB-21105` WARN; the WARN itself is the audit trail (greppable). Accepted trade-off; alternative (audit-first, launch-second) would orphan rows on launch failure, which is **worse** for forensic completeness. |
 | Concurrent same-`(Alias,Url)` open        | Serialised by `keyedMutex.Lock(alias+"|"+url)`; second call sees dedup hit. |
 | Concurrent same-alias `Diagnose`          | Serialised by `keyedMutex.Lock(alias)`; second call gets cached result (after first completes) or shares the in-flight result via cache write at end. |
 | Cancellation mid-Export                   | `csv.Flush` + `os.Remove(spec.OutPath)` (best-effort); partial file removal is NOT guaranteed (race vs. fsync) but is attempted. |
@@ -486,13 +486,13 @@ ORDER BY ReceivedAt ASC, Id ASC;
 | 21765 | `OpenUrlPrivateIpBlocked`         | core     | UI toast + Settings hint                        |
 | 21766 | `OpenUrlBrowserUnavailable`       | core     | UI toast "no browser found"; suggest `BrowserOverride` |
 | 21767 | `OpenUrlLaunchFailed`             | core     | UI toast with OS error                          |
-| 21768 | `OpenUrlAuditInsertFailed`        | store-wrap | Wrap `ER-STO-21103`; WARN log; launch already happened |
+| 21768 | `OpenUrlAuditInsertFailed`        | store-wrap | Wrap `ER-DB-21105`; WARN log; launch already happened |
 | 21769 | `ToolsBackgroundLeakDetected`     | core     | Defensive — sub-tool left a goroutine alive past Detach; ERROR + force-cancel |
 
 Wrapped (referenced, not owned by Tools):
 - `ER-EXP-21601..21604` — exporter file I/O
 - `ER-MAIL-21201..21210` — mail probes for ReadOnce + Diagnose
-- `ER-STO-21103 ErrStoreInsertOpenedUrl` — audit-insert failure
+- `ER-DB-21105 ErrDbInsertUrl` — audit-insert failure
 - `ER-COR-21704 ErrCorePathOutsideData` — export path escape
 - `ER-COR-21703 ErrCoreContextCancelled` — ctx cancellation surface
 
@@ -515,7 +515,7 @@ Per `05-logging-strategy.md` §6.6.
 | INFO  | `OpenUrlLaunched`              | `Alias`, `Url` (redacted), `Origin`, `RuleName`, `EmailId`, `BrowserBinary`, `TraceId`  |
 | INFO  | `OpenUrlDeduped`               | `Alias`, `Url`, `Origin`, `WindowSecs`, `TraceId`                                       |
 | WARN  | `OpenUrlUserinfoStripped`      | `Alias`, `Origin`, `TraceId` (URL fields **omitted** — userinfo is sensitive)           |
-| WARN  | `OpenUrlAuditInsertFailed`     | `Alias`, `Url`, `ErrCode=ER-STO-21103`, `TraceId`                                       |
+| WARN  | `OpenUrlAuditInsertFailed`     | `Alias`, `Url`, `ErrCode=ER-DB-21105`, `TraceId`                                       |
 | ERROR | `OpenUrlBrowserUnavailable`    | `BrowserOverride`, `TraceId`                                                            |
 | ERROR | `OpenUrlLaunchFailed`          | `Alias`, `Url`, `BrowserBinary`, `OsError` (redacted), `TraceId`                        |
 | ERROR | `ToolsBackgroundLeakDetected`  | `SubTool`, `TraceId`                                                                    |

@@ -79,7 +79,7 @@ Console (stderr) lines are **single-line, fixed-column, no JSON**. Color via `in
 LEVEL TIMESTAMP            LOGGER                FIELDS                                  MESSAGE
 INFO  2026-04-25T10:14:03Z core.SaveEmail        Alias=ab Uid=12345 DurationMs=42        saved email
 WARN  2026-04-25T10:14:03Z rules.Evaluate        Alias=ab RuleId=2 Reason=NoMatch        rule did not match
-ERROR 2026-04-25T10:14:03Z core.SaveEmail        Alias=ab Uid=12345 ErrCode=ER-STO-21101 insert email: UNIQUE constraint failed
+ERROR 2026-04-25T10:14:03Z core.SaveEmail        Alias=ab Uid=12345 ErrCode=ER-DB-21108 insert email: UNIQUE constraint failed
   at internal/store/store.go:184 (store.InsertEmail)
   at internal/core/emails.go:73 (core.SaveEmail)
   at internal/watcher/watcher.go:142 (watcher.processNew)
@@ -199,8 +199,8 @@ Every feature spec MUST restate the lines listed in this section verbatim. The l
 | `INSERT` success | `DEBUG` | `Table`, `RowId` | `"inserted row"` |
 | `UPDATE`/`DELETE` success | `DEBUG` | `Table`, `RowsAffected` | `"updated rows"` / `"deleted rows"` |
 | `SELECT` success | (no log unless `--verbose`) | `Table`, `RowsRead` | `"read rows"` |
-| Constraint violation | `WARN` | `Table`, `Constraint`, `ErrCode=ER-STO-*` | `"constraint hit: <name>"` |
-| Connection error | `ERROR` | `ErrCode=ER-STO-*`, `ErrFrames` | `"db connection failed"` |
+| Constraint violation | `WARN` | `Table`, `Constraint`, `ErrCode=ER-DB-*` | `"constraint hit: <name>"` |
+| Connection error | `ERROR` | `ErrCode=ER-DB-*`, `ErrFrames` | `"db connection failed"` |
 
 ### 6.3 `internal/mailclient/*`
 

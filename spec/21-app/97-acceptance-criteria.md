@@ -78,7 +78,7 @@ These criteria are **cross-feature**: each one exercises ≥ 2 feature backends,
 
 | #          | Criterion                                                                                                                                                                                                                                              | Test                                                  |
 |------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------|
-| AC-PROJ-21 | A fresh install (no `data/email-read.db`) bootstraps `SchemaMigration` and runs `M001`–`M00N` in order; failure aborts the app with `ER-STO-21100` and writes no half-applied state. (Cross-checks `AC-DB-30`–`AC-DB-37`.)                             | `Project_FreshBootstrap_RunsAllMigrations_OrAborts`   |
+| AC-PROJ-21 | A fresh install (no `data/email-read.db`) bootstraps `SchemaMigration` and runs `M001`–`M00N` in order; failure aborts the app with `ER-DB-21101` and writes no half-applied state. (Cross-checks `AC-DB-30`–`AC-DB-37`.)                             | `Project_FreshBootstrap_RunsAllMigrations_OrAborts`   |
 | AC-PROJ-22 | Retention sweep deletes `OpenedUrl` rows older than the configured TTL (365 d / 90 d) and triggers `VACUUM`/`ANALYZE` per the threshold rules in `spec/23-app-database/04-retention-and-vacuum.md`. Idempotent across reruns.                          | `Project_RetentionSweep_DeletesAndVacuumsCorrectly`   |
 
 ### 1.7 Issue regression coverage (every solved issue has a test)
