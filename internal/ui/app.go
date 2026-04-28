@@ -301,22 +301,27 @@ func BuildShell(aliases []string) fyne.CanvasObject {
 		rebuildDetail()
 		mountShellSplit(root, sidebar, detail, true)
 	}
-
-	// Re-render the active view if the alias changes so views always reflect
-	// the currently selected account. Cache is dropped because alias is an
-	// implicit dependency of every viewFor arm.
-	state.Subscribe(func(ev AppStateEvent) {
-		if ev.PrevAlias != ev.Alias {
-			invalidateViewCache()
-			rebuildDetail()
-		}
-	})
+	wireAliasInvalidation(state, invalidateViewCache, rebuildDetail)
 
 	// Initial build using the aliases passed in (avoids double-loading).
 	sidebar := buildShellSidebar(state, aliases, rebuildDetail)
 	rebuildDetail()
 	mountShellSplit(root, sidebar, detail, false)
 	return root
+}
+
+// wireAliasInvalidation subscribes to AppState changes and drops the
+// memoised view cache whenever the active alias changes — alias is an
+// implicit dependency of every viewFor arm. Extracted from BuildShell to
+// keep the outer function under the 15-statement linter budget
+// (AC-PROJ-20).
+func wireAliasInvalidation(state *AppState, invalidate func(), rebuildDetail func()) {
+	state.Subscribe(func(ev AppStateEvent) {
+		if ev.PrevAlias != ev.Alias {
+			invalidate()
+			rebuildDetail()
+		}
+	})
 }
 
 // buildShellSidebar wraps the NewSidebar(SidebarOptions{...}) literal so
