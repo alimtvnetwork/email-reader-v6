@@ -30,3 +30,4 @@ Honest-scope principle: skipped tests with `t.Logf` + `t.Skip` are tripwires, no
 - [Session 2026-04-21](mem://sessions/01-2026-04-21) — IMAP auth debugging session.
 - [Session 2026-04-21 debugging](mem://sessions/02-2026-04-21-debugging) — Verbose poll logging round.
 - [Archived: spec-21-app tasklist](mem://archive/02-spec-21-app-tasklist) — Closed 35-task authoring tasklist.
+- [Watch Raw log lifecycle mirror](mem://workflow/watch-raw-log-lifecycle-slice199) — Start/Stop/Error are mirrored from core.Watch to watcher.Bus so Raw log gets an immediate line even on fast-fail.
