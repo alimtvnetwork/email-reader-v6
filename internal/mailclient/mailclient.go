@@ -5,6 +5,7 @@ package mailclient
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"fmt"
 	"io"
@@ -14,6 +15,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/emersion/go-imap"
@@ -56,8 +58,20 @@ const DefaultDialTimeout = 8 * time.Second
 
 // Dial opens an IMAP connection and logs in.
 func Dial(acct config.Account) (*Client, error) {
+	return DialContext(context.Background(), acct)
+}
+
+// DialContext opens an IMAP connection and logs in, closing the underlying
+// socket promptly when ctx is cancelled. This lets Watch.Stop interrupt an
+// in-flight dial/greeting/login instead of waiting for the timeout budget.
+func DialContext(ctx context.Context, acct config.Account) (*Client, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	addr := net.JoinHostPort(acct.ImapHost, fmt.Sprintf("%d", acct.ImapPort))
-	dialer := &net.Dialer{Timeout: DefaultDialTimeout}
+	dialer := &contextDialer{ctx: ctx, timeout: DefaultDialTimeout}
+	stopAbort := dialer.abortOnCancel()
+	defer stopAbort()
 	var (
 		c   *client.Client
 		err error
@@ -68,6 +82,9 @@ func Dial(acct config.Account) (*Client, error) {
 		c, err = client.DialWithDialer(dialer, addr)
 	}
 	if err != nil {
+		if cerr := ctx.Err(); cerr != nil {
+			return nil, cerr
+		}
 		return nil, errtrace.Wrapf(err, "imap dial %s", addr)
 	}
 	c.Timeout = DefaultDialTimeout
@@ -78,9 +95,64 @@ func Dial(acct config.Account) (*Client, error) {
 	}
 	if err := c.Login(acct.Email, pwd); err != nil {
 		_ = c.Logout()
+		if cerr := ctx.Err(); cerr != nil {
+			return nil, cerr
+		}
 		return nil, errtrace.Wrapf(err, "imap login %s", acct.Email)
 	}
 	return &Client{acct: acct, c: c}, nil
+}
+
+type contextDialer struct {
+	ctx     context.Context
+	timeout time.Duration
+	mu      sync.Mutex
+	conn    net.Conn
+	aborted bool
+}
+
+func (d *contextDialer) Dial(network, addr string) (net.Conn, error) {
+	conn, err := (&net.Dialer{Timeout: d.timeout}).DialContext(d.ctx, network, addr)
+	if err != nil {
+		return nil, err
+	}
+	if d.timeout > 0 {
+		if err := conn.SetDeadline(time.Now().Add(d.timeout)); err != nil {
+			_ = conn.Close()
+			return nil, err
+		}
+	}
+	d.mu.Lock()
+	aborted := d.aborted
+	d.conn = conn
+	d.mu.Unlock()
+	if aborted || d.ctx.Err() != nil {
+		_ = conn.Close()
+		return nil, d.ctx.Err()
+	}
+	return conn, nil
+}
+
+func (d *contextDialer) abortOnCancel() func() {
+	done := make(chan struct{})
+	go func() {
+		select {
+		case <-d.ctx.Done():
+			d.closeConn()
+		case <-done:
+		}
+	}()
+	return func() { close(done) }
+}
+
+func (d *contextDialer) closeConn() {
+	d.mu.Lock()
+	d.aborted = true
+	conn := d.conn
+	d.mu.Unlock()
+	if conn != nil {
+		_ = conn.Close()
+	}
 }
 
 // Close logs out and closes the connection.
@@ -303,7 +375,9 @@ func (c *Client) FetchSince(lastUid uint32) ([]*Message, error) {
 }
 
 // SaveRaw writes the raw .eml file under
-//   email/<alias>/<YYYY-MM-DD>/HH.MM.SS__<from>__<subject>__uid<N>.eml
+//
+//	email/<alias>/<YYYY-MM-DD>/HH.MM.SS__<from>__<subject>__uid<N>.eml
+//
 // and returns the absolute path written.
 //
 // The filename format is human-readable and time-ordered:
