@@ -66,7 +66,7 @@ func (rt *WatchRuntime) PollSeconds() int {
 	rt.cfgMu.RLock()
 	defer rt.cfgMu.RUnlock()
 	if rt.cfg == nil {
-		return 3
+		return config.MinWatchPollSeconds
 	}
 	return rt.cfg.Watch.PollSeconds
 }

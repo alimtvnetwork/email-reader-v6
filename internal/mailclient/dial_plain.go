@@ -53,12 +53,7 @@ func DialPlain(in PlainDialInput) error {
 
 	c, err := dialPlainConn(in.Host, in.Port, in.UseTLS, timeout)
 	if err != nil {
-		if in.UseTLS && in.Port == 993 && isNetTimeout(err) {
-			c, err = dialPlainStartTLS(in.Host, timeout)
-		}
-		if err != nil {
-			return wrapDialError(err, in.Host, in.Port)
-		}
+		return wrapDialError(err, in.Host, in.Port)
 	}
 	defer func() { _ = c.Logout() }()
 
@@ -69,18 +64,6 @@ func DialPlain(in PlainDialInput) error {
 			WithContext("Host", in.Host)
 	}
 	return nil
-}
-
-func dialPlainStartTLS(host string, timeout time.Duration) (*client.Client, error) {
-	c, err := dialPlainConn(host, 143, false, timeout)
-	if err != nil {
-		return nil, err
-	}
-	if err := c.StartTLS(&tls.Config{ServerName: host}); err != nil {
-		_ = c.Logout()
-		return nil, err
-	}
-	return c, nil
 }
 
 // dialPlainConn performs the TCP (or TLS) dial with the supplied timeout.

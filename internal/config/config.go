@@ -41,6 +41,11 @@ type Watch struct {
 	PollSeconds int `json:"pollSeconds"`
 }
 
+// MinWatchPollSeconds is the safe production cadence for real IMAP hosts.
+// The watcher opens a fresh IMAP session per cycle today; polling faster can
+// trigger shared-host throttling and intermittent dial timeouts.
+const MinWatchPollSeconds = 60
+
 // Browser holds Chrome/Chromium launcher configuration.
 type Browser struct {
 	ChromePath   string `json:"chromePath"`

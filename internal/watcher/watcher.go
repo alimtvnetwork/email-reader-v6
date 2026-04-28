@@ -32,7 +32,7 @@ type Options struct {
 	Bus                     *Bus        // optional; structured event stream for the UI. CLI leaves nil.
 	SuppressLifecycleEvents bool        // core.Watch may mirror Start/Stop itself for UI raw-log continuity.
 	// PollSecondsCh, when non-nil, lets a Settings consumer push live
-	// PollSeconds updates. Values are clamped to 1..60 and applied on the
+	// PollSeconds updates. Values are clamped to the safe IMAP cadence and applied on the
 	// NEXT loop iteration (in-flight polls are not interrupted). Per
 	// spec/21-app/02-features/07-settings/01-backend.md §8 (CF-W1).
 	PollSecondsCh <-chan int
@@ -171,8 +171,9 @@ func Run(ctx context.Context, opts Options) error {
 		logger = log.New(io.Discard, "", 0)
 	}
 	poll := time.Duration(opts.PollSeconds) * time.Second
-	if poll <= 0 {
-		poll = 3 * time.Second
+	minPoll := time.Duration(config.MinWatchPollSeconds) * time.Second
+	if poll < minPoll {
+		poll = minPoll
 	}
 	alias := opts.Account.Alias
 	logStartupBanner(logger, opts, poll)
@@ -255,11 +256,11 @@ func nextDelay(base time.Duration, st *pollState, logger *log.Logger, alias stri
 // change. The new cadence takes effect on the next tick (in-flight polls
 // are NOT interrupted) per spec CF-W1.
 func applyPollReload(logger *log.Logger, alias string, poll *time.Duration, secs int) {
-	if secs < 1 {
-		secs = 1
+	if secs < config.MinWatchPollSeconds {
+		secs = config.MinWatchPollSeconds
 	}
-	if secs > 60 {
-		secs = 60
+	if secs > config.MinWatchPollSeconds {
+		secs = config.MinWatchPollSeconds
 	}
 	next := time.Duration(secs) * time.Second
 	if next == *poll {

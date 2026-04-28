@@ -88,7 +88,7 @@ func buildSettingsForm(svc *core.Settings, snap core.SettingsSnapshot) fyne.Canv
 func settingsFormItems(w *settingsWidgets) []*widget.FormItem {
 	return []*widget.FormItem{
 		{Text: "Theme", Widget: w.themeSelect, HintText: "Restart not required — repaints live."},
-		{Text: "Poll interval (seconds)", Widget: w.pollEntry, HintText: "1–60. Applied to running watcher live."},
+		{Text: "Poll interval (seconds)", Widget: w.pollEntry, HintText: "60 only. Prevents IMAP throttling."},
 		{Text: "Chrome / Chromium path", Widget: w.chromeEntry, HintText: "Leave blank to auto-detect."},
 		{Text: "Density", Widget: w.densitySelect, HintText: "Compact tightens paddings. Persists across restarts."},
 		{Text: "Opened-URLs retention (days)", Widget: w.retentionEntry, HintText: "0–3650. 0 = never prune."},
