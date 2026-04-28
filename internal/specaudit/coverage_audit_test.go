@@ -326,11 +326,13 @@ var coverageGapAllowlist = map[string]struct{}{
 	// `Test_FeatureFolderShapeIsUniform`).
 	//
 	// Honest defers from Slice #131:
-	//   - AC-PROJ-31: scanner is wired (`Test_AllErrorRefsResolveInRegistry`)
-	//     and ratchet-ready, but currently surfaces ~39 ER codes that
-	//     specs reference but `06-error-registry.md` hasn't formalised
-	//     yet (Settings 217xx, Migrations 218xx, UI 219xx blocks).
-	//     Closing requires registry growth = behaviour work.
+	//   - AC-PROJ-31 ✅ CLOSED by Slices #196 + #197. Slice #196 closed
+	//     Cat A (ER-STO renamed to ER-DB across 10 spec files; 5 SQLite-class
+	//     codes added to registry as ER-DB-21108..21112). Slice #197 added
+	//     the 12 missing detail entries (ER-WCH-21412, ER-UI-21900,
+	//     ER-SET-21770..21779) to spec/21-app/06-error-registry.md and
+	//     promoted Test_AllErrorRefsResolveInRegistry from t.Skip to
+	//     t.Fatal. Scanner now reports 0 gaps.
 	//   - AC-PROJ-33 closed by Slice #164 — `Test_NoBrokenSpecLinks_GreenInCi`
 	//     now t.Fatal's on any broken local link. All 33 originally-broken
 	//     cross-tree refs were repathed (`08-generic-update/` → `14-self-update-app-update/`
