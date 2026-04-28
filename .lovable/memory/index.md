@@ -4,7 +4,7 @@ Updated: 2026-04-28
 # Project Memory
 
 ## Core
-IMAP `poll ok` followed by `i/o timeout` means valid config plus intermittent connection throttling; reduce reconnect cadence/backoff before auth/network blame.
+IMAP `poll ok` then `i/o timeout` means valid config plus intermittent reachability; keep requested 5s cadence, fix via backoff/session reuse.
 Watch Raw log `start → stop` only means first poll was likely cancelled during long IMAP dial; add/inspect progress telemetry before network tweaks.
 Email watcher RCA: stable IMAP `messages`/`uidNext` means no new server-visible mail; diagnose delivery/folder before watcher logic.
 IMAP `AUTHENTICATIONFAILED`: always run `email-read doctor <alias>` first to rule out hidden Unicode (U+2060 word-joiner from chat copy-paste) before blaming code.
@@ -35,6 +35,6 @@ Honest-scope principle: skipped tests with `t.Logf` + `t.Skip` are tripwires, no
 - [Archived: spec-21-app tasklist](mem://archive/02-spec-21-app-tasklist) — Closed 35-task authoring tasklist.
 - [Watch Raw log lifecycle mirror](mem://workflow/watch-raw-log-lifecycle-slice199) — Start/Stop/Error are mirrored from core.Watch to watcher.Bus so Raw log gets an immediate line even on fast-fail.
 - [Watch start/stop only RCA (Slice #205)](mem://workflow/watch-start-stop-only-rca-slice205) — Raw log with only lifecycle lines means first poll was cancelled during long dial; solution is visible progress telemetry before more network changes.
-- [IMAP intermittent timeout after successful poll-ok (Slice #206)](mem://workflow/imap-intermittent-timeout-after-pollok-slice206) — Poll-ok then 993/143 timeout proves valid config but intermittent throttling from per-poll reconnect churn; fix cadence/backoff/reuse, not password.
+- [IMAP intermittent timeout after successful poll-ok (Slice #206/#207)](mem://workflow/imap-intermittent-timeout-after-pollok-slice206) — Poll-ok then 993/143 timeout proves valid config but intermittent reachability; keep requested 5s cadence, fix with backoff/session reuse, not password.
 - [Account Test Connection auth failure](mem://workflow/account-test-auth-failed-slice200) — Sanitized Test Connection password path and wrapped IMAP LOGIN rejects as ER-ACC-22201 with actionable RCA.
 - [Blockers 1/2/3/5 shipped (Slice #201)](mem://workflow/blockers-1-2-3-5-shipped-slice201) — `doctor browser` subcommand, GitHub Actions race-gate workflow, `internal/mockimap` (E.1 scope), `internal/benchgate` advisory harness; #4 canvas + #6 human-review remain deferred.
