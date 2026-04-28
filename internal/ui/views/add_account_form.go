@@ -132,30 +132,48 @@ func clearLabel(editing bool) string {
 	return "Clear"
 }
 
+// newProviderSelect builds the Provider dropdown defaulted to the
+// "Custom (manual)" sentinel so existing keyboard-only users see no
+// behaviour change until they pick a preset. Extracted from
+// newAccountFormEntries to keep that function under the 15-statement
+// linter budget (AC-PROJ-20).
+func newProviderSelect() *widget.Select {
+	provider := widget.NewSelect(PresetLabels(), nil)
+	provider.SetSelected(PresetLabels()[0])
+	return provider
+}
+
+// newAccountTextEntries constructs the text/password Entry widgets with
+// their placeholders. Returned in the canonical struct order so the
+// caller can compose the final accountFormEntries inline.
+func newAccountTextEntries() (alias, email, displayName, password, host, port, mailbox *widget.Entry) {
+	alias = widget.NewEntry()
+	alias.SetPlaceHolder("e.g. work-gmail")
+	email = widget.NewEntry()
+	email.SetPlaceHolder("you@example.com")
+	displayName = widget.NewEntry()
+	displayName.SetPlaceHolder("optional — e.g. Work — Sales inbox")
+	password = widget.NewPasswordEntry()
+	password.SetPlaceHolder("IMAP password or app-specific token")
+	host = widget.NewEntry()
+	host.SetPlaceHolder("auto-detect from email — leave blank to use imapdef")
+	port = widget.NewEntry()
+	port.SetPlaceHolder("993")
+	mailbox = widget.NewEntry()
+	mailbox.SetPlaceHolder("INBOX")
+	return alias, email, displayName, password, host, port, mailbox
+}
+
 // newAccountFormEntries constructs the entry widgets with their
 // placeholders. Returning a struct keeps BuildAddAccountForm flat.
 // The Provider Select is populated from PresetLabels() and starts on the
 // "Custom (manual)" sentinel so existing keyboard-only users see no
 // behaviour change until they pick a preset.
 func newAccountFormEntries() *accountFormEntries {
-	provider := widget.NewSelect(PresetLabels(), nil)
-	provider.SetSelected(PresetLabels()[0])
-	alias := widget.NewEntry()
-	alias.SetPlaceHolder("e.g. work-gmail")
-	email := widget.NewEntry()
-	email.SetPlaceHolder("you@example.com")
-	displayName := widget.NewEntry()
-	displayName.SetPlaceHolder("optional — e.g. Work — Sales inbox")
-	password := widget.NewPasswordEntry()
-	password.SetPlaceHolder("IMAP password or app-specific token")
-	host := widget.NewEntry()
-	host.SetPlaceHolder("auto-detect from email — leave blank to use imapdef")
-	port := widget.NewEntry()
-	port.SetPlaceHolder("993")
+	provider := newProviderSelect()
+	alias, email, displayName, password, host, port, mailbox := newAccountTextEntries()
 	useTLS := widget.NewCheck("Use TLS (recommended)", nil)
 	useTLS.SetChecked(true)
-	mailbox := widget.NewEntry()
-	mailbox.SetPlaceHolder("INBOX")
 	e := &accountFormEntries{provider, alias, email, displayName, password, host, port, useTLS, mailbox}
 	provider.OnChanged = func(label string) { applyPresetToEntries(label, e) }
 	return e
