@@ -151,7 +151,53 @@ func attachRuntimeServices(ctx context.Context, rt *WatchRuntime) error {
 	}
 	rt.Refresher = buildRefresherRegistry(rt, engine, launcher)
 	startMaintenance(ctx, rt)
+	startAccountRemovalWatcher(ctx, rt)
 	return nil
+}
+
+// startAccountRemovalWatcher subscribes to the process-wide account
+// event bus and stops any live `*core.Watch` runner whose alias was
+// just removed from config. Without this hook, deleting an account
+// while its watcher is mid-poll leaves an orphan goroutine that keeps
+// hitting IMAP with the stale credential snapshot it captured at
+// Start time — surfacing as "0 accounts in Accounts page, but Watch
+// log keeps showing `[<deleted-alias>] poll error`" (Slice #198 RCA).
+//
+// Bounded leak: one goroutine per WatchRuntime singleton (i.e. one
+// per process), terminated when the events channel closes via the
+// runtime's Close() path.
+func startAccountRemovalWatcher(ctx context.Context, rt *WatchRuntime) {
+	if rt.Watch == nil {
+		return
+	}
+	events, cancel := core.SubscribeAccountEvents()
+	rt.closers = append(rt.closers, func() error { cancel(); return nil })
+	go forwardAccountRemovalEvents(ctx, events, rt.Watch)
+}
+
+// forwardAccountRemovalEvents drains the AccountEvent stream and stops
+// any runner for a removed alias. Honours ctx so a global shutdown
+// cleanly tears the goroutine down. AccountAdded / AccountUpdated are
+// ignored here — they are handled elsewhere (resolver re-reads cfg
+// before each Start).
+func forwardAccountRemovalEvents(ctx context.Context, events <-chan core.AccountEvent, w *core.Watch) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case ev, ok := <-events:
+			if !ok {
+				return
+			}
+			if ev.Kind != core.AccountRemoved || ev.Alias == "" {
+				continue
+			}
+			if w.IsRunning(ev.Alias) {
+				_ = w.Stop(ev.Alias, 5*time.Second)
+				log.Printf("ui: stopped orphan watcher for removed alias %q", ev.Alias)
+			}
+		}
+	}
 }
 
 // buildRefresherRegistry constructs the alias-indexed `*watcher.Watcher`
