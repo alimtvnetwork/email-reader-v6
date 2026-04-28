@@ -1,11 +1,12 @@
 # Memory: index.md
-Updated: 2026-04-27
+Updated: 2026-04-28
 
 # Project Memory
 
 ## Core
 Email watcher RCA: stable IMAP `messages`/`uidNext` means no new server-visible mail; diagnose delivery/folder before watcher logic.
 IMAP `AUTHENTICATIONFAILED`: always run `email-read doctor <alias>` first to rule out hidden Unicode (U+2060 word-joiner from chat copy-paste) before blaming code.
+Test Connection auth failures mean IMAP LOGIN was reached; sanitize password bytes, then verify/reset the mailbox password at the mail host.
 All errors must use `internal/errtrace` (no `fmt.Errorf` / `errors.New` / bare `return err` — 3 lints in fail mode); UI handlers additionally call `errlog.ReportError(component, err)` to populate the ring buffer + `data/error-log.jsonl` + `email-read errors tail`.
 App spec lives at `spec/21-app/` (App Project Template). Old paths `spec/21-golang-email-reader/` and `spec/22-fyne-ui/` were merged here on 2026-04-25 — never recreate them.
 Sandbox has no preinstalled Go; verify with `nix run nixpkgs#go -- {vet,test} -tags nofyne ./...`. Files outside `.lovable/` may revert between sessions — verify on disk before assuming.
@@ -31,3 +32,4 @@ Honest-scope principle: skipped tests with `t.Logf` + `t.Skip` are tripwires, no
 - [Session 2026-04-21 debugging](mem://sessions/02-2026-04-21-debugging) — Verbose poll logging round.
 - [Archived: spec-21-app tasklist](mem://archive/02-spec-21-app-tasklist) — Closed 35-task authoring tasklist.
 - [Watch Raw log lifecycle mirror](mem://workflow/watch-raw-log-lifecycle-slice199) — Start/Stop/Error are mirrored from core.Watch to watcher.Bus so Raw log gets an immediate line even on fast-fail.
+- [Account Test Connection auth failure](mem://workflow/account-test-auth-failed-slice200) — Sanitized Test Connection password path and wrapped IMAP LOGIN rejects as ER-ACC-22201 with actionable RCA.

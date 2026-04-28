@@ -5,5 +5,5 @@ type: feature
 ---
 # Implementation Progress Tracker — spec/21-app
 
-**Last updated:** 2026-04-28 (after **Slice #199 — Watch Raw log lifecycle mirror**: Raw log now receives immediate Start/Stop/Error lifecycle events from core.Watch via watcher.Bus, so Start cannot show “Watching” with an empty Raw log on fast-fail paths. Verified core+watcher tests/vet under -tags nofyne.)
-**Overall: 100% done · 0% remaining (original roadmap complete) · UX bugfix slice applied.**
+**Last updated:** 2026-04-28 (after **Slice #200 — Account Test Connection auth-failure RCA**: Test Connection now sanitizes password bytes before IMAP LOGIN, matching Save/Watch behavior, and wraps server LOGIN rejects as `ER-ACC-22201` with endpoint context and clear mailbox-password guidance. Memory: `mem://workflow/account-test-auth-failed-slice200`.)
+**Overall: 100% done · 0% remaining (original roadmap complete) · UX bugfix slices applied through #200.**
