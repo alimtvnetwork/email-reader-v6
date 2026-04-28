@@ -182,6 +182,13 @@ func Run(ctx context.Context, opts Options) error {
 	return runLoop(ctx, opts, logger, tick, st, &poll)
 }
 
+func publishLifecycleEvent(opts Options, kind EventKind, alias string) {
+	if opts.SuppressLifecycleEvents {
+		return
+	}
+	opts.Bus.Publish(Event{Kind: kind, Alias: alias})
+}
+
 // runLoop owns the main select loop. Extracted so Run stays ≤15 statements.
 // `poll` is held by pointer so live-reload (PollSecondsCh) can mutate it
 // between iterations without interrupting an in-flight poll.
