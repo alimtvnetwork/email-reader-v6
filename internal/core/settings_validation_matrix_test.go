@@ -263,7 +263,6 @@ func runSettingsValidationCase(t *testing.T, tc settingsValidationCase) {
 // "" when none is found. Re-declaring it here would duplicate the
 // helper; the matrix relies on the dashboard_test.go definition.
 
-
 func mustConfigPath(t *testing.T) string {
 	t.Helper()
 	p, err := config.Path()

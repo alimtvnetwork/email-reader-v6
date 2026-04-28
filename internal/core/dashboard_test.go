@@ -7,9 +7,9 @@
 //   - Error envelope on cfg/store failures matches the pre-refactor
 //     contract: ErrConfigOpen for cfg load, ErrDbQueryEmail for
 //     emails count, with scope/alias context preserved.
-//   (Phase 2.8b: the legacy package-level `LoadDashboardStats` and method `LoadStats`
-//    wrapper has been deleted; all callers now go through
-//    *DashboardService directly.)
+//     (Phase 2.8b: the legacy package-level `LoadDashboardStats` and method `LoadStats`
+//     wrapper has been deleted; all callers now go through
+//     *DashboardService directly.)
 //
 // All fakes are one-line closures — no test mocks library, no
 // reflect tricks. This is the principal payoff of the

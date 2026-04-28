@@ -3,7 +3,7 @@
 //
 // Coverage matrix:
 //   - HappyPath_Delete_StampsClock        — clock injected; SetEmailDeletedAt
-//                                           called with *deletedAt == clock.Unix()
+//     called with *deletedAt == clock.Unix()
 //   - HappyPath_Undelete_WritesNil        — deletedAt arg is nil
 //   - Empty_Delete_NoStoreOpen            — opener never invoked
 //   - Empty_Undelete_NoStoreOpen

@@ -234,9 +234,9 @@ func scanOpenedUrlRows(rows interface {
 	var out []OpenedUrlRow
 	for rows.Next() {
 		var (
-			r                                  OpenedUrlRow
-			origin                             string
-			isDeduped, isIncognito             int
+			r                      OpenedUrlRow
+			origin                 string
+			isDeduped, isIncognito int
 		)
 		if err := rows.Scan(&r.Id, &r.EmailId, &r.Alias, &r.RuleName, &origin,
 			&r.Url, &r.OriginalUrl, &isDeduped, &isIncognito, &r.TraceId, &r.OpenedAt); err != nil {

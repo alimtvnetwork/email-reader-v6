@@ -12,9 +12,9 @@
 // (see `dashboard.go`, `emails.go`):
 //
 //   - `RulesService` struct holds two injected deps:
-//       * `loadCfg configLoader` — read side (already declared in
-//         dashboard.go and reused here verbatim)
-//       * `saveCfg cfgWriter`    — write side, declared below
+//   - `loadCfg configLoader` — read side (already declared in
+//     dashboard.go and reused here verbatim)
+//   - `saveCfg cfgWriter`    — write side, declared below
 //     Read and write are split so tests can fake-write to memory
 //     and so a future read-only consumer can construct a service
 //     that explicitly cannot mutate config.

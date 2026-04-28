@@ -161,15 +161,15 @@ func (l *realLoop) Run(ctx context.Context) error {
 		defer l.deps.PollChans.Release(l.opts.Alias)
 	}
 	return watcher.Run(ctx, watcher.Options{
-		Account:       *l.acct,
-		PollSeconds:   l.opts.PollSeconds,
-		Engine:        l.deps.Engine,
-		Launcher:      l.deps.Launcher,
-		Store:         l.deps.Store,
-		Logger:        l.deps.Logger,
-		Verbose:       l.deps.Verbose,
-		Bus:           l.deps.Bus,
+		Account:                 *l.acct,
+		PollSeconds:             l.opts.PollSeconds,
+		Engine:                  l.deps.Engine,
+		Launcher:                l.deps.Launcher,
+		Store:                   l.deps.Store,
+		Logger:                  l.deps.Logger,
+		Verbose:                 l.deps.Verbose,
+		Bus:                     l.deps.Bus,
 		SuppressLifecycleEvents: l.deps.Bus != nil,
-		PollSecondsCh: pollCh,
+		PollSecondsCh:           pollCh,
 	})
 }

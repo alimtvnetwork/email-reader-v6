@@ -1,7 +1,8 @@
 // dashboard_activity.go — P3.4 RecentActivity core (pure-Go).
 //
 // Spec: spec/21-app/02-features/01-dashboard/01-backend.md §2.2, §3.2
-//       spec/21-app/02-features/01-dashboard/00-overview.md (struct)
+//
+//	spec/21-app/02-features/01-dashboard/00-overview.md (struct)
 //
 // This slice lands the **pure-Go core** of RecentActivity:
 //

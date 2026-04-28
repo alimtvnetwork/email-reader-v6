@@ -17,7 +17,8 @@
 //	          waste a 60 s cache cycle on every account add.
 //
 // Spec: spec/21-app/02-features/06-tools/99-consistency-report.md
-//       (informational CF "Tools cache invalidation post-AccountEvent").
+//
+//	(informational CF "Tools cache invalidation post-AccountEvent").
 package core
 
 import (

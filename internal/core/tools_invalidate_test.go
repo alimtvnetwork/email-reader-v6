@@ -26,7 +26,7 @@ func newToolsForInvalidateTest(t *testing.T) *Tools {
 // invoked in this file, so the methods are intentionally unused.
 type stubLauncher struct{}
 
-func (stubLauncher) Open(string) error    { return nil }
+func (stubLauncher) Open(string) error     { return nil }
 func (stubLauncher) Path() (string, error) { return "/usr/bin/stub", nil }
 
 type stubRecorder struct{}

@@ -38,27 +38,27 @@ type fakeEmailsStore struct {
 	countErr error
 
 	// CountUnreadEmails programming + observation (Phase 4 P4.5)
-	unread    int
-	unreadErr error
+	unread        int
+	unreadErr     error
 	lastUnreadAls string
 
 	// CountDeletedEmails programming + observation (Slice #100)
-	deleted    int
-	deletedErr error
+	deleted        int
+	deletedErr     error
 	lastDeletedAls string
 
 	// MarkRead programming + observation (Phase 4 P4.2)
-	setReadRows int64
-	setReadErr  error
-	setReadCalls int32
+	setReadRows      int64
+	setReadErr       error
+	setReadCalls     int32
 	lastSetReadAlias string
 	lastSetReadUids  []uint32
 	lastSetReadValue bool
 
 	// SetEmailDeletedAt programming + observation (Phase 4 P4.3)
-	setDeletedRows int64
-	setDeletedErr  error
-	setDeletedCalls int32
+	setDeletedRows      int64
+	setDeletedErr       error
+	setDeletedCalls     int32
 	lastSetDeletedAlias string
 	lastSetDeletedUids  []uint32
 	lastSetDeletedAt    *int64 // copied so the caller can free its stamp
@@ -192,7 +192,7 @@ func TestEmailsService_List_HappyPathProjectsRows(t *testing.T) {
 		listRows: []store.Email{{
 			Id: 1, Alias: "a@b", Uid: 42,
 			FromAddr: "x@y", Subject: "hello",
-			BodyText: "  multi\n\nline   text  ", // exercises snippet collapse
+			BodyText:   "  multi\n\nline   text  ", // exercises snippet collapse
 			ReceivedAt: when,
 		}},
 	}

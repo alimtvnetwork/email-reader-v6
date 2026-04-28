@@ -11,15 +11,15 @@
 // `core.GetAccount`, `core.RemoveAccount`. Adding a typed service
 // shell that delegates to those free funcs gives us:
 //
-//   1. The spec-aligned shape (`*Service`-style API surface) so the
-//      UI bootstrap can pass typed services around uniformly via
-//      `Services` (`internal/ui/services.go`).
-//   2. A future DI seam — `NewDefaultAccountsService` is a function
-//      so a test can swap it for a stub that doesn't touch
-//      `data/config.json`.
-//   3. Zero behaviour change — the service methods are one-line
-//      delegates, so the existing free-func tests (`accounts_test.go`)
-//      still pin the exact same code paths.
+//  1. The spec-aligned shape (`*Service`-style API surface) so the
+//     UI bootstrap can pass typed services around uniformly via
+//     `Services` (`internal/ui/services.go`).
+//  2. A future DI seam — `NewDefaultAccountsService` is a function
+//     so a test can swap it for a stub that doesn't touch
+//     `data/config.json`.
+//  3. Zero behaviour change — the service methods are one-line
+//     delegates, so the existing free-func tests (`accounts_test.go`)
+//     still pin the exact same code paths.
 //
 // The free funcs stay (rip-and-replace would touch ~20 files for
 // zero user-visible win). When a future slice is ready to migrate

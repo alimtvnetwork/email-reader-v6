@@ -80,10 +80,10 @@ func mustCoded(t *testing.T, err error, want errtrace.Code) *errtrace.Coded {
 func TestNewRulesService_RejectsNilDeps(t *testing.T) {
 	load, save, path, _ := memCfg(&config.Config{})
 	cases := []struct {
-		name        string
-		l           configLoader
-		s           cfgWriter
-		p           cfgPathFn
+		name string
+		l    configLoader
+		s    cfgWriter
+		p    cfgPathFn
 	}{
 		{"nil load", nil, save, path},
 		{"nil save", load, nil, path},

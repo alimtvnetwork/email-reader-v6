@@ -12,18 +12,18 @@
 //
 // The four sub-tests cover, in order, the spec § noted on each:
 //
-//   1. Happy-path — Origin must be OriginManual (NOT OriginRule),
-//      RuleName must round-trip the input. The headline assertion
-//      from F-23 itself.
-//   2. Empty rule name — passes through unchanged. The helper does
-//      not invent a placeholder; an empty rule name signals a UI
-//      bug that the caller must surface, not paper over.
-//   3. Empty URL — passes through unchanged. Validation belongs to
-//      `Tools.OpenUrl.validateUrl`, not to this shape helper. Two
-//      validators in two layers would be a maintenance trap.
-//   4. Alias / EmailId — must be zero. The preview is account-
-//      and message-agnostic; if a future caller starts populating
-//      these fields, the contract pin breaks loudly.
+//  1. Happy-path — Origin must be OriginManual (NOT OriginRule),
+//     RuleName must round-trip the input. The headline assertion
+//     from F-23 itself.
+//  2. Empty rule name — passes through unchanged. The helper does
+//     not invent a placeholder; an empty rule name signals a UI
+//     bug that the caller must surface, not paper over.
+//  3. Empty URL — passes through unchanged. Validation belongs to
+//     `Tools.OpenUrl.validateUrl`, not to this shape helper. Two
+//     validators in two layers would be a maintenance trap.
+//  4. Alias / EmailId — must be zero. The preview is account-
+//     and message-agnostic; if a future caller starts populating
+//     these fields, the contract pin breaks loudly.
 package core
 
 import "testing"

@@ -21,7 +21,8 @@
 // deterministic — production code reads `s.clock` for `UpdatedAt`.
 //
 // Spec: spec/21-app/02-features/07-settings/01-backend.md §4
-//       (UpdatedAt) and §6 (Subscribe contract).
+//
+//	(UpdatedAt) and §6 (Subscribe contract).
 package core
 
 import (

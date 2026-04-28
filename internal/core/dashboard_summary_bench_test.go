@@ -7,13 +7,13 @@
 //
 // Two sibling probes for the same code path:
 //
-//   1. `BenchmarkDashboard_Summary_10kEmails` — reports ns/op so we
-//      can track regression trends in `go test -bench`. Bench-only,
-//      not a CI gate.
-//   2. `TestDashboard_Summary_10kEmails_PerfGate` — runs the same
-//      workload N times under a wall-clock budget and fails the
-//      build if the p95 exceeds 100 ms. Skipped under `testing.Short`
-//      so unit-test runs stay snappy; runs by default in `go test`.
+//  1. `BenchmarkDashboard_Summary_10kEmails` — reports ns/op so we
+//     can track regression trends in `go test -bench`. Bench-only,
+//     not a CI gate.
+//  2. `TestDashboard_Summary_10kEmails_PerfGate` — runs the same
+//     workload N times under a wall-clock budget and fails the
+//     build if the p95 exceeds 100 ms. Skipped under `testing.Short`
+//     so unit-test runs stay snappy; runs by default in `go test`.
 //
 // Both reuse `openGoldenStore` + `seedGoldenEmails` from
 // `dashboard_golden_test.go` (P3.6); those helpers were widened to

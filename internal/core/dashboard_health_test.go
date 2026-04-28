@@ -5,6 +5,7 @@
 //   - #5 AccountHealth_NoWatchStateRow_ReturnsWarning
 //   - #6 AccountHealth_ThreeConsecutiveFailures_ReturnsError
 //   - #8 ComputeHealth_MatrixTable (all 4 decision branches)
+//
 // plus a nil-source guard and a config-load error propagation case.
 package core
 
