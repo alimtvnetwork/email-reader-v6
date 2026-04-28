@@ -321,7 +321,7 @@ func connectAndSelect(ctx context.Context, opts Options, logger *log.Logger, sta
 		if cerr := ctx.Err(); cerr != nil {
 			return nil, mailclient.MailboxStats{}, cerr
 		}
-		return nil, mailclient.MailboxStats{}, errtrace.WrapCode(err, errtrace.ErrMailDial, "watcher.connectAndSelect: dial imap")
+		return nil, mailclient.MailboxStats{}, errtrace.Wrap(err, "watcher.connectAndSelect: dial imap")
 	}
 	if v {
 		logger.Printf("%s  · [%s] connected (%s)", ts(), alias, time.Since(start).Round(time.Millisecond))
