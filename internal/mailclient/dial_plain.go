@@ -32,9 +32,9 @@ type PlainDialInput struct {
 }
 
 // DefaultPlainDialTimeout is the upper bound on a single Test Connection
-// attempt. Generous enough for slow corporate IMAPs but short enough to
-// keep the UI responsive.
-const DefaultPlainDialTimeout = 8 * time.Second
+// attempt. Generous enough for slow/shared-hosting IMAPs but still short
+// enough to keep the UI responsive.
+const DefaultPlainDialTimeout = 30 * time.Second
 
 // DialPlain dials the given IMAP endpoint, logs in, and immediately logs
 // out. Returns a *Coded error on dial / handshake / login failure so
