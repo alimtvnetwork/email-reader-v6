@@ -940,6 +940,18 @@ const (
 
 ## 12. ER-UI — Fyne
 
+### ER-UI-21900 — `ErrUiThemeUnknownToken`
+
+| Field | Value |
+|---|---|
+| Severity | `WARN` |
+| Trigger | A theme code requested a semantic token name that doesn't exist in the active palette |
+| Wrap site | `internal/ui/theme/theme.go` (token resolver) |
+| Log line | `WARN ui.theme.Resolve Token=<t> Palette=<p> ErrCode=ER-UI-21900 unknown token` |
+| User msg | (none — falls back to default token; logged for diagnostics) |
+| Recovery | Theme falls back to default; user/dev fixes the token name |
+| Test ref | `TestTheme_UnknownTokenWarns` |
+
 ### ER-UI-21901 — `ErrUiStateLoad`
 
 | Field | Value |
