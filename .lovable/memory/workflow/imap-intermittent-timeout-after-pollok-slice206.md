@@ -34,12 +34,13 @@ The STARTTLS fallback is not helping here: when 993 times out, trying 143 also t
 
 ## Correct solution plan
 
-1. Reduce connection churn immediately: enforce a safer default/minimum Watch cadence for real IMAP, e.g. 60s instead of 3–6s.
-2. Stop using STARTTLS fallback automatically after a 993 timeout for this account/host, or make it opt-in/diagnostic, because it doubles the failed wait here.
-3. Add a circuit breaker/backoff for dial timeouts so after one network timeout the watcher waits longer before trying another brand-new connection.
-4. Best long-term fix: reuse one IMAP session or implement IMAP IDLE so the app does not login/logout every few seconds.
-5. Keep the `poll ok` heartbeat visible so the user can distinguish healthy idle mailbox state from delivery problems.
+1. Respect the user's requested cadence. If they explicitly request 5s, do **not** force a 60s clamp in Settings or watcher runtime; 5s is the app default again as of Slice #207.
+2. Treat 5s as a product requirement but explain the trade-off honestly: a `dial tcp ... i/o timeout` is still a network/server reachability timeout, and frequent reconnects can amplify it on shared mail hosts.
+3. Stop using STARTTLS fallback automatically after a 993 timeout for this account/host, or make it opt-in/diagnostic, because it doubles the failed wait here.
+4. Add a circuit breaker/backoff for dial timeouts so after one network timeout the watcher waits longer before trying another brand-new connection, without changing the configured 5s cadence on successful polls.
+5. Best long-term fix: reuse one IMAP session or implement IMAP IDLE so the app does not login/logout every few seconds.
+6. Keep the `poll ok` heartbeat visible so the user can distinguish healthy idle mailbox state from delivery problems.
 
 ## Future debugging rule
 
-When logs contain both `poll ok` and later `i/o timeout`, treat it as intermittent network/server throttling caused or amplified by reconnect frequency. First lower cadence/backoff/reuse connections; only investigate credentials if there has never been a `poll ok` in that run.
+When logs contain both `poll ok` and later `i/o timeout`, treat it as intermittent network/server throttling caused or amplified by reconnect frequency. Do not blame credentials if there has been a `poll ok`; prefer backoff/session reuse/IDLE over forcing a slower user-visible cadence.
