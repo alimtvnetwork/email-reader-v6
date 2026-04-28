@@ -56,38 +56,78 @@ func BuildDashboard(opts DashboardOptions) fyne.CanvasObject {
 		// downstream code (refresh closure, tests) sees one uniform seam.
 		opts.Summary = opts.Service.Summary
 	}
+	header, subtitle := buildDashboardHeader()
+	cards := newDashboardCards()
+	status := newDashboardStatusLabel()
+	health := newDashboardHealthLabel()
+	activity := newDashboardActivitySection(status)
+	autoStart := newAutoStartIndicator()
+	combined := buildDashboardRefreshers(opts, cards, status, health, activity)
+	combined()
+	actions := newDashboardActions(opts, combined)
+	liveCard := buildDashboardLiveCard(opts, combined)
+	content := composeDashboardContent(dashboardContentParts{
+		header: header, subtitle: subtitle, cards: cards.Row, health: health,
+		activityCard: activity.Card, liveCard: liveCard, actions: actions,
+		autoStart: autoStart, status: status,
+	})
+	return container.NewVScroll(content)
+}
+
+// buildDashboardHeader returns the page heading + the wrapped subtitle.
+// Extracted from BuildDashboard to keep that function under the
+// 15-statement linter budget (AC-PROJ-20).
+func buildDashboardHeader() (*widget.Label, *widget.Label) {
 	heading := widget.NewLabelWithStyle("Dashboard", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	subtitle := widget.NewLabel("At-a-glance counts and live watcher activity for the selected account.")
 	subtitle.Wrapping = fyne.TextWrapWord
+	return heading, subtitle
+}
 
-	cards := newDashboardCards()
+// newDashboardStatusLabel returns the always-visible status footer label
+// (word-wrapped, defaults to "Loaded just now.").
+func newDashboardStatusLabel() *widget.Label {
 	status := widget.NewLabel("Loaded just now.")
 	status.Wrapping = fyne.TextWrapWord
+	return status
+}
 
-	// Slice #103: per-account health rollup row. Hidden when neither
-	// the Service nor a HealthSource is wired (degraded boot).
+// newDashboardHealthLabel returns the per-account health rollup label,
+// hidden until the refresher proves it has data (degraded boot otherwise
+// shows a phantom row).
+func newDashboardHealthLabel() *widget.Label {
 	health := widget.NewLabel("")
 	health.Wrapping = fyne.TextWrapWord
 	health.Hide()
+	return health
+}
 
-	// Slice #113: recent-activity feed as a virtualised, clickable
-	// `widget.List`. Replaces the previous multi-line `widget.Label`
-	// — gives us per-row severity coloring, scroll on overflow, and
-	// click-to-toggle row expansion (clicking a row prints its full
-	// payload to `status` so error-code messages aren't truncated).
-	//
-	// State: `activityRows` is the live slice driving the list; the
-	// closure below mutates it on Refresh. Hidden until we have at
-	// least one row OR an explicit error message — keeps boot quiet.
-	var activityRows []core.ActivityRow
-	activityHeader := widget.NewLabelWithStyle(
+// dashboardActivitySection bundles the activity-feed widget tree and the
+// mutable `Rows` slice the refresher writes into. Returned as a struct so
+// BuildDashboard threads one value through helpers instead of 5 vars.
+type dashboardActivitySection struct {
+	Rows   []core.ActivityRow
+	Header *widget.Label
+	List   *widget.List
+	Err    *widget.Label
+	Card   *widget.Card
+}
+
+// newDashboardActivitySection builds the recent-activity Card: a header,
+// a virtualised+CLIPPING list (Slice #113 — see inline comments below
+// for the painted-rows-overlap bug we're guarding against), and an
+// inline error label. Hidden until the refresher fills rows or surfaces
+// an explicit error.
+func newDashboardActivitySection(status *widget.Label) *dashboardActivitySection {
+	sec := &dashboardActivitySection{}
+	sec.Header = widget.NewLabelWithStyle(
 		"Recent activity", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-	activityHeader.Hide()
-	activityList := newActivityList(&activityRows, status)
-	activityList.Hide()
-	activityErr := widget.NewLabel("")
-	activityErr.Wrapping = fyne.TextWrapWord
-	activityErr.Hide()
+	sec.Header.Hide()
+	sec.List = newActivityList(&sec.Rows, status)
+	sec.List.Hide()
+	sec.Err = widget.NewLabel("")
+	sec.Err.Wrapping = fyne.TextWrapWord
+	sec.Err.Hide()
 	// Wrap the virtualised list in a fixed-height, CLIPPING scroll
 	// viewport. We learned the hard way (see screenshot in the
 	// "rows overlap live-counters row" bug) that a layout-only
@@ -99,57 +139,71 @@ func BuildDashboard(opts DashboardOptions) fyne.CanvasObject {
 	// layout so the parent VBox always reserves the same vertical
 	// real estate, regardless of how many rows currently live in
 	// the list.
-	activityScroll := container.NewVScroll(activityList)
+	activityScroll := container.NewVScroll(sec.List)
 	activityScroll.SetMinSize(fyne.NewSize(0, activityListMaxHeight))
 	activityListSlot := container.New(fixedHeightLayout{Height: activityListMaxHeight}, activityScroll)
-	// Card-wrap the activity feed so it reads as a distinct, titled
-	// panel instead of bleeding into the surrounding VBox. The Card
-	// title doubles as the section header; activityHeader is kept
-	// inside the body only to surface the "(no recent activity)"
-	// empty-state message — hidden when rows exist.
-	activityBody := container.NewVBox(activityErr, activityHeader, activityListSlot)
-	activityCard := widget.NewCard("Recent activity", "Latest watcher events", activityBody)
+	body := container.NewVBox(sec.Err, sec.Header, activityListSlot)
+	sec.Card = widget.NewCard("Recent activity", "Latest watcher events", body)
+	return sec
+}
 
-	autoStart := newAutoStartIndicator()
+// buildDashboardRefreshers wires the three independent refresh closures
+// (counters, health, activity) into a single tick callable. Returned as
+// a single closure so BuildDashboard, OnRefresh, and the live-bus tap
+// each call one thing instead of three.
+func buildDashboardRefreshers(
+	opts DashboardOptions,
+	cards *dashboardCards,
+	status, health *widget.Label,
+	activity *dashboardActivitySection,
+) func() {
 	refresh := makeDashboardRefresh(opts, cards, status)
 	refreshHealth := makeDashboardHealthRefresh(opts, health)
-	refreshActivity := makeDashboardActivityRefresh(opts, &activityRows, activityHeader, activityList, activityErr)
-	combined := func() {
+	refreshActivity := makeDashboardActivityRefresh(
+		opts, &activity.Rows, activity.Header, activity.List, activity.Err)
+	return func() {
 		refresh()
 		refreshHealth()
 		refreshActivity()
 	}
-	combined()
+}
 
-	actions := newDashboardActions(opts, combined)
+// buildDashboardLiveCard wraps the live-counters row in a Card so it
+// reads as a distinct section like Recent activity (visual rhythm
+// consistency).
+func buildDashboardLiveCard(opts DashboardOptions, combined func()) *widget.Card {
 	live := newDashboardLiveRow(opts, combined)
-	// Wrap the live counters in a Card so they read as a distinct
-	// section like Recent activity. Keeps visual rhythm consistent.
-	liveCard := widget.NewCard("Live counters", "Updates while the watcher is running", live)
-	// Vertical rhythm: separators between every major band so the
-	// activity list, live-counters row, and action buttons read as
-	// distinct sections instead of running together. Padded wraps
-	// give every block consistent inset breathing room.
-	content := container.NewVBox(
-		container.NewPadded(heading),
-		container.NewPadded(subtitle),
+	return widget.NewCard("Live counters", "Updates while the watcher is running", live)
+}
+
+// dashboardContentParts is the input bag for composeDashboardContent —
+// keeps the helper signature flat and named instead of a 9-positional
+// arg list.
+type dashboardContentParts struct {
+	header, subtitle, health, status, autoStart fyne.CanvasObject
+	cards, actions                              fyne.CanvasObject
+	activityCard, liveCard                      fyne.CanvasObject
+}
+
+// composeDashboardContent stitches the major dashboard bands into a
+// padded VBox with separators between them so each section reads as a
+// distinct block. Extracted from BuildDashboard for the 15-statement
+// linter budget (AC-PROJ-20).
+func composeDashboardContent(p dashboardContentParts) fyne.CanvasObject {
+	return container.NewVBox(
+		container.NewPadded(p.header),
+		container.NewPadded(p.subtitle),
 		widget.NewSeparator(),
-		container.NewPadded(cards.Row),
+		container.NewPadded(p.cards),
 		widget.NewSeparator(),
-		container.NewPadded(health),
-		container.NewPadded(activityCard),
-		container.NewPadded(liveCard),
+		container.NewPadded(p.health),
+		container.NewPadded(p.activityCard),
+		container.NewPadded(p.liveCard),
 		widget.NewSeparator(),
-		container.NewPadded(actions),
-		container.NewPadded(autoStart),
-		container.NewPadded(status),
+		container.NewPadded(p.actions),
+		container.NewPadded(p.autoStart),
+		container.NewPadded(p.status),
 	)
-	// Outer VScroll so the dashboard remains fully reachable on
-	// short windows — without it, the bottom section (actions /
-	// status) is unreachable when the window is shorter than the
-	// natural content height. Reported by the user as "I cannot
-	// scroll down from the top section".
-	return container.NewVScroll(content)
 }
 
 // activityListMaxHeight caps the recent-activity list at ~10 rows so
