@@ -1174,7 +1174,7 @@ Implemented in `internal/cli/cli.go:exitCodeFor(err error) int`.
 
 ---
 
-## 15. Forbidden Anti-Patterns
+## 16. Forbidden Anti-Patterns
 
 | Pattern | Why banned |
 |---|---|
