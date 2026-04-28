@@ -166,6 +166,15 @@ func applySeedDefaults(c *Config) bool {
 		if c.FindAccount(seed.Alias) != nil {
 			continue
 		}
+		if seed.PasswordB64 == "" {
+			pw := resolveSeedPassword()
+			if pw == "" {
+				// No env-supplied password ⇒ skip seeding this entry
+				// rather than persist an unusable account.
+				continue
+			}
+			seed.PasswordB64 = pw
+		}
 		c.Accounts = append(c.Accounts, seed)
 		mutated = true
 	}
