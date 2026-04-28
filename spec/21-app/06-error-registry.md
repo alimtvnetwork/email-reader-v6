@@ -1014,7 +1014,139 @@ const (
 
 ---
 
-## 13. Mapping: ErrCode → CLI Exit Code
+## 13. ER-SET — Settings
+
+> **Block ownership note (Slice #197):** Codes 21770–21783 are owned by
+> `internal/core/settings.go` and friends. The 10 entries below cover
+> the pre-Density set referenced across spec/21-app/02-features/07-settings/.
+> `ER-SET-21780..21783` (DetectChromeStat, EventDropped, RetentionDays,
+> Density) exist in the impl registry; their per-code tables are deferred
+> to a future doc-completeness slice (no spec references currently surface
+> them via `Test_AllErrorRefsResolveInRegistry`).
+
+### ER-SET-21770 — `ErrSettingsConstruct`
+
+| Field | Value |
+|---|---|
+| Severity | `FATAL` |
+| Trigger | `NewSettingsService` construction failed (missing dependency / nil store) |
+| Wrap site | `internal/core/settings.go:NewSettingsService()` |
+| Log line | `FATAL settings.Construct ErrCode=ER-SET-21770 settings service construction failed` |
+| User msg | `Cannot start settings service: <reason>.` |
+| Recovery | App startup aborts; report bug |
+| Test ref | `TestSettings_Construct_NilStoreFatals` |
+
+### ER-SET-21771 — `ErrSettingsPollSeconds`
+
+| Field | Value |
+|---|---|
+| Severity | `WARN` |
+| Trigger | `PollSeconds` value outside the allowed range |
+| Wrap site | `internal/core/settings.go` (validate path) |
+| Log line | `WARN settings.Validate Field=PollSeconds Value=<v> ErrCode=ER-SET-21771 out of range` |
+| User msg | Toast: `Poll interval must be between <min> and <max> seconds.` |
+| Recovery | UI rejects the change; previous value retained |
+| Test ref | `TestSettings_PollSeconds_OutOfRangeRejected` |
+
+### ER-SET-21772 — `ErrSettingsTheme`
+
+| Field | Value |
+|---|---|
+| Severity | `WARN` |
+| Trigger | Theme value not one of the allowed palette identifiers |
+| Wrap site | `internal/core/settings.go` (validate path) |
+| Log line | `WARN settings.Validate Field=Theme Value=<v> ErrCode=ER-SET-21772 unknown palette` |
+| User msg | Toast: `Unknown theme '<v>'.` |
+| Recovery | UI rejects the change |
+| Test ref | `TestSettings_Theme_UnknownRejected` |
+
+### ER-SET-21773 — `ErrSettingsUrlScheme`
+
+| Field | Value |
+|---|---|
+| Severity | `WARN` |
+| Trigger | URL scheme rule rejects the candidate (e.g. `javascript:` or `file:`) |
+| Wrap site | `internal/core/settings.go` (URL gate) |
+| Log line | `WARN settings.UrlGate Scheme=<s> ErrCode=ER-SET-21773 scheme rejected` |
+| User msg | Toast: `URL scheme '<s>' is not allowed.` |
+| Recovery | UI rejects the change |
+| Test ref | `TestSettings_UrlScheme_DisallowedRejected` |
+
+### ER-SET-21774 — `ErrSettingsChromePath`
+
+| Field | Value |
+|---|---|
+| Severity | `WARN` |
+| Trigger | Configured Chrome/Chromium path is not executable |
+| Wrap site | `internal/core/settings.go` (Chrome detection) |
+| Log line | `WARN settings.ChromePath Path=<p> ErrCode=ER-SET-21774 not executable` |
+| User msg | Toast: `Chrome at '<p>' is not executable.` |
+| Recovery | User picks a different binary |
+| Test ref | `TestSettings_ChromePath_NotExecutableRejected` |
+
+### ER-SET-21775 — `ErrSettingsIncognitoArg`
+
+| Field | Value |
+|---|---|
+| Severity | `WARN` |
+| Trigger | Incognito CLI argument template is malformed |
+| Wrap site | `internal/core/settings.go` (incognito-arg parse) |
+| Log line | `WARN settings.IncognitoArg Tmpl=<t> ErrCode=ER-SET-21775 malformed template` |
+| User msg | Toast: `Incognito argument is not valid.` |
+| Recovery | UI rejects the change |
+| Test ref | `TestSettings_IncognitoArg_MalformedRejected` |
+
+### ER-SET-21776 — `ErrSettingsLocalhostUrls`
+
+| Field | Value |
+|---|---|
+| Severity | `WARN` |
+| Trigger | localhost URL setting violates the gate rule |
+| Wrap site | `internal/core/settings.go` (localhost gate) |
+| Log line | `WARN settings.LocalhostGate Url=<u> ErrCode=ER-SET-21776 gate rule violation` |
+| User msg | Toast: `Localhost URLs are not allowed by current settings.` |
+| Recovery | User adjusts setting or URL |
+| Test ref | `TestSettings_LocalhostUrls_GateRejected` |
+
+### ER-SET-21777 — `ErrSettingsCompositeRule`
+
+| Field | Value |
+|---|---|
+| Severity | `WARN` |
+| Trigger | A composite settings rule (multiple fields) failed validation |
+| Wrap site | `internal/core/settings.go` (composite validate) |
+| Log line | `WARN settings.Validate Rule=<r> ErrCode=ER-SET-21777 composite rule violation` |
+| User msg | Toast: `Settings combination is invalid: <reason>.` |
+| Recovery | UI rejects the change |
+| Test ref | `TestSettings_CompositeRule_Rejected` |
+
+### ER-SET-21778 — `ErrSettingsPersist`
+
+| Field | Value |
+|---|---|
+| Severity | `ERROR` |
+| Trigger | Persisting settings to disk failed (write error / permission denied) |
+| Wrap site | `internal/core/settings.go:Save()` |
+| Log line | `ERROR settings.Save ErrCode=ER-SET-21778 ErrFrames=[…] persist failed` |
+| User msg | Toast: `Could not save settings: <reason>.` |
+| Recovery | User retries; previous value still in memory |
+| Test ref | `TestSettings_Save_DiskErrorPropagates` |
+
+### ER-SET-21779 — `ErrSettingsConcurrentEdit`
+
+| Field | Value |
+|---|---|
+| Severity | `WARN` |
+| Trigger | Detected a stale revision token on save (concurrent edit from another window/process) |
+| Wrap site | `internal/core/settings.go:Save()` (revision check) |
+| Log line | `WARN settings.Save Revision=<r> Stored=<s> ErrCode=ER-SET-21779 stale revision` |
+| User msg | Toast: `Settings were changed elsewhere. Reload and try again.` |
+| Recovery | UI reloads from disk; user re-applies edit |
+| Test ref | `TestSettings_Save_StaleRevisionRejected` |
+
+---
+
+## 14. Mapping: ErrCode → CLI Exit Code
 
 | ErrCode prefix | Exit code (CLI only) |
 |---|---|
