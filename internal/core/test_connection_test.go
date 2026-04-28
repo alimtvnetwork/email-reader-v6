@@ -6,6 +6,7 @@ package core
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -74,5 +75,37 @@ func TestTestAccountConnection_SanitizesPasswordAndWrapsLoginFailure(t *testing.
 	}
 	if !errors.As(errors.Unwrap(c), &c) || c.Code != errtrace.ErrMailLogin {
 		t.Fatalf("expected wrapped ErrMailLogin, got %v", r.Error())
+	}
+	if !strings.Contains(r.Error().Error(), "server rejected the login") {
+		t.Fatalf("login failure message lost auth RCA: %v", r.Error())
+	}
+}
+
+func TestTestAccountConnection_WrapsTimeoutAsReachabilityFailure(t *testing.T) {
+	oldDial := testAccountConnectionDial
+	t.Cleanup(func() { testAccountConnectionDial = oldDial })
+	testAccountConnectionDial = func(in mailclient.PlainDialInput) error {
+		return errtrace.NewCoded(errtrace.ErrMailTimeout, "imap dial timed out")
+	}
+
+	r := TestAccountConnection(AccountInput{
+		Alias: "Admin", Email: "user@example.com", PlainPassword: "secret",
+		ImapHost: "mail.example.com", ImapPort: 993, UseTLS: true,
+	}, time.Second)
+	if !r.HasError() {
+		t.Fatal("expected timeout failure")
+	}
+	var c *errtrace.Coded
+	if !errors.As(r.Error(), &c) || c.Code != errtrace.ErrAccountTestFailed {
+		t.Fatalf("expected ErrAccountTestFailed, got %v", r.Error())
+	}
+	if !errors.As(errors.Unwrap(c), &c) || c.Code != errtrace.ErrMailTimeout {
+		t.Fatalf("expected wrapped ErrMailTimeout, got %v", r.Error())
+	}
+	if !strings.Contains(r.Error().Error(), "IMAP endpoint is unreachable") {
+		t.Fatalf("timeout failure message should not blame login: %v", r.Error())
+	}
+	if strings.Contains(r.Error().Error(), "server rejected the login") {
+		t.Fatalf("timeout failure incorrectly blamed credentials: %v", r.Error())
 	}
 }
