@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lovable/email-read/internal/config"
 	"github.com/lovable/email-read/internal/errtrace"
 )
 
@@ -145,12 +144,12 @@ func validateMaintenanceKnobs(in SettingsInput) error {
 }
 
 func validatePollSeconds(v uint16) error {
-	if v < config.MinWatchPollSeconds || v > config.MinWatchPollSeconds {
+	if v < 1 || v > 60 {
 		return errtrace.NewCoded(errtrace.ErrSettingsPollSeconds,
 			"poll seconds out of range").
 			WithContext("value", v).
-			WithContext("min", config.MinWatchPollSeconds).
-			WithContext("max", config.MinWatchPollSeconds)
+			WithContext("min", 1).
+			WithContext("max", 60)
 	}
 	return nil
 }
