@@ -134,6 +134,17 @@ func BuildAccounts(opts AccountsOptions) fyne.CanvasObject {
 }
 
 func accountRow(a config.Account, ws store.WatchState, health core.HealthLevel, opts AccountsOptions, status *widget.Label, reload func()) fyne.CanvasObject {
+	mailbox, lastUid := accountRowMeta(a, ws)
+	dataRow := accountRowDataGrid(a, mailbox, lastUid, health)
+	actions := accountRowActions(a, opts, status, reload)
+	return container.NewBorder(nil, nil, nil, actions, dataRow)
+}
+
+// accountRowMeta normalises the mailbox label (defaulting to INBOX) and
+// composes the two-line "last UID + last received timestamp" string.
+// Extracted from accountRow to keep that function under the 15-statement
+// linter budget (AC-PROJ-20).
+func accountRowMeta(a config.Account, ws store.WatchState) (string, string) {
 	mailbox := a.Mailbox
 	if mailbox == "" {
 		mailbox = "INBOX"
@@ -142,37 +153,21 @@ func accountRow(a config.Account, ws store.WatchState, health core.HealthLevel, 
 	if !ws.LastReceivedAt.IsZero() {
 		lastUid += "\n" + ws.LastReceivedAt.UTC().Format("2006-01-02 15:04")
 	}
+	return mailbox, lastUid
+}
 
+// accountRowDataGrid builds the 6-column data grid (alias / email / server
+// / mailbox / last-seen / health). Server + email labels wrap on word so
+// long values stay legible without forcing a wider column.
+func accountRowDataGrid(a config.Account, mailbox, lastUid string, health core.HealthLevel) fyne.CanvasObject {
 	server := widget.NewLabel(AccountServer(a))
 	server.Wrapping = fyne.TextWrapBreak
 	email := widget.NewLabel(a.Email)
 	email.Wrapping = fyne.TextWrapBreak
-
-	// Per-row health badge — uses pure-Go formatter so the glyph set
-	// stays in sync with the dashboard rollup. Importance hint nudges
-	// the Fyne theme into rendering Error rows in red without
-	// hard-coding a colour (theme-respecting; survives dark/light).
+	// Per-row health badge — pure-Go formatter keeps the glyph set in sync
+	// with the dashboard rollup.
 	healthLabel := widget.NewLabel(formatAccountHealthBadge(health))
-
-	// Icon-led action buttons keep the column compact and visually
-	// consistent (Edit = pencil, Delete = trash). Importance hints
-	// recolor the buttons via the active theme so they stay legible
-	// in light + dark modes without hard-coding HSL.
-	editBtn := widget.NewButtonWithIcon("Edit", theme.IconEdit(),
-		func() { openEditAccountDialog(a, opts, status, reload) })
-	editBtn.Importance = widget.MediumImportance
-	delBtn := widget.NewButtonWithIcon("Delete", theme.IconDelete(),
-		func() { confirmDeleteAccount(a, opts, status, reload) })
-	delBtn.Importance = widget.DangerImportance
-	// HBox keeps the buttons at their intrinsic widths (Edit ≈ 80 px,
-	// Delete ≈ 90 px) instead of stretching each to fill half of a
-	// 1/7-of-window column. The whole HBox is wrapped in a
-	// fixedWidthLayout so per-row alignment with the header stays
-	// stable regardless of how Fyne measures the icons.
-	actions := container.New(&fixedWidthLayout{width: actionsColumnWidth},
-		container.NewHBox(editBtn, delBtn))
-
-	dataRow := container.NewGridWithColumns(6,
+	return container.NewGridWithColumns(6,
 		widget.NewLabel(a.Alias),
 		email,
 		server,
@@ -180,7 +175,20 @@ func accountRow(a config.Account, ws store.WatchState, health core.HealthLevel, 
 		widget.NewLabel(lastUid),
 		healthLabel,
 	)
-	return container.NewBorder(nil, nil, nil, actions, dataRow)
+}
+
+// accountRowActions builds the icon-led Edit/Delete button pair, wrapped
+// in a fixedWidthLayout so per-row alignment with the header column stays
+// stable regardless of how Fyne measures the icons.
+func accountRowActions(a config.Account, opts AccountsOptions, status *widget.Label, reload func()) fyne.CanvasObject {
+	editBtn := widget.NewButtonWithIcon("Edit", theme.IconEdit(),
+		func() { openEditAccountDialog(a, opts, status, reload) })
+	editBtn.Importance = widget.MediumImportance
+	delBtn := widget.NewButtonWithIcon("Delete", theme.IconDelete(),
+		func() { confirmDeleteAccount(a, opts, status, reload) })
+	delBtn.Importance = widget.DangerImportance
+	return container.New(&fixedWidthLayout{width: actionsColumnWidth},
+		container.NewHBox(editBtn, delBtn))
 }
 
 // openEditAccountDialog shows the Add Account form in edit mode inside a
