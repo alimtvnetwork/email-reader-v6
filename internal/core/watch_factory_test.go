@@ -118,6 +118,18 @@ func TestWatch_Start_MirrorsLifecycleToWatcherBus(t *testing.T) {
 	assertWatcherEventKind(t, sub, watcher.EventStarted)
 }
 
+func assertWatcherEventKind(t *testing.T, ch <-chan watcher.Event, want watcher.EventKind) {
+	t.Helper()
+	select {
+	case ev := <-ch:
+		if ev.Kind != want || ev.Alias != "ghost" {
+			t.Fatalf("watcher event = %+v, want kind=%s alias=ghost", ev, want)
+		}
+	case <-time.After(time.Second):
+		t.Fatalf("timeout waiting for watcher event %s", want)
+	}
+}
+
 // TestRealLoopFactory_New_ResolverCalledOncePerStart: the resolver
 // must be invoked at New() time (not at Run() time) so live config
 // reloads between Start calls take effect — and so a single Start does
