@@ -177,10 +177,17 @@ func startAccountRemovalWatcher(ctx context.Context, rt *WatchRuntime) {
 
 // forwardAccountRemovalEvents drains the AccountEvent stream and stops
 // any runner for a removed alias. Honours ctx so a global shutdown
-// cleanly tears the goroutine down. AccountAdded / AccountUpdated are
-// ignored here — they are handled elsewhere (resolver re-reads cfg
-// before each Start).
+// cleanly tears the goroutine down.
+//
+// AccountAdded / AccountUpdated trigger a config reload + Refresher
+// re-registration so the resolver closure inside buildLoopFactory
+// (which reads `rt.cfg`) sees the freshly-saved alias on the next
+// Start. Without this, adding an account through the UI persists to
+// disk but the in-memory `rt.cfg` snapshot stays stale and Watch fails
+// with `[ER-WCH-21412] watch: account <alias> not found` even though
+// Test Connection (which loads its own snapshot) succeeds.
 func forwardAccountRemovalEvents(ctx context.Context, events <-chan core.AccountEvent, w *core.Watch) {
+	rt := watchRuntimeSingleton
 	for {
 		select {
 		case <-ctx.Done():
@@ -189,13 +196,53 @@ func forwardAccountRemovalEvents(ctx context.Context, events <-chan core.Account
 			if !ok {
 				return
 			}
-			if ev.Kind != core.AccountRemoved || ev.Alias == "" {
+			if ev.Alias == "" {
+				continue
+			}
+			if ev.Kind == core.AccountAdded || ev.Kind == core.AccountUpdated {
+				if rt != nil {
+					reloadRuntimeConfig(rt, ev.Alias)
+				}
+				continue
+			}
+			if ev.Kind != core.AccountRemoved {
 				continue
 			}
 			if w.IsRunning(ev.Alias) {
 				_ = w.Stop(ev.Alias, 15*time.Second)
 				log.Printf("ui: stopped orphan watcher for removed alias %q", ev.Alias)
 			}
+		}
+	}
+}
+
+// reloadRuntimeConfig re-reads config from disk into rt.cfg under the
+// runtime's write lock and re-registers `alias` in the Refresher so
+// both the long-running Watch resolver and the on-demand "🔄 Refresh"
+// path see the freshly-saved account.
+//
+// Failures are logged and non-fatal: if disk reload fails, the next
+// Start will still raise ER-WCH-21412 — the user can retry — but the
+// runtime stays alive for every other alias.
+func reloadRuntimeConfig(rt *WatchRuntime, alias string) {
+	cfg, err := config.Load()
+	if err != nil {
+		log.Printf("ui: watch runtime: reload after account %q change: %v", alias, err)
+		return
+	}
+	rt.cfgMu.Lock()
+	rt.cfg = cfg
+	rt.cfgMu.Unlock()
+	if rt.Refresher == nil {
+		return
+	}
+	if acct := cfg.FindAccount(alias); acct != nil {
+		if err := rt.Refresher.Register(watcher.Options{
+			Account: *acct,
+			Store:   rt.Store,
+			Bus:     rt.Bus,
+		}); err != nil {
+			log.Printf("ui: watch runtime: refresher re-register %q: %v", alias, err)
 		}
 	}
 }
