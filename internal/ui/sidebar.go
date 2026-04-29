@@ -8,6 +8,7 @@ package ui
 import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/lovable/email-read/internal/ui/errlog"
@@ -90,21 +91,34 @@ func NewSidebar(opts SidebarOptions) fyne.CanvasObject {
 	// or a real nav row pointing at NavItems[i].
 	rows := buildSidebarRows(NavItems)
 
+	// Track the currently-selected row so the binder can render an
+	// explicit "▸" leading indicator. Fyne's `List.OnSelected` fires
+	// after the row is highlighted, but the highlight is subtle on
+	// dark themes — the leading caret makes the active row
+	// unambiguous and helps users avoid the "Diagnose opens when I
+	// click Error Log" misclick by giving them visible click-target
+	// feedback before they release the mouse. Slice #213.
+	activeRow := -1
+
+	// Row template: a horizontally-padded label inside a container
+	// whose MinSize is taller than the bare label. This is the core
+	// hit-area fix for Slice #213 — the old template
+	// (`widget.NewLabel("template")`) reported a MinSize of ~14px
+	// at default density, so adjacent rows shared a 28px painted
+	// box but only the top 14px registered the click visually.
+	// Padding the label adds ~theme.Padding()*2 vertical breathing
+	// room and Fyne's list propagates that to every row uniformly,
+	// so users now get a 24-30px-tall click target per row.
+	mkTemplate := func() fyne.CanvasObject {
+		lbl := widget.NewLabel("template")
+		lbl.Truncation = fyne.TextTruncateEllipsis
+		return container.New(layout.NewPaddedLayout(), lbl)
+	}
 	list := widget.NewList(
 		func() int { return len(rows) },
-		func() fyne.CanvasObject { return widget.NewLabel("template") },
+		mkTemplate,
 		func(i widget.ListItemID, o fyne.CanvasObject) {
-			lbl := o.(*widget.Label)
-			r := rows[i]
-			if r.header != "" {
-				lbl.SetText(r.header)
-				lbl.TextStyle = fyne.TextStyle{Italic: true, Bold: true}
-			} else {
-				item := NavItems[r.navIdx]
-				lbl.SetText(formatNavRowLabel(item.Title, opts.BadgeFor(item.Kind)))
-				lbl.TextStyle = fyne.TextStyle{}
-			}
-			lbl.Refresh()
+			renderSidebarRow(o, rows, i, opts.BadgeFor, i == activeRow)
 		},
 	)
 	list.OnSelected = func(i widget.ListItemID) {
@@ -124,6 +138,8 @@ func NewSidebar(opts SidebarOptions) fyne.CanvasObject {
 			}
 			return
 		}
+		activeRow = i
+		list.Refresh() // repaint so the leading "▸" caret moves
 		item := NavItems[r.navIdx]
 		if opts.State != nil {
 			opts.State.SetNav(item.Kind)
@@ -155,6 +171,7 @@ func NewSidebar(opts SidebarOptions) fyne.CanvasObject {
 			}
 		}
 	}
+	activeRow = preIdx
 	list.Select(preIdx)
 
 	// Live badge refresh: every errlog append (and MarkRead via the
@@ -185,6 +202,46 @@ func defaultBadgeFor(k NavKind) int64 {
 		return errlog.Unread()
 	}
 	return 0
+}
+
+// renderSidebarRow paints one list row. Pulled out so the binder
+// closure stays readable and the rendering rules are unit-testable
+// via SidebarRowText (sidebar_render.go).
+//
+// Header rows: italic + bold, prefixed with a thin space + bullet
+// so they read as a section divider rather than a missing/empty
+// nav entry. Nav rows: plain text, with a leading "▸ " caret on
+// the active row to give the user unambiguous click-target
+// feedback (Slice #213 misclick fix).
+func renderSidebarRow(
+	o fyne.CanvasObject,
+	rows []sidebarRow,
+	i int,
+	badgeFor func(NavKind) int64,
+	active bool,
+) {
+	if i < 0 || i >= len(rows) {
+		return
+	}
+	// The template is a *fyne.Container wrapping the label; reach
+	// in to pull the label out for SetText / style edits.
+	box, ok := o.(*fyne.Container)
+	if !ok || len(box.Objects) == 0 {
+		return
+	}
+	lbl, ok := box.Objects[0].(*widget.Label)
+	if !ok {
+		return
+	}
+	r := rows[i]
+	if r.header != "" {
+		lbl.SetText(SidebarRowText(r, NavItems, badgeFor, false))
+		lbl.TextStyle = fyne.TextStyle{Italic: true, Bold: true}
+	} else {
+		lbl.SetText(SidebarRowText(r, NavItems, badgeFor, active))
+		lbl.TextStyle = fyne.TextStyle{Bold: active}
+	}
+	lbl.Refresh()
 }
 
 // containsAlias reports whether `a` is present in `aliases`. Local
