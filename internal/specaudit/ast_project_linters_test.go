@@ -2,15 +2,15 @@
 // AST or spec-text scans and require no Fyne canvas / bench infra:
 //
 //   - AC-PROJ-18  Only `internal/ui/...` and `cmd/email-read-ui/...` import
-//                 `fyne.io/fyne/v2`. Other packages must stay headless.
+//     `fyne.io/fyne/v2`. Other packages must stay headless.
 //   - AC-PROJ-31  Every `ER-XXX-NNNNN` referenced in any spec file is
-//                 defined in `spec/21-app/06-error-registry.md`.
+//     defined in `spec/21-app/06-error-registry.md`.
 //   - AC-PROJ-32  Every `Q-XXX-XXX` referenced in any backend spec is
-//                 defined in `spec/23-app-database/02-queries.md`.
+//     defined in `spec/23-app-database/02-queries.md`.
 //   - AC-PROJ-33  Every `mem://`, `./`, `../` link in any spec file
-//                 resolves to an existing file (or memory file).
+//     resolves to an existing file (or memory file).
 //   - AC-PROJ-34  Every folder under `spec/21-app/02-features/` contains
-//                 exactly the five canonical files. No extras, no missing.
+//     exactly the five canonical files. No extras, no missing.
 //
 // The "no open OI-N references at merge time" row is intentionally NOT
 // closed in this slice — the tools/99 consistency report still lists

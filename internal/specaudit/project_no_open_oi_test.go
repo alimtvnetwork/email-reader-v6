@@ -1,8 +1,9 @@
 // project_no_open_oi_test.go — Slice #144 / Task #3 burn-down.
 //
 // Closes AC-PROJ-35:
-//   "All open issues (`OI-N`) referenced in any feature 99-report are
-//    resolved (✅ Closed) before merge."
+//
+//	"All open issues (`OI-N`) referenced in any feature 99-report are
+//	 resolved (✅ Closed) before merge."
 //
 // Implementation: walks every
 // `spec/21-app/02-features/*/99-consistency-report.md`, finds every

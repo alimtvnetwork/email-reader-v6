@@ -260,13 +260,13 @@ var coverageGapAllowlist = map[string]struct{}{
 	"AC-DB-36": {},
 	// AC-DB-37 closed by Slice #127 — same Test_AST_MaintenanceOnly
 	// scan that already covered AC-PROJ-17 (DDL-only-in-migrate rule).
-	"AC-DB-41": {},
-	"AC-DB-46": {},
-	"AC-DBP-02":  {},
-	"AC-DBP-03":  {},
-	"AC-DBP-04":  {},
-	"AC-DBP-05":  {},
-	"AC-DBP-06":  {},
+	"AC-DB-41":  {},
+	"AC-DB-46":  {},
+	"AC-DBP-02": {},
+	"AC-DBP-03": {},
+	"AC-DBP-04": {},
+	"AC-DBP-05": {},
+	"AC-DBP-06": {},
 	// Slice #122 closed AC-DS-01/02/03/10/11/12/13/14/16/17/18/20/48/
 	// 60/61/62/63/64/65/66/67/68 by tagging the existing theme/AST/
 	// accessibility tests with their AC-DS IDs (no new test code —
@@ -376,36 +376,36 @@ var coverageGapAllowlist = map[string]struct{}{
 	// satisfied by a CI Makefile target referenced from the AC text and
 	// no longer needs an allowlist entry — the doc comment above
 	// counts as the spec citation.
-	"AC-SF-01":   {},
-	"AC-SF-02":   {},
+	"AC-SF-01": {},
+	"AC-SF-02": {},
 	// AC-SF-03 closed by Slice #149 — Test_AST_SettingsPaths_NoEntryWidget
 	// in ast_settings_paths_readonly_test.go pins the structural rule:
 	// the `newSettingsPaths` constructor in internal/ui/views/settings.go
 	// may not invoke any `widget.New*Entry`-shaped call (today it uses
 	// only widget.NewLabel / widget.NewLabelWithStyle).
-	"AC-SF-04":   {},
-	"AC-SF-05":   {},
-	"AC-SF-06":   {},
-	"AC-SF-07":   {},
-	"AC-SF-08":   {},
-	"AC-SF-09":   {},
-	"AC-SF-10":   {},
-	"AC-SF-11":   {},
-	"AC-SF-12":   {},
-	"AC-SF-13":   {},
-	"AC-SF-14":   {},
-	"AC-SF-15":   {},
-	"AC-SF-16":   {},
-	"AC-SF-17":   {},
-	"AC-SF-18":   {},
-	"AC-SF-19":   {},
-	"AC-SF-20":   {},
-	"AC-SF-21":   {},
-	"AC-SP-01":   {},
-	"AC-SP-02":   {},
-	"AC-SP-03":   {},
-	"AC-SP-04":   {},
-	"AC-SP-05":   {},
+	"AC-SF-04": {},
+	"AC-SF-05": {},
+	"AC-SF-06": {},
+	"AC-SF-07": {},
+	"AC-SF-08": {},
+	"AC-SF-09": {},
+	"AC-SF-10": {},
+	"AC-SF-11": {},
+	"AC-SF-12": {},
+	"AC-SF-13": {},
+	"AC-SF-14": {},
+	"AC-SF-15": {},
+	"AC-SF-16": {},
+	"AC-SF-17": {},
+	"AC-SF-18": {},
+	"AC-SF-19": {},
+	"AC-SF-20": {},
+	"AC-SF-21": {},
+	"AC-SP-01": {},
+	"AC-SP-02": {},
+	"AC-SP-03": {},
+	"AC-SP-04": {},
+	"AC-SP-05": {},
 	// Slice #127 closed AC-SX-06 (backend half) via the existing
 	// TestSettings_ValidationMatrix forbidden-scheme cases. The
 	// frontend §5 half (cross-layer fixture) needs the canvas-bound
@@ -445,7 +445,7 @@ var staleCodeRefAllowlist = map[string]struct{}{}
 //   - `gap_no_unexpected`   — every gap must be in the allowlist.
 //   - `gap_no_stale_allow`  — every allowlisted gap must still be a real gap.
 //   - `code_no_stale_ref`   — every code ref must resolve to a real spec ID
-//                             (or be allowlisted as known-stale).
+//     (or be allowlisted as known-stale).
 //   - `code_no_stale_allow` — every allowlisted stale ref must still be stale.
 //
 // Sub-test names use `_` separators so a CI dashboard with a
