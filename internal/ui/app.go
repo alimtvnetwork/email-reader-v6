@@ -441,7 +441,14 @@ func viewFor(item NavItem, state *AppState, services *Services, gotoNav func(Nav
 			ToolsFactory:      services.Tools, // Slice #116c (Phase 6.3)
 		})
 	case NavSettings:
-		return views.BuildSettings(views.SettingsOptions{})
+		// Slice #212 — wire path-panel seams: Clipboard for Copy,
+		// OpenURL-via-Fyne for Open, and a cross-platform reveal
+		// helper for the Config-row "Reveal" button.
+		return views.BuildSettings(views.SettingsOptions{
+			Clipboard:  fyneClipboard(),
+			OpenPath:   openLogFileWithFyne, // same handler the Error Log uses
+			RevealPath: revealPathInFileManager,
+		})
 	case NavErrorLog:
 		// Phase 3.3 — Diagnostics → Error Log. The view pulls from
 		// the process-wide errlog ring buffer (defaults filled in
