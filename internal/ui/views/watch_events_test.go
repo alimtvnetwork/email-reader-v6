@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lovable/email-read/internal/errtrace"
 	"github.com/lovable/email-read/internal/mailclient"
 	"github.com/lovable/email-read/internal/watcher"
 )
@@ -108,6 +109,17 @@ func TestFormatRawLogLine_UnknownKindFallback(t *testing.T) {
 	line := FormatRawLogLine(watcher.Event{Kind: "weird", At: atTime(t), Alias: "a"})
 	if line == "" || !contains(line, "unknown event") {
 		t.Fatalf("default branch did not flag unknown kind: %q", line)
+	}
+}
+
+func TestFormatRawLogLine_MailTimeoutAddsReachabilityRCA(t *testing.T) {
+	t.Parallel()
+	err := errtrace.NewCoded(errtrace.ErrMailTimeout, "imap dial timed out")
+	line := FormatRawLogLine(watcher.Event{Kind: watcher.EventPollError, At: atTime(t), Alias: "admin", Err: err})
+	for _, want := range []string{"TCP never reached IMAP login", "993/143", "open IMAP/Dovecot/firewall"} {
+		if !contains(line, want) {
+			t.Fatalf("timeout line missing %q: %q", want, line)
+		}
 	}
 }
 
