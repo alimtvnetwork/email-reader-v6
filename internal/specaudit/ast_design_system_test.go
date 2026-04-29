@@ -2,21 +2,21 @@
 // Fyne canvas harness:
 //
 //   - AC-DS-19  AST: only `internal/ui/anim/` may use
-//               `canvas.NewColorRGBAAnimation`. Currently vacuously
-//               true — there is no `internal/ui/anim/` package yet,
-//               and the call is unused anywhere in the tree. This
-//               test pins that invariant so the day someone adds an
-//               animation, they're forced to put it in the right
-//               package or this scanner FAILs.
+//     `canvas.NewColorRGBAAnimation`. Currently vacuously
+//     true — there is no `internal/ui/anim/` package yet,
+//     and the call is unused anywhere in the tree. This
+//     test pins that invariant so the day someone adds an
+//     animation, they're forced to put it in the right
+//     package or this scanner FAILs.
 //
 //   - AC-DS-51  AST: only `WatchDot` (the status-footer indicator
-//               widget) may call `anim.Pulse(...)`. Vacuously true
-//               today — no `internal/ui/anim/` package, zero call
-//               sites — but the same ratchet logic applies: the
-//               first paste of `anim.Pulse` from outside a future
-//               `WatchDot` widget file must trip this scanner.
-//               Cluster-mate to AC-DS-19; same template, same
-//               helpers.
+//     widget) may call `anim.Pulse(...)`. Vacuously true
+//     today — no `internal/ui/anim/` package, zero call
+//     sites — but the same ratchet logic applies: the
+//     first paste of `anim.Pulse` from outside a future
+//     `WatchDot` widget file must trip this scanner.
+//     Cluster-mate to AC-DS-19; same template, same
+//     helpers.
 //
 // Other AC-DS rows in the same neighbourhood (palette duplicate
 // detection, ThemeSystem variant routing) were scoped out of this

@@ -4,6 +4,7 @@ Updated: 2026-04-28
 # Project Memory
 
 ## Core
+mail.attobondcleaning.store `nc` timeout on 993/143 means TCP never reaches IMAP login; fix hosting/Dovecot/firewall/DNS-only, not app password.
 Account Test `ER-ACC-22201` is only a wrapper; inspect wrapped `ER-MAIL-*`. Timeout/dial = unreachable endpoint, not rejected password.
 IMAP `poll ok` then `i/o timeout` means valid config plus intermittent reachability; keep 5s fixed-rate, preserve ER-MAIL-21208, prefer session reuse/IDLE.
 Watch Raw log `start → stop` only means first poll was likely cancelled during long IMAP dial; add/inspect progress telemetry before network tweaks.
@@ -39,4 +40,5 @@ Honest-scope principle: skipped tests with `t.Logf` + `t.Skip` are tripwires, no
 - [IMAP intermittent timeout after successful poll-ok (Slice #206/#208)](mem://workflow/imap-intermittent-timeout-after-pollok-slice206) — Poll-ok then timeout proves valid config but intermittent reachability; keep 5s fixed-rate, preserve timeout code, prefer session reuse/IDLE.
 - [Account Test Connection auth failure](mem://workflow/account-test-auth-failed-slice200) — Sanitized Test Connection password path and wrapped IMAP LOGIN rejects as ER-ACC-22201 with actionable RCA.
 - [Account Test Connection timeout misclassified (Slice #209)](mem://workflow/account-test-timeout-misclassified-slice209) — ER-ACC-22201 wraps all test failures; wrapped ER-MAIL-21208/21201 means endpoint unreachable, not password rejected.
+- [mail.attobondcleaning.store IMAP timeout RCA (Slice #210)](mem://workflow/mail-attobondcleaning-imap-timeout-rca-slice210) — External `nc` timeout to 993/143 means TCP never reaches IMAP login; fix hosting/Dovecot/firewall/DNS-only or hostname.
 - [Blockers 1/2/3/5 shipped (Slice #201)](mem://workflow/blockers-1-2-3-5-shipped-slice201) — `doctor browser` subcommand, GitHub Actions race-gate workflow, `internal/mockimap` (E.1 scope), `internal/benchgate` advisory harness; #4 canvas + #6 human-review remain deferred.

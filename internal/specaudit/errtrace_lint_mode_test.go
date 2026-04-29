@@ -3,16 +3,16 @@
 // Pins two invariants for the three errtrace lint scripts under
 // `linter-scripts/`:
 //
-//   1. The default `LINT_MODE` is `fail` — i.e. the bash parameter-
-//      expansion `LINT_MODE="${LINT_MODE:-fail}"` is present verbatim.
-//      This prevents a future PR from silently downgrading the
-//      gate to `warn` (which would let new bare-wraps / fmt.Errorf /
-//      errors.New sites land without breaking the build).
+//  1. The default `LINT_MODE` is `fail` — i.e. the bash parameter-
+//     expansion `LINT_MODE="${LINT_MODE:-fail}"` is present verbatim.
+//     This prevents a future PR from silently downgrading the
+//     gate to `warn` (which would let new bare-wraps / fmt.Errorf /
+//     errors.New sites land without breaking the build).
 //
-//   2. Each script currently exits 0 when invoked with no env var.
-//      That confirms the live tree has zero violations under the
-//      enforcing default, so #1 above is meaningful (not vacuous
-//      because we happen to be in warn-only mode somewhere).
+//  2. Each script currently exits 0 when invoked with no env var.
+//     That confirms the live tree has zero violations under the
+//     enforcing default, so #1 above is meaningful (not vacuous
+//     because we happen to be in warn-only mode somewhere).
 //
 // Skips when bash is unavailable (Windows CI without WSL) or when
 // the linter-scripts/ directory is absent (alternate repo layout).

@@ -102,10 +102,13 @@ func TestTestAccountConnection_WrapsTimeoutAsReachabilityFailure(t *testing.T) {
 	if !errors.As(errors.Unwrap(c), &c) || c.Code != errtrace.ErrMailTimeout {
 		t.Fatalf("expected wrapped ErrMailTimeout, got %v", r.Error())
 	}
-	if !strings.Contains(r.Error().Error(), "IMAP endpoint is unreachable") {
-		t.Fatalf("timeout failure message should not blame login: %v", r.Error())
+	msg := r.Error().Error()
+	for _, want := range []string{"TCP connection to IMAP endpoint", "mail.example.com:993", "nc -zv", "Dovecot", "Cloudflare mail DNS-only"} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("timeout failure message missing %q: %v", want, r.Error())
+		}
 	}
-	if strings.Contains(r.Error().Error(), "server rejected the login") {
+	if strings.Contains(msg, "server rejected the login") {
 		t.Fatalf("timeout failure incorrectly blamed credentials: %v", r.Error())
 	}
 }
