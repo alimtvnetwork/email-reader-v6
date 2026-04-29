@@ -12,9 +12,7 @@ import (
 	"context"
 	"log"
 	"net/url"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -22,6 +20,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/lovable/email-read/internal/browser"
 	"github.com/lovable/email-read/internal/config"
 	"github.com/lovable/email-read/internal/core"
 	"github.com/lovable/email-read/internal/errtrace"
@@ -449,7 +448,7 @@ func viewFor(item NavItem, state *AppState, services *Services, gotoNav func(Nav
 		return views.BuildSettings(views.SettingsOptions{
 			Clipboard:  fyneClipboard(),
 			OpenPath:   openLogFileWithFyne, // same handler the Error Log uses
-			RevealPath: revealPathInFileManager,
+			RevealPath: browser.RevealInFileManager,
 		})
 	case NavErrorLog:
 		// Phase 3.3 — Diagnostics → Error Log. The view pulls from
@@ -562,42 +561,4 @@ func fyneClipboard() fyne.Clipboard {
 		return nil
 	}
 	return w[0].Clipboard()
-}
-
-// revealPathInFileManager opens the OS file manager with `path`
-// selected. Used by the Settings path-panel "Reveal" button on the
-// Config row. Falls back to opening the parent directory on Linux
-// where there is no portable single-file selector.
-//
-// Cross-platform behaviour:
-//   - macOS:   `open -R <path>` (Finder reveals + selects the file)
-//   - Windows: `explorer /select,<path>` (Explorer reveals + selects)
-//   - Linux:   xdg-open on the parent directory (best-effort; most
-//     desktops don't expose a "select file" param via xdg-open).
-//
-// Returns a wrapped error so the view can render it inline.
-func revealPathInFileManager(path string) error {
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return errtrace.Wrap(err, "revealPathInFileManager: abs")
-	}
-	switch runtime.GOOS {
-	case "darwin":
-		if err := exec.Command("open", "-R", abs).Start(); err != nil {
-			return errtrace.Wrap(err, "revealPathInFileManager: open -R")
-		}
-	case "windows":
-		// /select, must be a single arg with no space after the comma.
-		if err := exec.Command("explorer", "/select,"+abs).Start(); err != nil {
-			return errtrace.Wrap(err, "revealPathInFileManager: explorer /select")
-		}
-	default:
-		// Linux / BSD — fall back to opening the parent dir. The
-		// file is not selected but the user lands one click away.
-		parent := filepath.Dir(abs)
-		if err := exec.Command("xdg-open", parent).Start(); err != nil {
-			return errtrace.Wrap(err, "revealPathInFileManager: xdg-open")
-		}
-	}
-	return nil
 }
