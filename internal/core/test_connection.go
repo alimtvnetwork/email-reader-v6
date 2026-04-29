@@ -6,6 +6,7 @@ package core
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/lovable/email-read/internal/config"
