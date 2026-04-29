@@ -262,7 +262,6 @@ var coverageGapAllowlist = map[string]struct{}{
 	// scan that already covered AC-PROJ-17 (DDL-only-in-migrate rule).
 	"AC-DB-41": {},
 	"AC-DB-46": {},
-	"AC-DBP-01":  {},
 	"AC-DBP-02":  {},
 	"AC-DBP-03":  {},
 	"AC-DBP-04":  {},
