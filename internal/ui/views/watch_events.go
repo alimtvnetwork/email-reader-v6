@@ -11,10 +11,12 @@
 package views
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/lovable/email-read/internal/errtrace"
 	"github.com/lovable/email-read/internal/ui/errlog"
 	"github.com/lovable/email-read/internal/watcher"
 )
@@ -232,7 +234,15 @@ func errMsg(err error) string {
 	if err == nil {
 		return "(no error message)"
 	}
+	if isMailReachabilityError(err) {
+		return err.Error() + " — TCP never reached IMAP login; test 993/143 with nc and ask hosting to open IMAP/Dovecot/firewall if they time out"
+	}
 	return err.Error()
+}
+
+func isMailReachabilityError(err error) bool {
+	var coded *errtrace.Coded
+	return errors.As(err, &coded) && (coded.Code == errtrace.ErrMailTimeout || coded.Code == errtrace.ErrMailDial)
 }
 
 // truncURL keeps URL renderings readable. Mirrors watcher.truncURL —
