@@ -12,7 +12,9 @@ import (
 	"context"
 	"log"
 	"net/url"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"fyne.io/fyne/v2"
