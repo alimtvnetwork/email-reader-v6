@@ -51,7 +51,7 @@ func TestAccountConnection(in AccountInput, timeout time.Duration) errtrace.Resu
 }
 
 func wrapTestConnectionError(err error, in AccountInput, host string, port int, useTLS bool, cleanPassword string) error {
-	return errtrace.WrapCode(err, errtrace.ErrAccountTestFailed, testConnectionFailureMessage(err)).
+	return errtrace.WrapCode(err, errtrace.ErrAccountTestFailed, testConnectionFailureMessage(err, host, port, useTLS)).
 		WithContext("Alias", in.Alias).
 		WithContext("Email", in.Email).
 		WithContext("Host", host).
@@ -60,15 +60,23 @@ func wrapTestConnectionError(err error, in AccountInput, host string, port int, 
 		WithContext("PasswordSanitized", cleanPassword != in.PlainPassword)
 }
 
-func testConnectionFailureMessage(err error) string {
+func testConnectionFailureMessage(err error, host string, port int, useTLS bool) string {
 	var coded *errtrace.Coded
 	if errors.As(err, &coded) && coded.Code == errtrace.ErrMailLogin {
 		return "test connection failed — IMAP server rejected the login; verify the same email/password in webmail or reset the mailbox password"
 	}
 	if errors.As(err, &coded) && (coded.Code == errtrace.ErrMailTimeout || coded.Code == errtrace.ErrMailDial) {
-		return "test connection failed — IMAP endpoint is unreachable; verify host, port, TLS, firewall, and mail-server availability"
+		return testConnectionReachabilityMessage(host, port, useTLS)
 	}
 	return "test connection failed — IMAP test could not complete; inspect the wrapped mail error for the exact cause"
+}
+
+func testConnectionReachabilityMessage(host string, port int, useTLS bool) string {
+	tlsHint := "TLS on"
+	if !useTLS {
+		tlsHint = "TLS off"
+	}
+	return "test connection failed — TCP connection to IMAP endpoint " + host + ":" + fmt.Sprint(port) + " (" + tlsHint + ") did not reach login; verify with nc -zv, and if ports 993/143 time out ask hosting to enable Dovecot/open IMAP firewall and keep Cloudflare mail DNS-only"
 }
 
 // TestConnectionResult reports the resolved endpoint that was successfully
