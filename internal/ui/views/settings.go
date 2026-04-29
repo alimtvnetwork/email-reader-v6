@@ -30,8 +30,32 @@ import (
 // SettingsOptions wires the view to its dependencies. Leaving Service nil
 // triggers a default core.NewSettings construction, matching the pattern
 // used by every other view in this package.
+//
+// Slice #212 (Settings redesign Phase 1) added the path-panel seams:
+//   - Clipboard receives the path text on Copy. Production wiring
+//     (`app.go::viewFor`) injects `fyne.CurrentApp().Clipboard()`;
+//     headless tests inject a recorder.
+//   - OpenPath opens the **directory** in the OS file manager. nil →
+//     button stays enabled but the inline status reads "not wired".
+//   - RevealPath reveals (and selects) the **file** in the OS file
+//     manager. Only used by the Config row (the only path that points
+//     at a single file rather than a directory).
 type SettingsOptions struct {
 	Service *core.Settings
+	// Clipboard receives clipboard writes from the path panel's Copy
+	// buttons. Mirrors the same seam used by error_log.go so headless
+	// tests don't need a Fyne app to verify Copy fires.
+	Clipboard fyne.Clipboard
+	// OpenPath, when non-nil, opens `path` in the OS default handler
+	// (Finder / Explorer / xdg-open). Production wires this to
+	// app.go::openLogFileWithFyne; tests substitute a recorder.
+	OpenPath func(path string) error
+	// RevealPath, when non-nil, reveals `path` (a single file) in the
+	// OS file manager with the file selected. Only the Config row uses
+	// it — Data dir and Email archive are directories, so Open is
+	// sufficient. Production wires this to revealPathWithFyne; tests
+	// substitute a recorder.
+	RevealPath func(path string) error
 }
 
 // BuildSettings returns the Settings page widget. On any backend failure
@@ -50,7 +74,7 @@ func BuildSettings(opts SettingsOptions) fyne.CanvasObject {
 	if snapRes.HasError() {
 		return settingsFatal(snapRes.Error())
 	}
-	return buildSettingsForm(svc, snapRes.Value())
+	return buildSettingsForm(svc, snapRes.Value(), opts)
 }
 
 // settingsFatal renders a single error pane when Settings cannot construct
@@ -64,38 +88,63 @@ func settingsFatal(err error) fyne.CanvasObject {
 	return container.NewVBox(heading, widget.NewSeparator(), body)
 }
 
-// buildSettingsForm composes the main form. Inputs are laid out via
-// widget.Form; status text + Save / Reset buttons sit beneath.
-func buildSettingsForm(svc *core.Settings, snap core.SettingsSnapshot) fyne.CanvasObject {
+// buildSettingsForm composes the main page. Inputs are grouped into three
+// cards (Appearance, Watcher, Database maintenance — Slice #212). Status
+// text + Save / Reset sit beneath, then the path panel card.
+func buildSettingsForm(svc *core.Settings, snap core.SettingsSnapshot, opts SettingsOptions) fyne.CanvasObject {
 	w := newSettingsWidgets(snap)
 	status := widget.NewLabel("Loaded at " + time.Now().Format("15:04:05") + ".")
 	status.Wrapping = fyne.TextWrapWord
 
-	form := &widget.Form{Items: settingsFormItems(w)}
+	cards := newSettingsCards(w)
 	actions := newSettingsActions(svc, w, status)
 	heading := widget.NewLabelWithStyle("Settings", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-	paths := newSettingsPaths(snap)
-	return container.NewVBox(
-		heading, widget.NewSeparator(),
-		form, actions, status,
-		widget.NewSeparator(), paths,
+	subtitle := widget.NewLabel("Configure how email-read looks, polls, and maintains its database.")
+	subtitle.Wrapping = fyne.TextWrapWord
+	paths := newSettingsPathsCard(snap, opts)
+	body := container.NewVBox(
+		heading, subtitle, widget.NewSeparator(),
+		cards.appearance, cards.watcher, cards.maintenance,
+		actions, status,
+		paths,
 	)
+	return container.NewVScroll(body)
 }
 
-// settingsFormItems composes the labelled input rows. Split out of
-// buildSettingsForm to keep it under the 15-statement linter cap once the
-// maintenance knobs grew the row count.
-func settingsFormItems(w *settingsWidgets) []*widget.FormItem {
-	return []*widget.FormItem{
+// settingsCards bundles the three grouped cards so buildSettingsForm
+// stays under the 15-statement linter cap.
+type settingsCards struct {
+	appearance  *widget.Card
+	watcher     *widget.Card
+	maintenance *widget.Card
+}
+
+// newSettingsCards groups the 9 input widgets into three themed cards.
+// The grouping is locked-in (Phase 1 user choice 2026-04-29):
+//
+//	Appearance  — Theme, Density
+//	Watcher     — Poll interval, Chrome / Chromium path
+//	Maintenance — Retention, weekday, hour, WAL hours, prune batch
+func newSettingsCards(w *settingsWidgets) settingsCards {
+	appearance := &widget.Form{Items: []*widget.FormItem{
 		{Text: "Theme", Widget: w.themeSelect, HintText: "Restart not required — repaints live."},
+		{Text: "Density", Widget: w.densitySelect, HintText: "Compact tightens paddings. Persists across restarts."},
+	}}
+	watcher := &widget.Form{Items: []*widget.FormItem{
 		{Text: "Poll interval (seconds)", Widget: w.pollEntry, HintText: "1–60 seconds. Default 5."},
 		{Text: "Chrome / Chromium path", Widget: w.chromeEntry, HintText: "Leave blank to auto-detect."},
-		{Text: "Density", Widget: w.densitySelect, HintText: "Compact tightens paddings. Persists across restarts."},
+	}}
+	maintenance := &widget.Form{Items: []*widget.FormItem{
 		{Text: "Opened-URLs retention (days)", Widget: w.retentionEntry, HintText: "0–3650. 0 = never prune."},
 		{Text: "Weekly VACUUM weekday", Widget: w.weekdaySelect, HintText: "Day of week for the weekly VACUUM."},
 		{Text: "Weekly VACUUM hour (local)", Widget: w.vacHourEntry, HintText: "0–23. 24-hour clock; default 03."},
 		{Text: "WAL checkpoint cadence (hours)", Widget: w.walHoursEntry, HintText: "1–168. Default 6h."},
 		{Text: "Prune batch size (rows)", Widget: w.batchEntry, HintText: "100–50000. Default 5000."},
+	}}
+	return settingsCards{
+		appearance:  widget.NewCard("Appearance", "Theme and density. Live preview on change.", appearance),
+		watcher:     widget.NewCard("Watcher", "How often we poll IMAP and which browser opens links.", watcher),
+		maintenance: widget.NewCard("Database maintenance", "Retention, VACUUM cadence, and WAL housekeeping.", maintenance),
 	}
 }
 
@@ -201,23 +250,96 @@ func newSettingsActions(svc *core.Settings, w *settingsWidgets, status *widget.L
 		repopulateWidgets(w, res.Value())
 		status.SetText("Reset to defaults at " + time.Now().Format("15:04:05") + ".")
 	})
-	return container.NewHBox(saveBtn, resetBtn)
+	// Pad between buttons so they don't visually merge at default density.
+	return container.NewHBox(saveBtn, widget.NewLabel(" "), resetBtn)
 }
 
-// newSettingsPaths returns a small read-only paths panel so users can see
-// where their config and data live without leaving the screen.
-func newSettingsPaths(snap core.SettingsSnapshot) fyne.CanvasObject {
-	mk := func(label, value string) fyne.CanvasObject {
-		k := widget.NewLabelWithStyle(label, fyne.TextAlignLeading, fyne.TextStyle{Italic: true})
-		v := widget.NewLabel(value)
-		v.Wrapping = fyne.TextWrapWord
-		return container.NewVBox(k, v)
-	}
-	return container.NewVBox(
-		mk("Config path", snap.ConfigPath),
-		mk("Data dir", snap.DataDir),
-		mk("Email archive", snap.EmailArchiveDir),
+// newSettingsPathsCard renders the Config / Data dir / Email archive
+// rows inside a `widget.Card`. Each row shows a monospace path plus
+// inline action buttons (Copy, Open; + Reveal on the Config row).
+// Slice #212 — replaces the old plain-label `newSettingsPaths`.
+func newSettingsPathsCard(snap core.SettingsSnapshot, opts SettingsOptions) fyne.CanvasObject {
+	status := widget.NewLabel("")
+	status.Wrapping = fyne.TextWrapWord
+	status.Importance = widget.LowImportance
+
+	rows := container.NewVBox(
+		newPathRow("Config path", snap.ConfigPath, true /*reveal*/, opts, status),
+		widget.NewSeparator(),
+		newPathRow("Data dir", snap.DataDir, false, opts, status),
+		widget.NewSeparator(),
+		newPathRow("Email archive", snap.EmailArchiveDir, false, opts, status),
+		status,
 	)
+	return widget.NewCard("Filesystem locations", "Where your config, database, and email archive live.", rows)
+}
+
+// newPathRow builds a single Copy/Open(/Reveal) row for one filesystem
+// path. `withReveal=true` adds the Reveal button (Config row only —
+// Data dir and Email archive are directories, so Open is sufficient).
+// All button handlers report into the shared `status` label so the user
+// gets visible feedback without a popup.
+func newPathRow(label, value string, withReveal bool, opts SettingsOptions, status *widget.Label) fyne.CanvasObject {
+	title := widget.NewLabelWithStyle(label, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	val := widget.NewLabel(value)
+	val.Wrapping = fyne.TextWrapBreak
+	val.TextStyle = fyne.TextStyle{Monospace: true}
+
+	copyBtn := widget.NewButton("Copy", func() {
+		status.SetText(handleCopyPath(value, opts.Clipboard, label))
+	})
+	openBtn := widget.NewButton("Open", func() {
+		status.SetText(handleOpenPath(value, opts.OpenPath, label))
+	})
+	buttons := container.NewHBox(copyBtn, openBtn)
+	if withReveal {
+		revealBtn := widget.NewButton("Reveal", func() {
+			status.SetText(handleRevealPath(value, opts.RevealPath, label))
+		})
+		buttons.Add(revealBtn)
+	}
+	return container.NewVBox(title, val, buttons)
+}
+
+// handleCopyPath / handleOpenPath / handleRevealPath are the pure-Go
+// helpers that back the path-row button handlers. Pulled out as
+// standalone funcs so settings_paths_test.go can verify the status
+// strings + seam invocation without spinning up a Fyne app.
+func handleCopyPath(value string, cb fyne.Clipboard, label string) string {
+	if value == "" {
+		return label + ": empty path."
+	}
+	if cb == nil {
+		return label + ": clipboard not wired."
+	}
+	cb.SetContent(value)
+	return "Copied " + label + " to clipboard."
+}
+
+func handleOpenPath(value string, open func(string) error, label string) string {
+	if value == "" {
+		return label + ": empty path."
+	}
+	if open == nil {
+		return label + ": open handler not wired."
+	}
+	if err := open(value); err != nil {
+		return label + ": open failed — " + err.Error()
+	}
+	return "Opened " + label + "."
+}
+
+func handleRevealPath(value string, reveal func(string) error, label string) string {
+	if value == "" {
+		return label + ": empty path."
+	}
+	if reveal == nil {
+		return label + ": reveal handler not wired."
+	}
+	if err := reveal(value); err != nil {
+		return label + ": reveal failed — " + err.Error()
+	}
+	return "Revealed " + label + " in file manager."
 }
 
 // readSettingsInput validates + projects widget state into a SettingsInput.

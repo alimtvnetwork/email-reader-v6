@@ -20,6 +20,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/lovable/email-read/internal/browser"
 	"github.com/lovable/email-read/internal/config"
 	"github.com/lovable/email-read/internal/core"
 	"github.com/lovable/email-read/internal/errtrace"
@@ -441,7 +442,14 @@ func viewFor(item NavItem, state *AppState, services *Services, gotoNav func(Nav
 			ToolsFactory:      services.Tools, // Slice #116c (Phase 6.3)
 		})
 	case NavSettings:
-		return views.BuildSettings(views.SettingsOptions{})
+		// Slice #212 — wire path-panel seams: Clipboard for Copy,
+		// OpenURL-via-Fyne for Open, and a cross-platform reveal
+		// helper for the Config-row "Reveal" button.
+		return views.BuildSettings(views.SettingsOptions{
+			Clipboard:  fyneClipboard(),
+			OpenPath:   openLogFileWithFyne, // same handler the Error Log uses
+			RevealPath: browser.RevealInFileManager,
+		})
 	case NavErrorLog:
 		// Phase 3.3 — Diagnostics → Error Log. The view pulls from
 		// the process-wide errlog ring buffer (defaults filled in
@@ -536,4 +544,21 @@ func openLogFileWithFyne(path string) error {
 		return errtrace.Wrap(err, "openLogFileWithFyne: OpenURL")
 	}
 	return nil
+}
+
+// fyneClipboard returns the system clipboard from the first Fyne
+// window, or nil if no Fyne app is running (headless tests). Slice
+// #212 — extracted so the Settings path-panel wiring stays a
+// one-liner and matches the inline pattern used for Watch + Error
+// Log clipboards above.
+func fyneClipboard() fyne.Clipboard {
+	a := fyne.CurrentApp()
+	if a == nil {
+		return nil
+	}
+	w := a.Driver().AllWindows()
+	if len(w) == 0 {
+		return nil
+	}
+	return w[0].Clipboard()
 }

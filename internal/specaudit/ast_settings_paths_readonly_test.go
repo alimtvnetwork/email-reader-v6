@@ -77,11 +77,16 @@ func Test_AST_SettingsPaths_NoEntryWidget(t *testing.T) {
 		t.Fatalf("parse %s: %v", rel, err)
 	}
 
-	// Locate the `newSettingsPaths` function declaration. If a future
-	// refactor renames it, this test FAILs with a clear "function not
-	// found" message and the reviewer must re-pin the audit's scope
-	// in the same diff (just like exportStreamFiles in slice #147).
-	const fnName = "newSettingsPaths"
+	// Locate the paths-card constructor. Re-pinned in Slice #212
+	// (Settings redesign Phase 1) when the helper was renamed from
+	// `newSettingsPaths` → `newSettingsPathsCard` to reflect that
+	// the new implementation wraps the rows in a `widget.Card` and
+	// adds Copy / Open / Reveal buttons. Spec contract is unchanged:
+	// no `widget.NewEntry` may live inside this function (the path
+	// values stay read-only — the new buttons are the only way to
+	// interact with them). Future renames must keep this constant
+	// in sync in the same diff.
+	const fnName = "newSettingsPathsCard"
 	var target *ast.FuncDecl
 	for _, decl := range file.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
